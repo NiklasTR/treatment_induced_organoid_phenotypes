@@ -1,0 +1,157 @@
+---
+title: "incell6000_setup_final"
+author: "Niklas R"
+date: "22 2 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Check profiles of imaged plates
+```{r}
+library(readr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(lazyeval)
+library(tidyr)
+library(platetools)
+library(viridis)
+
+ID = "D0"
+
+setwd("/Volumes/collab-bernd-fischer/PROMISE/incoming/PROMISE-10x-4t-c-16z/")
+temp <- list.files(pattern = ID) %>%
+  as_tibble() %>%
+  mutate(time = file.info(.$value)$atime < Sys.time()-180,
+         complete = !grepl("incomplete", .$value),
+         csv = paste0(.$value, "/", .$value, "_optimize_intensity.csv")) %>%
+  filter(time == TRUE & complete == TRUE) 
+
+
+
+plates.list <- lapply(temp$csv, read_csv)
+temp.df <- do.call("rbind",plates.list)
+
+plates <- temp.df %>% 
+  mutate(plate = rep(temp$value, each = nrow(plates.list[[1]])),
+         line = substr(plate, 22,28),
+         library = substr(plate, 33,35),
+         plate_number = substr(plate, 29,32),
+         barcode = substr(plate, 22,35)) 
+
+
+#rm(temp.df)
+```
+
+```{r}
+plot.profile.mean <- function(df, level_vector){
+  
+  df %>% 
+    as_tibble() %>%
+    mutate(Identifier.z_index = as.numeric(Identifier.z_index),
+         EmissionFilter.name = factor(EmissionFilter.name, levels = c("dsRed", "FITC", "DAPI")),
+         plate = factor(plate, levels = c(unique(plates$plate)))) %>%
+  ggplot(aes(x = Identifier.z_index, 
+                       y = MinMaxMean.mean, 
+                       color = EmissionFilter.name)) +
+      geom_point(alpha = 0) +
+      geom_smooth(se = TRUE, size = 1, alpha = 0.5) + 
+      scale_y_log10(limits = c(100,300), breaks = c(120,150,200,250)) + 
+      geom_hline(yintercept =120) + 
+      #geom_hline(yintercept =1000) + 
+      ggtitle("z-level vs. channel intensity across plates") + 
+      facet_grid(plate_number ~ line)
+    
+  
+}
+```
+
+```{r}
+
+plot.plate <- function(df, channel){
+  require(platetools)
+  temp <- df %>% 
+    filter(EmissionFilter.name == channel) %>%
+    group_by(Well.label, plate_number, line) %>%
+    summarise(mean_score = mean(MinMaxMean.mean-100)) %>%
+    mutate(Well.label.short = paste0(substr(Well.label, 1, 1), substr(Well.label, 5, 6)))
+  
+  set <- plate_map_grid(temp$mean_score, temp$Well.label.short, paste0(temp$line, temp$plate_number))
+  
+  raw_grid(data = set$values,
+           well = set$well,
+           plate_id = set$plate_label, 
+           ncols = 3, 
+           plate = 384) + 
+    scale_fill_viridis()# + 
+    #facet_wrap(~ library)
+ 
+  
+  
+}
+```
+
+```{r}
+#temp <- temp[c(1:64512),]
+plates %>%
+  #filter(grepl("W01P006", plate)) %>%
+  plot.profile.mean() #6 3
+```
+
+```{r}
+plates %>%
+  plot.plate(., "DAPI") #
+```
+
+```{r}
+plates %>%
+  plot.plate(., "FITC")
+```
+
+```{r}
+plates %>%
+  plot.plate(., "dsRed")
+```
+
+#There was a case of low intensity across all plates in a channel
+```{r}
+ID = "test"
+
+setwd("/Volumes/collab-bernd-fischer/test/PROMISE-10x-4t-c-16z-lowint/")
+temp <- list.files(pattern = ID) %>%
+  as_tibble() %>%
+  mutate(time = file.info(.$value)$atime < Sys.time()-180,
+         csv = paste0(.$value, "/", .$value, "_optimize_intensity.csv")) %>%
+  filter(time == TRUE) 
+
+
+
+plates.list <- lapply(temp$csv, read_csv)
+temp.df <- do.call("rbind",plates.list)
+
+#define a df with measurments from high-density plates
+plates_high <- temp.df %>% 
+  mutate(plate = rep(temp$value, each = nrow(plates.list[[1]])),
+         line = substr(plate, 22,28),
+         library = substr(plate, 33,35),
+         plate_number = substr(plate, 29,32),
+         barcode = substr(plate, 22,35)) 
+
+```
+
+```{r}
+plates %>%
+  filter(grepl("D013T01P003", plate)) %>%
+  plot.profile.mean() #6 3
+```
+
+```{r}
+plates_high %>%
+  #filter(grepl("D013T01P003", plate)) %>%
+  plot.profile.mean() #6 3
+```
+

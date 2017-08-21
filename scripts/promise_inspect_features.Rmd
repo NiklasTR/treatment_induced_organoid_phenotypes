@@ -1,0 +1,67 @@
+---
+title: "explore_inception_promise"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rhdf5)
+
+library(readr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(lazyeval)
+library(tidyr)
+library(platetools)
+library(viridis)
+
+ID = "_features_inception.h5"
+path = "/Volumes/collab-bernd-fischer/PROMISE/data-10x-4t-c-16z/features/"
+
+temp <- list.files(pattern = ID, 
+                   path = path,
+                   recursive = TRUE) %>%
+        as_tibble() 
+test <- temp %>%
+  dplyr::filter(grepl("D0", temp$value)) %>%
+  mutate(value.mut = value) %>%
+  separate(value.mut, c('barcode', 'source', 'h5.file'), sep = "/") %>%
+  mutate(barcode.mut = barcode) %>%
+  separate(barcode.mut, c("line", "plate", "library"), sep = c(7, 11)) %>%
+  filter(source == "inception_bak") %>%
+  mutate(full_path = paste0(path, value))# select data calculated with the inception_bak protocol
+
+
+  
+
+
+tmp.features <- lapply(test$full_path, h5read, name ="features")
+tmp.wells <- lapply(test$full_path, h5read, name ="well_names")
+tmp.features.df <- do.call("t",tmp)
+tmp.wells.df <- do.call("rbind",tmp.wells)
+
+cbind(tmp)
+
+
+  
+
+
+
+plates.list <- lapply(temp$csv, read_csv)
+temp.df <- do.call("rbind",plates.list)
+
+plates <- temp.df %>% 
+  mutate(plate = rep(temp$value, each = nrow(plates.list[[1]])),
+         line = substr(plate, 22,28),
+         library = substr(plate, 33,35),
+         plate_number = substr(plate, 29,32),
+         barcode = substr(plate, 22,35)) 
+
+
+```
+
