@@ -14,27 +14,99 @@ vignette: >
 12 organoid lines were screened with about 70 compounds (5 concentrations) of the clinical cancer panel. After 7 days total (4 days of treatment) the organoids we lysed and a ctg assay was performed. The experiment was conducted in 2 replciates. 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=8, fig.height=8) 
 ```
 
 ##Prepare data analysis
 ###Load necessary packages for data analysis
-```{r load-packages}
+```{r load-packages, message=FALSE, warning=FALSE}
 #library(tidyverse)
-library(HTSvis) #cite
 library(readr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(EBImage) #cite
 library(corrr)
 library(pheatmap)
 library(gridExtra)
+library(EBImage) #cite
+library(HTSvis) #cite
 library(PharmacoGx) #cite
 library(growthcurve) #cite
+library(jsonlite)
+library(httr)
 ```
 
+###Access DGIDB database to annotate compounds in library
+To systematically link compounds to a molecular target the DGIDB database is used. Library compounds are linked to affected genes. The result table is manually curated and subsequently loaded. 
+```{r access-dgidb-database, eval=FALSE, message=FALSE}
+return_dgidb <- function(input, type = "genes"){
+url = "http://dgidb.genome.wustl.edu"
+path = paste0("/api/v1/interactions.json",
+              "?", type,"=",input %>% str_replace_all(., " ", ""))
+
+response <- GET(url = url, path = path)
+
+response$content %>%
+  rawToChar() %>% 
+  fromJSON() -> temp
+
+do.call(what = "rbind",
+        args = lapply(temp, as.data.frame)) -> temp
+
+    if(nrow(temp) > 0 & !("suggestions" %in% colnames(temp))){
+    as.data.frame(temp$interactions) %>%
+      as_tibble() %>%
+        select(contains("Name"),  source, interactionType, contains("Id")) %>%
+        mutate(input = input,
+               alt_input = NA,
+             input_type = type) %>%
+        return()
+    } else if(("suggestions" %in% colnames(temp)) & (temp$suggestions %>% unlist %>% is.null() != TRUE)){
+      input.alt <- temp$suggestions %>% unlist %>% .[1]
+      cat(paste0(c("corrected ", input, "to", input.alt, "\n")))
+      path.alt = paste0("/api/v1/interactions.json",
+                    "?", type,"=",input.alt %>% str_replace_all(., " ", ""))
+      
+      GET(url = url, path = path.alt) %>%
+        .$content%>%
+        rawToChar() %>% 
+        fromJSON() -> temp.alt
+      
+      do.call(what = "rbind",
+              args = lapply(temp.alt, as.data.frame)) -> temp.alt
+      
+        if(nrow(temp.alt) > 0 & !("suggestions" %in% colnames(temp.alt))){
+      as.data.frame(temp.alt$interactions) %>%
+      as_tibble() %>%
+      select(contains("Name"),  source, interactionType, contains("Id")) %>%
+      mutate(input = input,
+             alt_input = input.alt,
+             input_type = type) %>%
+        return()
+        }
+    } else 
+      cat(paste0(c("could not find ", input, "\n")))
+}
+
+drug_targets.list <- lapply(auc_ccp$drug %>% unique, return_dgidb, type = "drugs")
+  
+drug_targets <- do.call(what = "rbind",
+        args = lapply(drug_targets.list, as.data.frame)) %>%
+  #ugly way to fix the problem of changing names (geneName or drugName depending on the input type)
+  group_by_(colnames(.)[1], "source", "input") %>% 
+          summarize(count = n()) %>%
+      group_by_(colnames(.)[1], "input") %>%
+      summarize(count = n()) %>%
+  filter(count > 0) %>%
+  group_by(input) %>%
+  summarise(target = geneName[count %>% which.max()],
+            count = max(count)) %>%
+  arrange(target)
+```
+
+
 ###Format and save the ctg datasets
-```{r load-ctg, eval = FALSE}
+```{r load-ctg, message=FALSE}
 #if(is.na() == FALSE){cut(x, c(0, 18.5, 24.9, 29.9, 34.9, 39.9, Inf), labels = FALSE)} else NA
 #run rsync -ravP rindtorf@b110-sc2hn01:/collab-ag-fischer/PROMISE/ctg_data /Users/rindtorf/promise/rsync_data/
 #define datasets to load ctg data into R
@@ -76,7 +148,7 @@ ccp_lib <- ccp_lib %>%
  # mutate(concentration_factor = replace(concentration_factor, ccp_lib$`Product Name` == "DMSO" | ccp_lib$`Product Name` == "Staurosporine_500nM", NA))
 
 #the list of used compounds was manually changed
-drug_targets <- read_delim("~/promise/drug_targets.csv", 
+drug_targets <- read_delim("~/promise/local_data/annotation/drug_targets.csv", 
     ";", escape_double = FALSE, trim_ws = TRUE) 
 
 
@@ -111,8 +183,6 @@ ctg_ccp <- ctg_ccp %>%
   mutate(photons = ifelse(plate_barcode == 'D004T01P006L08' & letter %in% LETTERS[c(1, 3, 5, 7, 9, 11, 13, 15)] & number %in% c(1:13), NA, photons)) %>%
   mutate(dummy = 1)
  
-
-
 
 #mutate(dat, dist = ifelse(speed == 4, dist * 100, dist)
 tmp <- ctg_ccp #%>%
@@ -155,35 +225,6 @@ levels(cohort_short$Location)
 ```
 
 ##Gain an overview about clinical and treatment response features
-###Draw a overall correlation plot of the two screen replicates
-```{r}
-tmp <- ctg_ccp %>%
-  unite("line_well", c("line", "Well_ID_384")) %>%
-  select(line_well, replicate, treat.ctrl.median) %>%
-  spread(replicate, treat.ctrl.median) 
-
-tmp.cor<- tmp %>% 
-  select(`1`,`2`) %>%
-  cor(use = "pairwise.complete.obs") %>%
-  .[1,2] %>%
-  round(2)
-
-tmp %>%
-  ggplot(aes(x = `1`, y = `2`)) + 
-  geom_point(alpha = 0.2) + 
-  theme_minimal() + 
-  ylab("Replicate 2") + 
-  xlab("Replicate 1") + 
-  ggtitle(paste0("Correlation of Normalized Treatment Reponse, r =", tmp.cor)) + 
-  geom_abline(slope = 1) + 
-  geom_density2d(alpha = 0.7)
-  #stat_binhex() 
-
-
-
-
-```
-
 ###Show replicate-wise correlation coefficients 
 ```{r}
 # Get lower triangle of the correlation matrix
@@ -215,6 +256,78 @@ tmp %>%
 
 
 ```
+
+###Normalize CTG photon counts by a plates DMSO controls
+The 32 DMSO controls yield a reference median which is, across all plates, more robust and greater in relative size than a plate-wise median. Hence the DMSO control dependent median should be used for calibration of plates.  
+```{r}
+ctrl_tmp <- ctg_ccp %>%
+  mutate(control = ifelse(drug == "DMSO", "DMSO", "Treatment")) %>%
+  #filter(plate_barcode == "D020T01P004L08") %>%
+  filter(control == "DMSO") %>%
+  group_by(plate_barcode) %>%
+  summarise(ctrl.median = median(photons, na.rm = TRUE),
+            ctrl.mad = mad(photons, na.rm = TRUE)) %>%
+  arrange(plate_barcode)
+  
+noctrl_tmp <- ctg_ccp %>%
+  mutate(control = ifelse(drug == "DMSO", "DMSO", "Treatment")) %>%
+  #filter(plate_barcode == "D020T01P004L08") %>%
+  #filter(control == "DMSO") %>%
+  group_by(plate_barcode) %>%
+  summarise(median = median(photons, na.rm = TRUE),
+            mad = mad(photons, na.rm = TRUE)) %>%
+  arrange(plate_barcode)
+
+#merge both tables to compare the different median references 
+ctrls <- merge(ctrl_tmp, noctrl_tmp, by = "plate_barcode")
+
+#illustrate to what extent the overall plate median is shifted towards more negative values relative to the DMSO based plate median
+ ctrls %>%
+  mutate(d.median = (median - ctrl.median)/ctrl.median*100,
+         d.mad = (mad - ctrl.mad)/ctrl.mad*100,
+         ctrl.r.cov = ctrl.mad/ctrl.median,
+         r.cov = mad/median) %>%
+  ggplot(aes(d.median)) + 
+  geom_density(fill = "blue", alpha = 0.7) + 
+  xlab("% difference of overall and DMSO plate median across screen") + 
+  theme_minimal()
+
+#add the ctrl median as a variable to the ctg_ccp df
+ctg_ccp <- merge(ctg_ccp, ctrls, by=c("plate_barcode")) %>%
+  #introduce relative photon counts
+  mutate(treat.ctrl.median = photons/ctrl.median,
+         treat.median = photons/median)
+```
+
+###Draw a overall correlation plot of the two screen replicates
+```{r}
+tmp <- ctg_ccp %>%
+  unite("line_well", c("line", "Well_ID_384")) %>%
+  select(line_well, replicate, treat.ctrl.median) %>%
+  spread(replicate, treat.ctrl.median) 
+
+tmp.cor<- tmp %>% 
+  select(`1`,`2`) %>%
+  cor(use = "pairwise.complete.obs") %>%
+  .[1,2] %>%
+  round(2)
+
+tmp %>%
+  ggplot(aes(x = `1`, y = `2`)) + 
+  geom_point(alpha = 0.2) + 
+  theme_minimal() + 
+  ylab("Replicate 2") + 
+  xlab("Replicate 1") + 
+  ggtitle(paste0("Correlation of Normalized Treatment Reponse, r =", tmp.cor)) + 
+  geom_abline(slope = 1) + 
+  geom_density2d(alpha = 0.7)
+  #stat_binhex() 
+
+
+
+
+```
+
 
 ###Response profiles with molecular subtype
 Load CMS subtype data and plot a heatmap with response profiles. The CMS subtype confindence has to be greater than 50% to be shown. The first heatmap shows how some response profiles cluster better by the date of their measurment than their organoid line. The second cluster shows the response profiles in relationship to relevant clinical data. 
@@ -320,52 +433,10 @@ ctg_ccp %>%
 ```
 
 #Investigate compound activity
-##Generate treatment response curves and define compound activity
-###Normalize CTG photon counts by a plates DMSO controls
-The 32 DMSO controls yield a reference median which is, across all plates, more robust and greater in relative size than a plate-wise median. Hence the DMSO control dependent median should be used for calibration of plates.  
-```{r}
-ctrl_tmp <- ctg_ccp %>%
-  mutate(control = ifelse(drug == "DMSO", "DMSO", "Treatment")) %>%
-  #filter(plate_barcode == "D020T01P004L08") %>%
-  filter(control == "DMSO") %>%
-  group_by(plate_barcode) %>%
-  summarise(ctrl.median = median(photons, na.rm = TRUE),
-            ctrl.mad = mad(photons, na.rm = TRUE)) %>%
-  arrange(plate_barcode)
-  
-noctrl_tmp <- ctg_ccp %>%
-  mutate(control = ifelse(drug == "DMSO", "DMSO", "Treatment")) %>%
-  #filter(plate_barcode == "D020T01P004L08") %>%
-  #filter(control == "DMSO") %>%
-  group_by(plate_barcode) %>%
-  summarise(median = median(photons, na.rm = TRUE),
-            mad = mad(photons, na.rm = TRUE)) %>%
-  arrange(plate_barcode)
+##Generate treatment response curves and illustrate compound activity
 
-#merge both tables to compare the different median references 
-ctrls <- merge(ctrl_tmp, noctrl_tmp, by = "plate_barcode")
-
-#illustrate to what extent the overall plate median is shifted towards more negative values relative to the DMSO based plate median
- ctrls %>%
-  mutate(d.median = (median - ctrl.median)/ctrl.median*100,
-         d.mad = (mad - ctrl.mad)/ctrl.mad*100,
-         ctrl.r.cov = ctrl.mad/ctrl.median,
-         r.cov = mad/median) %>%
-  ggplot(aes(d.median)) + 
-  geom_density(fill = "blue", alpha = 0.7) + 
-  xlab("% difference of overall and DMSO plate median across screen") + 
-  theme_minimal()
-
-#add the ctrl median as a variable to the ctg_ccp df
-ctg_ccp <- merge(ctg_ccp, ctrls, by=c("plate_barcode")) %>%
-  #introduce relative photon counts
-  mutate(treat.ctrl.median = photons/ctrl.median,
-         treat.median = photons/median)
-
-```
-
-
-###Generate panel of all screened compounds. Different response profiles are visible
+###Generate panel of all screened compounds
+Different response profiles are visible
 ```{r}
 dodge <- position_dodge(width=0.08)
 
@@ -389,7 +460,8 @@ ctg_ccp %>%
 
 ```
 
-##Calculate AUC for all compounds and lines 
+##Calculate AUC values to define compound activity
+###Calculate AUC for all compounds and lines
 ```{r, eval = FALSE}
 
 tmp <- ctg_ccp %>% 
@@ -407,7 +479,7 @@ save(auc_ccp, file = paste0("/Volumes/Macintosh HD/Users/rindtorf/promise/local_
 #other means of AUC calculation can be considered as well
 ```
 
-Load auc data for all compounds and lines 
+###Load auc data for all compounds and lines 
 ```{r}
 #the potent inhibitor Bortezomib leads to a viability of almost 0, scaling to a positive control is currently avoided
 ctg_ccp%>%filter(drug == "Bortezomib" & concentration_factor >= 0.2) %>% select(treat.ctrl.median) %>% .$treat.ctrl.median %>% median(na.rm = TRUE)
@@ -420,7 +492,7 @@ auc_ccp <- auc_cpp
 ```
 
 
-Plot AUC for specific treatments
+###Plot AUC for specific treatments
 ```{r}
 tmp <- auc_ccp %>%
   filter(drug == 'VX-702') %>%
@@ -461,12 +533,29 @@ dot
 
 ```
 
-##Plot an AUC heatmap for all treatments and replicates
+###Calculate median centered log AUC for heatmap
+```{r }
+auc_ccp_scaled <- auc_ccp %>%
+  as_tibble() %>%
+  group_by(drug) %>%
+  summarise(drug.median = median(auc, na.rm = TRUE),
+            drug.mad = mad(auc, na.rm = TRUE)) %>%
+  merge(auc_ccp, ., by = "drug") %>% 
+  mutate(rz.auc = (auc - drug.median)/drug.mad,
+         dif.auc = (auc - drug.median),
+         ratio.auc = (auc/drug.median),
+         ratio.auc.log = FitAR::glog(ratio.auc)- FitAR::glog(1),
+         auc.log = FitAR::glog(auc)) %>% 
+  arrange(rz.auc)
+
+
+```
+
+###Plot an AUC heatmap for all treatments and replicates
 ```{r}
 row <- ctg_ccp %>%
   group_by(drug) %>%
-  summarise(
-            Target = sample(target, 1),
+  summarise(Target = sample(target, 1),
             Pathway = sample(broad_summary, 1)) %>%
   as.data.frame() %>%
   remove_rownames() %>%
@@ -484,7 +573,6 @@ col <- auc_ccp %>%
 
   auc_ccp %>%
   ungroup() %>%
-  filter(grep())
   dplyr::select(drug, plate_barcode, auc) %>%
   spread(plate_barcode, auc) %>%
   remove_rownames() %>%
@@ -503,35 +591,11 @@ col <- auc_ccp %>%
   ) 
 ```
 
-
-##Selected compounds are illustrated
-```{r}
-dodge <- position_dodge(width=0.15)
-ctg_ccp %>%
-  filter(drug %in% c( "Oxaliplatin mit 5-FU", comp.tmp)) %>%
-  #filter(drug %in% c( "Irinotecan / SN-38", "5-FU", 
-  #                  "Gefitinib", "Erlotinib")) %>%
-  mutate(line = as.factor(line),
-         drug = factor(drug, levels = c( "Oxaliplatin mit 5-FU", comp.tmp))) %>%
-  group_by(line, drug, concentration_factor) %>%
-     dplyr::summarise(mean_photons = mean(treat.ctrl.median, na.rm = TRUE),
-                     sd_photons = sd(treat.ctrl.median, na.rm = TRUE),
-                     range_low_photons = range(treat.median)[1],
-                     range_high_photons = range(treat.median)[2]) %>%
-    ggplot(aes(y = mean_photons, x = concentration_factor)) + 
-    geom_point(position = dodge,  stat = "identity", aes( colour = line), size = 2)  + 
-    geom_path(aes( colour = line), alpha = 0.6, position = dodge, size = 2) + 
-    #geom_errorbar(aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
-    #geom_ribbon( aes(x=concentration_factor, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2) +
-    scale_x_log10(breaks = c(7,14)) + 
-    ylab("Photon count normalized to control") + 
-    facet_wrap(~drug) + 
-    xlab("Concentration factor 5-fold, mean of n=2") + 
-    scale_colour_brewer(palette = "Set3") + 
-    theme_minimal()
+#Statistical testing of AUC
+Todo: Associate AUC with organoid genotypes etc.
 
 
-```
+
 
 #Case Study: Patient D027T01
 ##Grey background dose-response
@@ -564,7 +628,7 @@ ctg_ccp %>%
 ```
 
 
-###Anysis for personalized treatments
+##Anysis for personalized treatments
 To compare a lines AUC with the median AUC of the same treatment a robust z score is calculated. To reduce the amount of false-positives a regression to the mean is guiding the analysis: The replicate with the smallest distance to the group median is defined to be relevant for further analysis. The stronger deviating replicate is discarded. 
 ```{r}
 tmp <- auc_ccp %>%
@@ -608,7 +672,36 @@ comp.tmp <- p.rz %>%
 
 ```
 
-Draw AUC waterfall on patient level
+##Selected compounds are illustrated
+```{r}
+dodge <- position_dodge(width=0.15)
+ctg_ccp %>%
+  filter(drug %in% c( "Oxaliplatin mit 5-FU", comp.tmp)) %>%
+  #filter(drug %in% c( "Irinotecan / SN-38", "5-FU", 
+  #                  "Gefitinib", "Erlotinib")) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = c( "Oxaliplatin mit 5-FU", comp.tmp))) %>%
+  group_by(line, drug, concentration_factor) %>%
+     dplyr::summarise(mean_photons = mean(treat.ctrl.median, na.rm = TRUE),
+                     sd_photons = sd(treat.ctrl.median, na.rm = TRUE),
+                     range_low_photons = range(treat.median)[1],
+                     range_high_photons = range(treat.median)[2]) %>%
+    ggplot(aes(y = mean_photons, x = concentration_factor)) + 
+    geom_point(position = dodge,  stat = "identity", aes( colour = line), size = 2)  + 
+    geom_path(aes( colour = line), alpha = 0.6, position = dodge, size = 2) + 
+    #geom_errorbar(aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    #geom_ribbon( aes(x=concentration_factor, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2) +
+    scale_x_log10(breaks = c(7,14)) + 
+    ylab("Photon count normalized to control") + 
+    facet_wrap(~drug) + 
+    xlab("Concentration factor 5-fold, mean of n=2") + 
+    scale_colour_brewer(palette = "Set3") + 
+    theme_minimal()
+
+
+```
+
+##Draw AUC waterfall on patient level
 ```{r}
 
 tmp <- p.rz %>%
@@ -666,95 +759,7 @@ tmp %>%
  
 ```
 
-###Statistical testing of AUC
-Todo: Associate AUC with organoid genotypes etc.
-
-
-
-##calculate median centered log AUC for heatmap
-```{r }
-auc_ccp_scaled <- auc_ccp %>%
-  as_tibble() %>%
-  group_by(drug) %>%
-  summarise(drug.median = median(auc, na.rm = TRUE),
-            drug.mad = mad(auc, na.rm = TRUE)) %>%
-  merge(auc_ccp, ., by = "drug") %>% 
-  mutate(rz.auc = (auc - drug.median)/drug.mad,
-         dif.auc = (auc - drug.median),
-         ratio.auc = (auc/drug.median),
-         ratio.auc.log = FitAR::glog(ratio.auc)- FitAR::glog(1),
-         auc.log = FitAR::glog(auc)) %>% 
-  arrange(rz.auc)
-
-
-```
-
-
-```{r access-dgidb-database, eval=FALSE}
-return_dgidb <- function(input, type = "genes"){
-url = "http://dgidb.genome.wustl.edu"
-path = paste0("/api/v1/interactions.json",
-              "?", type,"=",input %>% str_replace_all(., " ", ""))
-
-response <- GET(url = url, path = path)
-
-response$content %>%
-  rawToChar() %>% 
-  fromJSON() -> temp
-
-do.call(what = "rbind",
-        args = lapply(temp, as.data.frame)) -> temp
-
-    if(nrow(temp) > 0 & !("suggestions" %in% colnames(temp))){
-    as.data.frame(temp$interactions) %>%
-      as_tibble() %>%
-        select(contains("Name"),  source, interactionType, contains("Id")) %>%
-        mutate(input = input,
-               alt_input = NA,
-             input_type = type) %>%
-        return()
-    } else if(("suggestions" %in% colnames(temp)) & (temp$suggestions %>% unlist %>% is.null() != TRUE)){
-      input.alt <- temp$suggestions %>% unlist %>% .[1]
-      cat(paste0(c("corrected ", input, "to", input.alt, "\n")))
-      path.alt = paste0("/api/v1/interactions.json",
-                    "?", type,"=",input.alt %>% str_replace_all(., " ", ""))
-      
-      GET(url = url, path = path.alt) %>%
-        .$content%>%
-        rawToChar() %>% 
-        fromJSON() -> temp.alt
-      
-      do.call(what = "rbind",
-              args = lapply(temp.alt, as.data.frame)) -> temp.alt
-      
-        if(nrow(temp.alt) > 0 & !("suggestions" %in% colnames(temp.alt))){
-      as.data.frame(temp.alt$interactions) %>%
-      as_tibble() %>%
-      select(contains("Name"),  source, interactionType, contains("Id")) %>%
-      mutate(input = input,
-             alt_input = input.alt,
-             input_type = type) %>%
-        return()
-        }
-    } else 
-      cat(paste0(c("could not find ", input, "\n")))
-}
-
-drug_targets.list <- lapply(auc_ccp$drug %>% unique, return_dgidb, type = "drugs")
-  
-drug_targets <- do.call(what = "rbind",
-        args = lapply(drug_targets.list, as.data.frame)) %>%
-  #ugly way to fix the problem of changing names (geneName or drugName depending on the input type)
-  group_by_(colnames(.)[1], "source", "input") %>% 
-          summarize(count = n()) %>%
-      group_by_(colnames(.)[1], "input") %>%
-      summarize(count = n()) %>%
-  filter(count > 0) %>%
-  group_by(input) %>%
-  summarise(target = geneName[count %>% which.max()],
-            count = max(count)) %>%
-  arrange(target)
-```
+#Work in Progress
 
 
 ```{r}
@@ -832,7 +837,7 @@ auc_ccp_scaled %>%
   #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
   #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
   annotation_col = col_temp,
-  annotation_row = row,
+  #annotation_row = row,
   cutree_rows = 5,
   annotation_colors = ann_colors
   ) 
@@ -842,7 +847,7 @@ auc_ccp_scaled %>%
 ```{r}
 auc_ccp %>% ungroup %>% select(drug) %>%
 merge(drug_targets, ., by.x = "input", by.y = "drug", all = TRUE) %>% distinct(input, .keep_all = TRUE) %>%
-write.csv(., "drug_targets_original.csv")
+write.csv(., "~/promise/local_data/annotation/drug_targets_original.csv")
 ```
 
 
@@ -955,7 +960,7 @@ show_shortcuts("Metho", ctg_ccp, rows = 5)
 ```
 
 
-##Correction CTG data by proliferation rate
+#Correction of CTG data by proliferation rate
 Load CTG Proliferation data into R and perform first annotation of the dataset
 ```{r}
 #define datasets to load ctg data into R
@@ -1151,13 +1156,15 @@ ctg_prolif %>%
   ylab("Log2 of median photon count for each timepoint") + 
   xlab("Time (d)")
   
-test %>%
+tmp <- test %>%
   group_by(anno_lines) %>%
   summarise(d3 = estimate[1]+estimate[2]*3) %>%
   mutate(d3_lin = 2^d3,
          line = anno_lines) %>%
   select(-anno_lines) %>%
   merge(ctg_ccp, ., by = "line")
+
+head(tmp)
 
 ```
 

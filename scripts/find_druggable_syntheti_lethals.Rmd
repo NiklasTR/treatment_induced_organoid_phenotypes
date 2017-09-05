@@ -1,0 +1,218 @@
+---
+title: "Try ggraph"
+author: "Niklas R"
+date: "1 3 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(tidyverse)
+library(readxl)
+library(scales)
+library(tidyverse)
+library(ggraph)
+library(igraph)
+library(httr)
+library(jsonlite)
+```
+
+
+```{r}
+
+sl_human <- read_delim("~/C/synthetic_lethals/sl_human", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+crc_driver <- read_delim("~/C/synthetic_lethals/intogen-COREAD-drivers-data.tsv", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+
+sl_crispr <- read_excel("~/C/synthetic_lethals/pi_scores_07022017.xlsx")
+sl_cocanet <- read_delim("~/C/synthetic_lethals/cocanetx", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+
+```
+
+```{r}
+colnames(sl_crispr)[c(1,2)] <- c("GeneASymbol", "GeneBSymbol")
+
+colnames(sl_cocanet)[c(1,2)] <- c("GeneASymbol", "GeneBSymbol")
+
+
+
+sl_crispr %>%
+  filter(fdr < 0.05 & pi < 0) %>%
+  mutate(Score = rescale(abs(pi)),
+         Evidence = "CRISPR") %>%
+  select(GeneASymbol, GeneBSymbol, Score, Evidence)-> sl_crispr
+
+
+sl_cocanet %>%
+  mutate(Score = rescale(`Train 3%`),
+         Evidence = "Cocanet") %>%
+  select(GeneASymbol, GeneBSymbol, Score, Evidence) -> sl_cocanet
+
+sl_human %>%
+  select(GeneASymbol, GeneBSymbol, Score, Evidence) -> sl_human
+
+
+```
+
+```{r}
+sl_human$Score <- rescale(sl_human$Score)
+```
+
+```{r}
+sl_human <- rbind(sl_human, sl_cocanet, sl_crispr)
+```
+
+
+```{r}
+threshold = 0.6
+set.seed(123)
+```
+
+
+```{r}
+
+sl_human %>%
+  as_tibble() %>%
+  #mutate(Score = rescale(Score))
+  filter(Score > threshold) %>%
+  graph_from_data_frame(directed = FALSE) -> temp
+
+  ggraph(temp)+
+    geom_edge_link(aes(edge_alpha = abs(Score), color = Score, edge_width = 2)) +
+  guides(edge_alpha = "none", edge_width = "none") +
+  scale_edge_colour_gradientn(limits = c(threshold, 1), colors = rev(c("firebrick2", "dodgerblue2"))) +
+  geom_node_point(color = "black", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 1.5) +
+  theme_graph() +
+  labs(title = "Synthethic Lethal Interactions")
+  
+  
+  
+```
+
+
+```{r}
+
+
+#threshold = 0.7
+
+sl_human %>%
+  as_tibble() %>%
+  filter(Score > threshold & (GeneASymbol %in% crc_driver$SYMBOL | GeneBSymbol %in% crc_driver$SYMBOL)) %>%
+  select(GeneASymbol, GeneBSymbol, Score, Evidence) %>%
+  #mutate(Evidence_group = factor(Evidence, levels = Evidence)) %>%
+  graph_from_data_frame(directed = FALSE) -> temp
+
+  ggraph(temp)+
+    geom_edge_link(aes(edge_alpha = abs(Score), color = Score, edge_width = 2)) +
+  guides(edge_alpha = "none", edge_width = "none") +
+  scale_edge_colour_gradientn(limits = c(threshold, 1), colors = rev(c("firebrick2", "dodgerblue2"))) +
+  geom_node_point(color = "black", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 1.5) +
+  theme_graph() +
+  labs(title = "Synthethic Lethal Interactions in Colon Cancer")
+  
+  
+  
+```
+
+```{r}
+
+
+sl_human %>%
+  as_tibble() %>%
+  filter(Score > threshold & (GeneASymbol %in% crc_driver$SYMBOL | GeneBSymbol %in% crc_driver$SYMBOL)) %>%
+  select(GeneASymbol, GeneBSymbol) -> temp
+
+temp <- unique(c(temp$GeneASymbol, temp$GeneBSymbol))
+
+return_dgidb <- function(gene){
+url = "http://dgidb.genome.wustl.edu"
+path = paste0("/api/v1/interactions.json",
+              "?genes=",
+              gene)
+
+response <- GET(url = url, path = path)
+
+response$content %>%
+  rawToChar() %>% 
+  fromJSON() -> temp
+
+do.call(what = "rbind",
+        args = lapply(temp, as.data.frame)) -> temp
+
+    if(nrow(temp) > 0){
+    as.data.frame(temp$interactions) %>%
+      as_tibble() %>%
+      select(drugName, source, interactionType) %>%
+      group_by(drugName, source) %>%
+          summarize(Count = n()) %>%
+      group_by(drugName) %>%
+      summarize(Count = n()) %>%
+      mutate(gene = gene) %>%
+      arrange(desc(Count))-> temp
+    
+  return(temp)
+    }
+}
+  
+drugs <- lapply(temp, return_dgidb)
+  
+do.call(what = "rbind",
+        args = lapply(drugs, as.data.frame)) %>%
+  select(gene, drugName, Count) -> drugs
+
+
+
+```
+
+```{r}
+threshold_count = 2
+
+sl_human %>%
+  as_tibble() %>%
+  filter(Score > threshold & (GeneASymbol %in% crc_driver$SYMBOL | GeneBSymbol %in% crc_driver$SYMBOL)) %>%
+  select(GeneASymbol, GeneBSymbol, Score, Evidence) %>%
+  mutate(gene_drug = FALSE,
+         Count = NA) -> temp
+
+colnames(temp)[c(1,2)] <- c("A", "B")
+colnames(drugs)[c(1,2)] <- c("A", "B")
+
+drugs %>% 
+  mutate(gene_drug = TRUE,
+         Evidence = NA,
+         Score = NA) %>%
+  filter(Count > threshold_count) %>%
+  rbind(., temp) %>%
+  graph_from_data_frame(directed = FALSE) -> temp
+
+ggraph(temp)+
+    geom_edge_link(aes(edge_alpha = Score, color = Score, edge_width = 2)) +
+  guides(edge_alpha = "none", edge_width = "none") +
+  scale_edge_colour_gradientn(limits = c(threshold, 1), colors = rev(c("firebrick2", "dodgerblue2"))) +
+  geom_node_point(color = "black", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 1.5) +
+  theme_graph() +
+  labs(title = "Druggable Synthethic Lethal Interactions in Colon Cancer")
+
+
+  
+```
+
+```{r}
+drugs %>% 
+  mutate(gene_drug = TRUE,
+         Evidence = NA,
+         Score = NA) %>%
+  filter(Count > threshold_count) -> shortlist
+
+write_csv(shortlist, "shortlist.csv")
+```
+
