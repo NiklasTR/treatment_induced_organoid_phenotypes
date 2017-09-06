@@ -1,10 +1,14 @@
 ---
-title: "CTG data analysis of HC1092 human organoid screen with clinically relevant compounds"
+title: "CTG data analysis of HC1092 human organoid screen"
 author: "Niklas Rindtorff"
 output: 
    BiocStyle::html_document2:
-    toc_depth: 2
+    code_folding: hide
+    df_print: paged
+    toc_depth: 3
     toc_float: true
+    fig_height: 6
+    fig_width: 9.5
 vignette: >
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
@@ -225,8 +229,8 @@ levels(cohort_short$Location)
 ```
 
 ##Gain an overview about clinical and treatment response features
-###Show replicate-wise correlation coefficients 
-```{r}
+###Show replicate-wise correlation coefficients (flagged)
+```{r, include=FALSE}
 # Get lower triangle of the correlation matrix
   get_lower_tri<-function(cormat){
     cormat[upper.tri(cormat)] <- NA
@@ -257,9 +261,9 @@ levels(cohort_short$Location)
 
 ```
 
-###Normalize CTG photon counts by a plates DMSO controls
+###Normalize CTG photon counts by a plates DMSO controls (flagged)
 The 32 DMSO controls yield a reference median which is, across all plates, more robust and greater in relative size than a plate-wise median. Hence the DMSO control dependent median should be used for calibration of plates.  
-```{r}
+```{r, include = FALSE}
 ctrl_tmp <- ctg_ccp %>%
   mutate(control = ifelse(drug == "DMSO", "DMSO", "Treatment")) %>%
   #filter(plate_barcode == "D020T01P004L08") %>%
@@ -300,7 +304,7 @@ ctg_ccp <- merge(ctg_ccp, ctrls, by=c("plate_barcode")) %>%
 ```
 
 ###Draw a overall correlation plot of the two screen replicates
-```{r}
+```{r, warning=FALSE, message=FALSE}
 tmp <- ctg_ccp %>%
   unite("line_well", c("line", "Well_ID_384")) %>%
   select(line_well, replicate, treat.ctrl.median) %>%
@@ -329,9 +333,9 @@ tmp %>%
 ```
 
 
-###Response profiles with molecular subtype
+###Response profiles with molecular subtype (flagged)
 Load CMS subtype data and plot a heatmap with response profiles. The CMS subtype confindence has to be greater than 50% to be shown. The first heatmap shows how some response profiles cluster better by the date of their measurment than their organoid line. The second cluster shows the response profiles in relationship to relevant clinical data. 
-```{r}
+```{r, include= FALSE}
 # import expression data
 library(readxl)
 subtypes_organoids <- read_excel("~/promise/local_data/expression/subtypes_organoids_28062017.xlsx") %>%
@@ -435,9 +439,9 @@ ctg_ccp %>%
 #Investigate compound activity
 ##Generate treatment response curves and illustrate compound activity
 
-###Generate panel of all screened compounds
+###Generate panel of all screened compounds (flagged)
 Different response profiles are visible
-```{r}
+```{r, include = FALSE, warning=FALSE}
 dodge <- position_dodge(width=0.08)
 
 ctg_ccp %>%
@@ -480,9 +484,10 @@ save(auc_ccp, file = paste0("/Volumes/Macintosh HD/Users/rindtorf/promise/local_
 ```
 
 ###Load auc data for all compounds and lines 
+The potent inhibitor Bortezomib leads to a viability of almost 0, scaling to a positive control is currently avoided. The average scaled viability equals:
 ```{r}
 #the potent inhibitor Bortezomib leads to a viability of almost 0, scaling to a positive control is currently avoided
-ctg_ccp%>%filter(drug == "Bortezomib" & concentration_factor >= 0.2) %>% select(treat.ctrl.median) %>% .$treat.ctrl.median %>% median(na.rm = TRUE)
+ctg_ccp%>%filter(drug == "Bortezomib" & concentration_factor >= 0.2) %>% select(treat.ctrl.median) %>% .$treat.ctrl.median %>% mean(na.rm = TRUE)
 
 #The name of the auc file is fixed since recalculating it during every run is costly
 load(file = paste0("/Volumes/Macintosh HD/Users/rindtorf/promise/local_data/auc_ccp_unfiltered_2017-08-21.Rdata"))
@@ -494,15 +499,18 @@ auc_ccp <- auc_cpp
 
 ###Plot AUC for specific treatments
 ```{r}
+drug_input = 'VX-702'
+
 tmp <- auc_ccp %>%
-  filter(drug == 'VX-702') %>%
-  group_by(line, drug) %>%
-  summarise(auc.mean = mean(auc, na.rm = TRUE),
-            auc.min = min(auc),
-            auc.max = max(auc))
+  filter(drug == drug_input) %>%
+  # filter(drug == drug_input) %>%
+   group_by(line, drug) %>%
+   summarise(auc.mean = mean(auc, na.rm = TRUE),
+             auc.min = min(auc),
+             auc.max = max(auc))
 
 tmp.thres <- auc_ccp %>%
-  filter(drug == 'VX-702') %>%
+  filter(drug == drug_input) %>%
   group_by(drug) %>%
   summarise(drug.thres = median(auc, na.rm = TRUE) + 2*mad(auc, na.rm = TRUE))# %>%
   #merge(tmp, ., by = "drug")
@@ -512,47 +520,29 @@ tmp.thres <- auc_ccp %>%
 
 
 dot <-  tmp %>%
-  ggplot(aes(y = line, x = auc.mean, color = line)) + 
-  geom_point() + 
+  ggplot(aes(y = auc.mean, x = line, color = line)) + 
+  geom_point(size = 5) + 
+  geom_linerange(aes(ymin = auc.min, ymax = auc.max), size = 2)+
   theme_minimal() + 
   scale_colour_brewer(palette = "Set3") + 
-  geom_vline(data = tmp.thres, aes(xintercept = drug.thres)) + 
-  theme(axis.text.y=element_blank()) + 
+  geom_hline(data = tmp.thres, aes(yintercept = drug.thres)) + 
+  theme(axis.text.x=element_blank()) + 
   facet_wrap(~drug)
 
 dot 
-#density <- tmp %>%
-#  ggplot(aes(auc)) + 
-#  geom_density() + 
-#  geom_vline(xintercept = tmp.median + 2*tmp.mad) + 
-#  theme_minimal()
-
-
-#grid.arrange(dot, density,   ncol=1, nrow =2,  heights=c(4, 1.4)) %>%
-#  facet_wrap(~ line)
+# density <- tmp %>%
+#   ggplot(aes(auc)) + 
+#   geom_density() + 
+#   #geom_vline(xintercept = tmp.median + 2*tmp.mad) + 
+#   theme_minimal()
+# 
+# density
 
 ```
 
-###Calculate median centered log AUC for heatmap
-```{r }
-auc_ccp_scaled <- auc_ccp %>%
-  as_tibble() %>%
-  group_by(drug) %>%
-  summarise(drug.median = median(auc, na.rm = TRUE),
-            drug.mad = mad(auc, na.rm = TRUE)) %>%
-  merge(auc_ccp, ., by = "drug") %>% 
-  mutate(rz.auc = (auc - drug.median)/drug.mad,
-         dif.auc = (auc - drug.median),
-         ratio.auc = (auc/drug.median),
-         ratio.auc.log = FitAR::glog(ratio.auc)- FitAR::glog(1),
-         auc.log = FitAR::glog(auc)) %>% 
-  arrange(rz.auc)
-
-
-```
 
 ###Plot an AUC heatmap for all treatments and replicates
-```{r}
+```{r, eval = FALSE}
 row <- ctg_ccp %>%
   group_by(drug) %>%
   summarise(Target = sample(target, 1),
@@ -578,7 +568,7 @@ col <- auc_ccp %>%
   remove_rownames() %>%
   column_to_rownames('drug') %>%
   pheatmap( 
-  #scale = "column",
+  scale = "row",
   cluster_rows = TRUE,
   show_rownames = TRUE,
   show_colnames = TRUE,
@@ -588,6 +578,67 @@ col <- auc_ccp %>%
   annotation_col = col,
   annotation_row = row,
   cutree_rows = 5
+  ) 
+```
+
+```{r}
+row <- ctg_ccp %>%
+  group_by(drug) %>%
+  summarise(Target = sample(target, 1),
+            Pathway = sample(broad_summary, 1)) %>%
+  mutate(Class = if_else(Pathway %in% c("DNA damage", "Topoisomerase", "Cytoskeleton", "Metabolism"), "un-targeted", "targeted"),
+         #using "" as alternative is not desired
+         Targeted = if_else(Class == "targeted", Pathway, ""),
+         Untargeted = if_else(Class == "un-targeted", Pathway, "")) %>%
+  as.data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  dplyr::select(Pathway)
+  
+col <- col_temp %>%
+  distinct(Patient, .keep_all = TRUE) %>%
+  #adapt to different naming coventions
+  mutate(col.name = paste0(Patient, "01")) %>%
+  #Remove Patient color bar below
+  select(-Patient) %>%
+  as.data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames('col.name') 
+
+# Specify colors
+ann_colors <- list(
+    Patient = c(RColorBrewer::brewer.pal(12, "Set3")),
+    Location = RColorBrewer::brewer.pal(3, "Set1"),
+    CMS = RColorBrewer::brewer.pal(3, "Set2")
+    #Target = c(RColorBrewer::brewer.pal(12, "Paired"), '#c2c2b2',	'#ff666a',	'#ff0f15'))
+)
+#names(ann_colors$Target) <- unique(row$Target)
+names(ann_colors$Patient) <- unique(col_temp$Patient)
+names(ann_colors$Location) <- c("Rectum", "Left", "Right")
+names(ann_colors$CMS) <- c("CMS1", "CMS2", "CMS3")
+
+
+auc_ccp %>%
+  group_by(line, drug) %>%
+  summarise(auc.mean = mean(auc, na.rm = TRUE)) %>%
+  select(line, drug, auc.mean) %>%
+  filter(!drug %in% c( "DMSO")) %>%
+  #filter(!grepl(.$drug, pattern = 'mit')) %>%
+  spread(line, auc.mean) %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  pheatmap( 
+  scale = "row",
+  cluster_rows = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'))(15),
+  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
+  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
+  annotation_col = col,
+  annotation_colors = ann_colors,
+  annotation_row = row
+  #cutree_rows = 5
   ) 
 ```
 
@@ -705,7 +756,7 @@ ctg_ccp %>%
 ```{r}
 
 tmp <- p.rz %>%
-  filter(!grepl(.$drug, pattern = 'mit')) %>%
+  #filter(!grepl(.$drug, pattern = 'mit')) %>%
   filter(line == 'D027T01') %>%
   #group_by(line) %>%
   mutate(rz.auc = if_else(rz.auc.min<rz.auc.mean, rz.auc.min, rz.auc.max),
@@ -725,7 +776,7 @@ tmp %>%
   theme_minimal() + 
   scale_fill_gradient(high="red", low="blue") + 
   geom_label_repel(
-    data=subset(tmp, rz.auc > 1.5 | rz.auc < -1.5),
+    data=tmp,
     aes(x = drug, y = rz.auc, label = drug),
     fontface = 'bold', color = 'white',
     box.padding = unit(0.35, "lines"),
