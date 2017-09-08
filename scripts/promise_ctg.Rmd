@@ -34,6 +34,7 @@ library(PharmacoGx) #cite
 library(growthcurve) #cite
 library(jsonlite)
 library(httr)
+library(openxlsx)
 ```
 
 ###Access DGIDB database to annotate compounds in library
@@ -267,9 +268,9 @@ Appropriate normalization of CTG photon counts is key to ensure robust quantific
 
 ```{r, results='hide', warning=F, message=F}
 ##read ctg data files
-ctg_data <- lapply(ctg_data, function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
+ctg_data <- lapply(list.files('rsync_data/ctg_data/HC1092/', full.names=T), 
+                   function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
                      `colnames<-`(c('screen', 'well', 'pcount'))) %>% bind_rows()
-
 ```
 
 For now we load again the plate annotation and merge that to the data to know which drug at which concentration went where.
@@ -280,23 +281,32 @@ plate_anno <- tbl_df(read.xlsx('rsync_data/layouts/raw_layout_files/Clin_Cancer_
 ## rename drug and well columns
 colnames(plate_anno)[c(1, 6)] <- c('drug', 'well')
 ## join with ctg data
-ctg_data <- ctg_data %>% inner_join(plate_anno)
+ctg_data <- ctg_data %>% inner_join(plate_anno) %>% 
+  extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
+  mutate(row=match(row, LETTERS), col=as.integer(col))
+```
+
+There was a technical issue with one of the plates. Wells have to be flagged accordingly.
+
+```{r, results='hide', warning=F, message=F}
+ctg_data <- ctg_data %>% 
+  mutate(pcount = ifelse(screen == '170502_NR_M2_D004T01P006L08' & 
+                         (row %in% seq(1, 15, by=2)) & 
+                         (col %in% 1:13), NA, pcount))
 ```
 
 Now we can get an idea of what the data looks like. First we look at only one plate at a time and look at the photon counts of DMSO controls to see how they vary and if there might be a positional bias that needs correction.
 
 ```{r, results='hide', warning=F, message=F}
-## select one plate
-p <- ctg_data %>% filter(screen == '170620_LF_M3_D030T01P008L08')
-
 ## box plot of DMSO photon counts
-p %>% filter(drug == 'DMSO') %>% 
+ctg_data %>% filter(drug == 'DMSO') %>% 
   ggplot(aes(rack.concentration, pcount)) + geom_jitter(width=0.2) + 
+  facet_wrap(~screen) + 
   geom_boxplot(alpha=0) + theme_classic()
 
 ## heat map of DMSO photon counts, ignoring other values
-p %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
-  mutate(pcount = ifelse(drug != 'DMSO', -1000, pcount)) %>% 
+p <- ctg_data %>% filter(screen == unique(ctg_data$screen)[3])
+p %>% mutate(pcount = ifelse(drug != 'DMSO', -1000, pcount)) %>% 
   dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
   dplyr::select(-row) %>% as.matrix() %>% 
   pheatmap(cluster_rows=F, cluster_cols=F)
@@ -305,29 +315,30 @@ p %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>%
 DMSO controls are scattered across the plate and there is no obvious spacial bias with the exception, maybe, of the control at the bottom right of the plate. However, some of the controls clearly failed and have to be flagged form the analysis. What is concerning is that these controls are all in the same are. Maybe plotting the plate as a whole reveals a spacial bias across all drugs.
 
 ```{r, results='hide', warning=F, message=F}
-p %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
-  dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
-  dplyr::select(-row) %>% as.matrix() %>% pheatmap(cluster_rows=F, cluster_cols=F)
+p %>% dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+  dplyr::select(-row) %>% as.matrix() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F)
 ```
 
-I would say that there is definitely a spacial bias where photon counts get higher towards the bottom of the plate.
+I would say that there is definitely a spacial bias where photon counts get higher towards the bottom and the maybe edges of the plate.
 
 ```{r, results='hide', warning=F, message=F}
-## scatter plot with robust loess fit.
-ctg_data %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>%
-  mutate(row=match(row, LETTERS)) %>% 
-  ggplot(aes(row, pcount)) + geom_point() + 
+## scatter plot with robust loess fit for rows.
+ctg_data %>% ggplot(aes(row, pcount)) + geom_point() + 
+  geom_smooth(method.args=list(family='symmetric')) +
+  facet_wrap(~screen) + theme_classic()
+
+## scatter plot with robust loess fit for columns
+ctg_data %>% ggplot(aes(col, pcount)) + geom_point() + 
   geom_smooth(method.args=list(family='symmetric')) +
   facet_wrap(~screen) + theme_classic()
 ```
 
-In order we correct for row-wise spacial bias we apply a loess-normalization to the data.
+##### Normlization of photon count data
 
-```{r, results='hide', warning=F, message=F}
-## annotate rows and columns
-ctg_data <- ctg_data %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>%
-  mutate(row=match(row, LETTERS)) 
+Looking at above plots this seems to be true for rowwise effect but seems to be negligible on the x axis of the plates. Hence, in order we correct for row-wise spacial bias we apply a loess-normalization to the data.
 
+```{r, results='hide', warning=F, message=F} 
 ## split data by plate and apply loess normalization
 ctg_loess <- ctg_data %>% split(.$screen) %>% lapply(function(s){
   ## loess fit. family is 'symmetric' to be robust to outliers
@@ -353,11 +364,12 @@ ctg_loess %>%
   left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
               summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>% 
   group_by(screen) %>% mutate(rv = pcount_norm/ctrl) %>% ungroup() %>% 
-  filter(drug == 'Bortezomib') %>% 
-  ggplot(aes(screen, rv)) + geom_point() + facet_wrap(~rack.concentration) + theme_classic()
+  filter(drug %in% c('DMSO', 'Bortezomib')) %>% 
+  ggplot(aes(screen, rv, colour=drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic()
 ```
 
-Without cross-plate normalization we can see that the drug is toxic, especially at higher concentrations, but we can definitely see some variation that is not necessarily expected. It might be explained by different growth rates of different lines. Let's see if a cross-plate normalization changes anything.
+Without cross-plate normalization we can see that the drug is toxic, especially at higher concentrations, but we can definitely see some variation. I'm not sure at this point whether this could be a real effect or whetehr there is variation for different reasons (such as varying growth rate) that is better normalized away. Let's see if a cross-plate normalization changes anything.
 
 ```{r, results='hide', warning=F, message=F}
 ## median photon count across all dmso controls of all plates
@@ -373,17 +385,25 @@ ctg_pn %>% dplyr::select(-ctrl) %>%
     left_join(ctg_pn %>% filter(drug == 'DMSO') %>% group_by(screen) %>%
                   summarise(ctrl = median(pcn, na.rm=T)) %>% ungroup()) %>% 
     group_by(screen) %>% mutate(rv = pcn/ctrl) %>% ungroup() %>% 
-  filter(drug == 'Bortezomib') %>% 
-  ggplot(aes(screen, rv)) + geom_point() + facet_wrap(~rack.concentration) + theme_classic()
+  filter(drug %in% c('Bortezomib', 'DMSO')) %>% 
+  ggplot(aes(screen, rv, colour=drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic()
 ```
 
-So it seems that a cross plate normalization doesn't actually matter, indicating that the growth rates might be affecting the variation in phenotype mostly. Let's see if this could be adjusted using a quantile normalization.
+So it seems that a cross plate normalization doesn't actually make a difference, indicating that the growth rates might be affecting the variation in phenotype mostly. Let's see if this could be adjusted using a quantile normalization.
 
 ```{r, results='hide', warning=F, message=F}
 ## generate a matrix with a column per sample and a row per well
-ctg_mat <- ctg_loess %>% dplyr::select(screen, well, pcount) %>% 
+ctg_mat <- ctg_loess %>% 
+  left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+              summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>%
+  group_by(screen) %>% mutate(pcount = pcount / ctrl) %>% ungroup() %>%
+  dplyr::select(screen, well, pcount) %>% 
   spread(screen, pcount) %>% data.frame() %>% `rownames<-`(.$well) %>% 
   dplyr::select(-well)
+
+## boxplot 
+boxplot(ctg_mat)
 
 ## remember rownames and colnames
 rn <- rownames(ctg_mat); cn <- colnames(ctg_mat)
@@ -392,16 +412,14 @@ rn <- rownames(ctg_mat); cn <- colnames(ctg_mat)
 qnorm_mat <- ctg_mat %>% as.matrix() %>% normalize.quantiles()
 rownames(qnorm_mat) <- rn; colnames(qnorm_mat) <- cn
 
+## boxplot of normalized matrix
+boxplot(qnorm_mat)
+
 ## bring back together with the meta data
 ctg_qnorm <- ctg_loess %>% dplyr::select(-c(pcount, pcount_norm, norm_fac)) %>% 
   inner_join(qnorm_mat %>% data.frame() %>% mutate(well = rownames(.)) %>% 
                tbl_df %>% gather(screen, pc_norm, -well) %>% 
                mutate(screen = gsub('^X', '', screen)))
-## normalize to dmso controls
-ctg_qnorm <- ctg_qnorm %>% 
-  left_join(ctg_qnorm %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
-                summarise(ctrl = median(pc_norm, na.rm=T)) %>% ungroup()) %>% 
-  group_by(screen) %>% mutate(rv = pc_norm/ctrl) %>% ungroup()
 
 ## look at bortezomib
 ctg_qnorm %>% filter(drug %in% c('Bortezomib', 'DMSO', 'Gefitinib')) %>% 
@@ -409,6 +427,50 @@ ctg_qnorm %>% filter(drug %in% c('Bortezomib', 'DMSO', 'Gefitinib')) %>%
   facet_wrap(~rack.concentration) + theme_classic()
 ```
 
+This looks reasonable to me. As a final check we can look at the 5-10 overall most toxic drugs and checkif there are differences between the lines (expecting that there are none).
+
+```{r, results='hide', warning=F, message=F}
+## select 5 most toxic drugs
+dtox <- ctg_qnorm %>% group_by(drug) %>% 
+  summarise(medpc = median(pc_norm, na.rm=T)) %>% ungroup() %>% 
+  arrange(medpc) %>% .$drug %>% .[1:5]
+
+## boxplot of these drugs across lines and concentrations
+ctg_qnorm %>% filter(drug %in% dtox) %>% 
+  ggplot(aes(screen, pc_norm)) + geom_boxplot() + 
+  facet_wrap(~rack.concentration) + theme_classic()
+```
+
+I do not see anything that seems to really be strikingly off so I think it's ok to precede and calculate IC50/AUC values. Viability values of > 100 % do not really make sense as we wouldn't expect drug treatment to result in a gain of viability pheontype. Hence, we clip the values at 1 to achieve better AUC/IC50 models.
+
+```{r, results='hide', warning=F, message=F}
+ctg_qnorm <- ctg_qnorm %>% mutate(pc_norm = ifelse(pc_norm > 1, 1, pc_norm))
+## histogram of normalized viability
+hist(ctg_qnorm %>% .$pc_norm)
+```
+
+### Quantification of drug response
+
+Different ways of quantifying drug response might yield different response. We first use the PharmacoGx package to calculate AUCs based on both the actual data and the fitted curve (I would assume the first to be more reasonable).
+
+```{r, results='hide', warning = F, message=F}
+## takes a while
+auc_pgx <- ctg_qnorm %>% group_by(screen, drug) %>% arrange(rack.concentration) %>% 
+  ## calculate auc both for fitted curve and actual values
+  mutate(AUC_fit = computeAUC(rack.concentration, pc_norm, verbose=F,
+                              viability_as_pct = F, area.type = 'Fitted'), 
+         AUC_actual = computeAUC(rack.concentration, pc_norm, verbose=F,
+                                 viability_as_pct = F, area.type='Actual')) %>% 
+  ungroup()
+```
+
+We plot a scatter plot to see if both ways of calculating the AUC agree. 
+
+```{r, results='hide', warning=F, message=F}
+auc_pgx %>% ggplot(aes(AUC_fit, AUC_actual)) + geom_point() + theme_classic()
+```
+
+It seems that they agree very well, with the exception of some outliers generated by cases with NAs. Looking through the results manually it seems that the values estimated by the fitted curve are more reasonable. It would be interesting to compare these results with the restults of a different AUC quantification, for example using a multilevel model.
 
 
 
