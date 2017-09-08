@@ -197,7 +197,7 @@ ctg_ccp <- ctg_ccp # %>%
 
 ###Load the ctg data back into the session
 ```{r}
-load(file = paste0("/Volumes/Macintosh HD/Users/rindtorf/promise/local_data/ctg_ccp_unfiltered_", substr(Sys.time(),1,10), ".Rdata"))
+load(file = 'tmp.Rdata')
 ctg_ccp <- tmp
 ```
 
@@ -257,7 +257,161 @@ levels(cohort_short$Location)
 
 ```
 
-###Normalize CTG photon counts by a plates DMSO controls
+### Normalize CTG photon counts by a plates DMSO controls
+
+#### Validation of different normalization strategies
+
+Appropriate normalization of CTG photon counts is key to ensure robust quantification of drug response. Many different strategies are available to remove potential technical bias from the data and some of them might be more appropriate than others depending on the kinds of bias present in the data. Hence, we examine carefully the kinds of technical bias present in our data set and employ different normalization strategies in order to correct these. We assess and compare performance of these different strategies by looking at various controls.
+
+##### Assessment of technical bias present in the data
+
+```{r, results='hide', warning=F, message=F}
+##read ctg data files
+ctg_data <- lapply(ctg_data, function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
+                     `colnames<-`(c('screen', 'well', 'pcount'))) %>% bind_rows()
+
+```
+
+For now we load again the plate annotation and merge that to the data to know which drug at which concentration went where.
+
+```{r, results='hide', warning=F, message=F}
+## read excel file, convert to tibble
+plate_anno <- tbl_df(read.xlsx('rsync_data/layouts/raw_layout_files/Clin_Cancer_Panel_V170511.xlsx'))
+## rename drug and well columns
+colnames(plate_anno)[c(1, 6)] <- c('drug', 'well')
+## join with ctg data
+ctg_data <- ctg_data %>% inner_join(plate_anno)
+```
+
+Now we can get an idea of what the data looks like. First we look at only one plate at a time and look at the photon counts of DMSO controls to see how they vary and if there might be a positional bias that needs correction.
+
+```{r, results='hide', warning=F, message=F}
+## select one plate
+p <- ctg_data %>% filter(screen == '170620_LF_M3_D030T01P008L08')
+
+## box plot of DMSO photon counts
+p %>% filter(drug == 'DMSO') %>% 
+  ggplot(aes(rack.concentration, pcount)) + geom_jitter(width=0.2) + 
+  geom_boxplot(alpha=0) + theme_classic()
+
+## heat map of DMSO photon counts, ignoring other values
+p %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
+  mutate(pcount = ifelse(drug != 'DMSO', -1000, pcount)) %>% 
+  dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+  dplyr::select(-row) %>% as.matrix() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F)
+```
+
+DMSO controls are scattered across the plate and there is no obvious spacial bias with the exception, maybe, of the control at the bottom right of the plate. However, some of the controls clearly failed and have to be flagged form the analysis. What is concerning is that these controls are all in the same are. Maybe plotting the plate as a whole reveals a spacial bias across all drugs.
+
+```{r, results='hide', warning=F, message=F}
+p %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
+  dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+  dplyr::select(-row) %>% as.matrix() %>% pheatmap(cluster_rows=F, cluster_cols=F)
+```
+
+I would say that there is definitely a spacial bias where photon counts get higher towards the bottom of the plate.
+
+```{r, results='hide', warning=F, message=F}
+## scatter plot with robust loess fit.
+ctg_data %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>%
+  mutate(row=match(row, LETTERS)) %>% 
+  ggplot(aes(row, pcount)) + geom_point() + 
+  geom_smooth(method.args=list(family='symmetric')) +
+  facet_wrap(~screen) + theme_classic()
+```
+
+In order we correct for row-wise spacial bias we apply a loess-normalization to the data.
+
+```{r, results='hide', warning=F, message=F}
+## annotate rows and columns
+ctg_data <- ctg_data %>% extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>%
+  mutate(row=match(row, LETTERS)) 
+
+## split data by plate and apply loess normalization
+ctg_loess <- ctg_data %>% split(.$screen) %>% lapply(function(s){
+  ## loess fit. family is 'symmetric' to be robust to outliers
+  fit <- loess(pcount ~ row, data=s, family='symmetric')
+  ## apply normalization
+  s %>% mutate(norm_fac = predict(fit, row),
+               pcount_norm = pcount - (norm_fac - median(norm_fac)))
+}) %>% bind_rows()
+```
+
+```{r, results='hide', warning=F, message=F}
+## plot row vs photon count of normalized values
+ctg_loess %>% ggplot(aes(row, pcount_norm)) + geom_point() + 
+  geom_smooth(method.args = list(family='symmetric')) + theme_classic() + 
+  facet_wrap(~screen)
+```
+
+Next we can investigate plate specific biases and if correcting for these would actually change anything compared to just normalizing to the DMSO controls on every plate individually. We compare the effects by looking at the drug Bortezomib which we expect to be toxic regardless of the organoid line.
+
+```{r, results='hide', warning=F, message=F}
+## no cross-plate normalization
+ctg_loess %>% 
+  left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+              summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>% 
+  group_by(screen) %>% mutate(rv = pcount_norm/ctrl) %>% ungroup() %>% 
+  filter(drug == 'Bortezomib') %>% 
+  ggplot(aes(screen, rv)) + geom_point() + facet_wrap(~rack.concentration) + theme_classic()
+```
+
+Without cross-plate normalization we can see that the drug is toxic, especially at higher concentrations, but we can definitely see some variation that is not necessarily expected. It might be explained by different growth rates of different lines. Let's see if a cross-plate normalization changes anything.
+
+```{r, results='hide', warning=F, message=F}
+## median photon count across all dmso controls of all plates
+all_dmso <- ctg_loess %>% filter(drug == 'DMSO') %>% .$pcount_norm %>% median(na.rm=T)
+
+## cross-plate normalization
+ctg_pn <- ctg_loess %>% 
+  left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+                summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>% 
+  group_by(screen) %>% mutate(pcn = pcount_norm * (all_dmso/ctrl)) %>% ungroup()
+## plot bortezomib
+ctg_pn %>% dplyr::select(-ctrl) %>%
+    left_join(ctg_pn %>% filter(drug == 'DMSO') %>% group_by(screen) %>%
+                  summarise(ctrl = median(pcn, na.rm=T)) %>% ungroup()) %>% 
+    group_by(screen) %>% mutate(rv = pcn/ctrl) %>% ungroup() %>% 
+  filter(drug == 'Bortezomib') %>% 
+  ggplot(aes(screen, rv)) + geom_point() + facet_wrap(~rack.concentration) + theme_classic()
+```
+
+So it seems that a cross plate normalization doesn't actually matter, indicating that the growth rates might be affecting the variation in phenotype mostly. Let's see if this could be adjusted using a quantile normalization.
+
+```{r, results='hide', warning=F, message=F}
+## generate a matrix with a column per sample and a row per well
+ctg_mat <- ctg_loess %>% dplyr::select(screen, well, pcount) %>% 
+  spread(screen, pcount) %>% data.frame() %>% `rownames<-`(.$well) %>% 
+  dplyr::select(-well)
+
+## remember rownames and colnames
+rn <- rownames(ctg_mat); cn <- colnames(ctg_mat)
+
+## quantile normalize
+qnorm_mat <- ctg_mat %>% as.matrix() %>% normalize.quantiles()
+rownames(qnorm_mat) <- rn; colnames(qnorm_mat) <- cn
+
+## bring back together with the meta data
+ctg_qnorm <- ctg_loess %>% dplyr::select(-c(pcount, pcount_norm, norm_fac)) %>% 
+  inner_join(qnorm_mat %>% data.frame() %>% mutate(well = rownames(.)) %>% 
+               tbl_df %>% gather(screen, pc_norm, -well) %>% 
+               mutate(screen = gsub('^X', '', screen)))
+## normalize to dmso controls
+ctg_qnorm <- ctg_qnorm %>% 
+  left_join(ctg_qnorm %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+                summarise(ctrl = median(pc_norm, na.rm=T)) %>% ungroup()) %>% 
+  group_by(screen) %>% mutate(rv = pc_norm/ctrl) %>% ungroup()
+
+## look at bortezomib
+ctg_qnorm %>% filter(drug %in% c('Bortezomib', 'DMSO', 'Gefitinib')) %>% 
+  ggplot(aes(screen, pc_norm, colour = drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic()
+```
+
+
+
+
 The 32 DMSO controls yield a reference median which is, across all plates, more robust and greater in relative size than a plate-wise median. Hence the DMSO control dependent median should be used for calibration of plates.  
 ```{r}
 ctrl_tmp <- ctg_ccp %>%
@@ -1190,3 +1344,8 @@ ctg_prolif %>%
   theme_minimal()
 ```
 
+# Session info 
+
+```{r}
+sessionInfo()
+```
