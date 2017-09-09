@@ -558,45 +558,6 @@ dot
 
 
 ###Plot an AUC heatmap for all treatments and replicates
-```{r, eval = FALSE}
-row <- ctg_ccp %>%
-  group_by(drug) %>%
-  summarise(Target = sample(target, 1),
-            Pathway = sample(broad_summary, 1)) %>%
-  as.data.frame() %>%
-  remove_rownames() %>%
-  column_to_rownames('drug') %>%
-  dplyr::select(Pathway)
-  
-col <- auc_ccp %>%
-  ungroup() %>%
-  dplyr::select(plate_barcode, line) %>%
-  distinct(plate_barcode, .keep_all = TRUE) %>%
-  as.data.frame() %>%
-  remove_rownames() %>%
-  column_to_rownames('plate_barcode') 
-
-
-  auc_ccp %>%
-  ungroup() %>%
-  dplyr::select(drug, plate_barcode, auc) %>%
-  spread(plate_barcode, auc) %>%
-  remove_rownames() %>%
-  column_to_rownames('drug') %>%
-  pheatmap( 
-  scale = "row",
-  cluster_rows = TRUE,
-  show_rownames = TRUE,
-  show_colnames = TRUE,
-  color = colorRampPalette(rev(c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0')))(15),
-  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
-  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
-  annotation_col = col,
-  annotation_row = row,
-  cutree_rows = 5
-  ) 
-```
-
 ```{r, warning=FALSE, message=FALSE}
 row <- ctg_ccp %>%
   group_by(drug) %>%
@@ -1231,16 +1192,63 @@ tmp %>% dplyr::select(line, m) %>% distinct(line, m) %>% ggplot(aes(line, m)) + 
 The estimation of doubling time is not considerably improved if positional effects are respected and every well is handled as a separate experiment
 
 ```{r}
-ctg_ccp %>% 
-  mutate(time = 96) %>%
-  select(plate_barcode, line, drug, replicate, time, concentration_factor, photons)
+tmp <- ctg_ccp %>% 
+  mutate(time = 144) %>%
+  dplyr::rename(concentration = concentration_factor) %>%
+  select(plate_barcode, line, drug, replicate, time, concentration, photons)
 
-ctg_prolif %>%
-  rename(line = anno_lines) %>%
-  mutate(drug = NA) %>%
-  select(plate_barcode, line, drug, )
+ctg_gr <- ctg_prolif %>%
+  filter(timepoint_num != 8) %>%
+  dplyr::rename(line = anno_lines) %>%
+  mutate(drug = "-",
+         replicate = 1,
+         time = as.integer((timepoint_num-2)*24),
+         concentration = 0) %>%
+  select(plate_barcode, line, drug, replicate, time, concentration, photons) %>%
+  rbind(tmp, .) %>%
+  dplyr::rename(cell_count = photons,
+                cell_line = line,
+                treatment = drug) %>%
+  as.tibble() %>%
+  select(-plate_barcode, -replicate)
 
-drc_output = GRfit(inputCaseA,
-groupingVariables = c('cell_line','agent'))
+drc_output = GRfit(ctg_gr, case = "C", groupingVariables = c('cell_line','treatment'))
+GRdrawDRC(drc_output, experiments = c('D027T01 Erlotinib', "D018T01 Erlotinib"))
+
+GRgetMetrics(drc_output) %>% 
+  select(cell_line, treatment, GR_AOC) %>%
+  as.tibble() %>%
+  ungroup() %>%
+  rename(line = cell_line,
+         drug = treatment, 
+         aoc.mean = GR_AOC) %>%
+  filter(!drug %in% c( "DMSO")) %>%
+  filter(!line %in% c("D015T01", "D020T01")) %>%
+  #filter(!grepl(.$drug, pattern = 'mit')) %>%
+  spread(line, aoc.mean) %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  pheatmap( 
+  scale = "row",
+  cluster_rows = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c('#ca0020','#f4a582','#f7f7f7', '#f7f7f7', '#92c5de','#0571b0'))(6),
+  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
+  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
+  annotation_col = col,
+  annotation_colors = ann_colors,
+  #annotation_row = row
+  cutree_cols = 2,
+  cutree_rows = 4
+  ) 
+```
+
+```{r}
+auc_ccp %>%
+  group_by(line, drug) %>%
+  summarise(auc.mean = mean(auc, na.rm = TRUE)) %>%
+  select(line, drug, auc.mean) %>%
+  
 ```
 
