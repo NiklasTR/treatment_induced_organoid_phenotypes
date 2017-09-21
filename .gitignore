@@ -1,8 +1,9 @@
 .Rproj.user
-.Rhistory
+**/*.Rhistory
 .RData
 .Ruserdata
+**/*.Rcheck
 methods/coculture
-.tar.gz
-.gz
-.tar
+**/*.tar.gz
+**/*.gz
+**/*.tar
