@@ -8,3 +8,5 @@ methods/coculture
 **/*.gz
 **/*.tar
 **/*.idea
+**/*.h5
+**/*.pkl
