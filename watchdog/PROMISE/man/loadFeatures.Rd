@@ -29,7 +29,11 @@ The feature_type parameter can have the following values:
   contiguous foreground patch without any object separation.} 
   \item{foreground}{Returns a single feature set for the entire foreground 
   of an image without any object separation. This feature set only includes 
-  shape-independent haralick features}}
+  shape-independent haralick features}
+  \item{inception}{Returns one feature set for each well. These are the 
+  inception features of the wells. For this, the fields have been resized 
+  to 299x299 pixels and run through the pretrained Inception-v4 network.
+  The features of individual wells were averaged together.}}
 }
 \examples{
 print(loadFeatures)

@@ -14,7 +14,11 @@
 #'   contiguous foreground patch without any object separation.} 
 #'   \item{foreground}{Returns a single feature set for the entire foreground 
 #'   of an image without any object separation. This feature set only includes 
-#'   shape-independent haralick features}}
+#'   shape-independent haralick features}
+#'   \item{inception}{Returns one feature set for each well. These are the 
+#'   inception features of the wells. For this, the fields have been resized 
+#'   to 299x299 pixels and run through the pretrained Inception-v4 network.
+#'   The features of individual wells were averaged together.}}
 #' 
 #' @return A data.frame of features. Each row represents one well's field, 
 #'         each column represents a feature.
@@ -31,11 +35,29 @@ loadFeatures <- function(platename, configdir, feature_type) {
     feature_type, 
     "organoids" = c("features", "feature_names", "well_names"),
     "clumps" = c("features_clumps", "feature_names_clumps", "well_names_clumps"),
-    "foreground" = c("features_noseg", "feature_names_noseg", "well_names_noseg"))
+    "foreground" = c("features_noseg", "feature_names_noseg", "well_names_noseg"),
+    "inception" = "inception")
   if(is.null(hdf5key)) {
-    warning(
-      "'feature_type' must be one of 'organoids', 'clumps', or 'foreground'")
+    warning(paste0(
+      "'feature_type' must be one of 'organoids', 'clumps', ",
+      "'foreground', or 'inception'"))
     return(NULL)
+  }
+  
+  # Inception features are a special case
+  if(hdf5key == "inception") {
+    feature_fn = file.path(
+      featuresdir, "inception", 
+      platename, sprintf("%s_features_inception.h5", platename))
+    features = data.frame(h5read(file = feature_fn, name = "features"))
+    feature_names = as.character(seq_len(ncol(features)))
+    wells = as.character(h5read(file = feature_fn, name = "well_names"))
+    colnames(features) = feature_names
+    # Hack: The well names for the inception features have an incompatible 
+    # format
+    wells = gsub(pattern = "_", replacement = "", x = wells)
+    features$WELL = wells
+    return(features)
   }
   
   feature_fn = file.path(
@@ -198,7 +220,7 @@ get_features_by_compound <- function(compound, organoid_type,
 #' #@examples print(get_all_compounds)
 #' #@export
 get_all_compounds <- function(configdir) {
-  warning("FUNCTION UNIMPLEMENTED")
+  warning("FUNCTION UNIMPLEMENTED BUT ONLY NEEDS SOME BUGFIXING. ANNOY ME ABOUT DOING THIS.")
   return(NULL)
   source(file.path(configdir, "watchdogConfig.R"))
   
