@@ -1,3 +1,12 @@
+2017-09-26: Version 0.1.21 (Jan Sauer)
+- Updated functions to combine features well features and load features
+
+2017-09-21: Version 0.1.20 (Jan Sauer)
+- Fixed feature extraction
+    - Function should now run considerably faster
+    - Note that the old features are most likely NOT 
+      compatible with these new ones anymore
+
 2017-09-13: Version 0.1.19 (Jan Sauer)
 - Expanded feature extraction
     - extractOrganoidFeatures() extracts organoid-specific 

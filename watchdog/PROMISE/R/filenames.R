@@ -155,7 +155,6 @@ intensityHdf5Filename <- function(filedir, platename, row, col) {
 #' @examples print(thumbnailFilename)
 #' @export
 thumbnailFilename <- function(filedir, platename, row, col, configdir=NULL, level=1, addPath=TRUE) {
-    # source(file.path(configdir, "watchdogConfig.R"))
     filename_template = "%s_%s_%s_%d.jpeg"
     if (addPath) {
         res = file.path(filedir, sprintf(filename_template, platename, row, col, level))
@@ -182,31 +181,7 @@ thumbnailFilename <- function(filedir, platename, row, col, configdir=NULL, leve
 #' @examples print(featuresHdf5Filename)
 #' @export
 featuresHdf5Filename <- function(filedir, platename, row, col, configdir=NULL) {
-  # TODO Delete if this leads to no issues
-  # source(file.path(configdir, "watchdogConfig.R"))
   filename_template = "%s_%s_%s_features.h5"
-  return(file.path(filedir, sprintf(filename_template, platename, row, col)))
-}
-
-#' @title Create hdf5 filename for binary masks
-#' 
-#' @description Creates hdf5 filenames with given parameters for the binary masks used to segment the projected images
-#' 
-#' @param filedir The directory of the file
-#' @param platename The plate that the well is on
-#' @param row The row of the well
-#' @param col The column of the well
-#' @param configdir The directory of the configuration files
-#' 
-#' @return The hdf5 filename
-#' 
-#' @author Jan Sauer
-#' 
-#' @examples print(featuresMaskHdf5Filename)
-#' @export
-featuresMaskHdf5Filename <- function(filedir, platename, row, col, configdir) {
-  source(file.path(configdir, "watchdogConfig.R"))
-  filename_template = "%s_%s_%s_masks.h5"
   return(file.path(filedir, sprintf(filename_template, platename, row, col)))
 }
 

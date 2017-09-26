@@ -12,7 +12,8 @@ combineWellFeatures(platename, configdir)
 \item{configdir}{The directory of the configuration files}
 }
 \value{
-A boolean value indicating if the features were correctly combined
+A boolean value indicating if the features were correctly combined 
+and written to disk
 }
 \description{
 Combines the features for each individual well of a plate. 

@@ -4,7 +4,8 @@
 \alias{submitClusterQueue}
 \title{Submits a job to the cluster queue to process one well}
 \usage{
-submitClusterQueue(plateIndir, platename, row, col, configdir, logfile)
+submitClusterQueue(plateIndir, platename, row, col, configdir, logfile,
+  custom_function = NULL)
 }
 \arguments{
 \item{plateIndir}{The base directory on the server, which contains a folder for each plate}
@@ -18,6 +19,8 @@ submitClusterQueue(plateIndir, platename, row, col, configdir, logfile)
 \item{configdir}{The configuration file, which defines the number of z-stacks, channels, and fields}
 
 \item{logfile}{An open connection to the logfile. If missing the logfile is opened and closed again after adding a log entry}
+
+\item{custom_function}{An optional custom workflow command. Must be one of the PROMISE* functions.}
 }
 \value{
 A boolean value indicating if the projection was successful

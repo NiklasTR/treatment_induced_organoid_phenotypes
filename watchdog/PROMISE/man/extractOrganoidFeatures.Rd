@@ -21,9 +21,11 @@ extractOrganoidFeatures(plateIndir, platename, row, col, configdir)
 A boolean value indicating if the features were correctly calculated and saved
 }
 \description{
-Loads a projection and the corresponding segmentation map and 
-calculates the full set of EBImage features as well as the texture features 
-of only the primitive foreground / background segmentation
+Calculates the features of a projection. It calculates three 
+feature sets: 
+    * A primitive segmentation of organoid clumps
+    * An attempt to separate connected organoids via watershedding
+    * The texture features of only the foreground / background
 }
 \examples{
 print(extractOrganoidFeatures)

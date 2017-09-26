@@ -7,3 +7,4 @@ methods/coculture
 **/*.tar.gz
 **/*.gz
 **/*.tar
+**/*.idea

@@ -13,3 +13,12 @@ The '-l [R Library]' tells it where to install the library to. This is
 necessary when installing on the cluster so the compute-nodes know where 
 to look. It's not necessary when installing on a local machine with only
 one Rlib.
+
+---
+
+Warning:
+There is another package called 'PROMISE' in CRAN/Bioconductor. Running an 
+automatic package updater (e.g. update.packages) may lead to our PROMISE
+package being overwritten on your system. If you run into trouble, simply
+uninstall whatever PROMISE package you have on your system and reinstall
+PROMISE from the tar.gz file

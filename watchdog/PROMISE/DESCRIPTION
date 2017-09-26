@@ -1,8 +1,8 @@
 Package: PROMISE
 Type: Package
 Title: What the package does (short line)
-Version: 0.1.19
-Date: 2017-09-13
+Version: 0.1.21
+Date: 2017-09-26
 Author: Jan Sauer, Bernd Fischer
 Maintainer: Jan Sauer <jan.sauer@dkfz-heidelberg.de>
 Description: A workflow package to manage and process the PROMISE image data

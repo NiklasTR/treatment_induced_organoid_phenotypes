@@ -10,7 +10,7 @@ processWell()
 Nothing is returned
 }
 \description{
-This function is called by the bathc script processWell.sh.
+This function is called by the batch script processWell.sh.
  It submits a single well process to the cluster queue.
 }
 \examples{

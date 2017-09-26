@@ -326,6 +326,7 @@ watchdogStart <- function(configdir) {
 #' @param col The column of the well
 #' @param configdir The configuration file, which defines the number of z-stacks, channels, and fields
 #' @param logfile An open connection to the logfile. If missing the logfile is opened and closed again after adding a log entry
+#' @param custom_function An optional custom workflow command. Must be one of the PROMISE* functions.
 #' 
 #' @return A boolean value indicating if the projection was successful
 #' 
@@ -333,7 +334,7 @@ watchdogStart <- function(configdir) {
 #' 
 #' @examples print(submitClusterQueue)
 #' @export
-submitClusterQueue <- function(plateIndir, platename, row, col, configdir, logfile) {
+submitClusterQueue <- function(plateIndir, platename, row, col, configdir, logfile, custom_function = NULL) {
     if (!file.exists(file.path(configdir, "watchdogConfig.R"))) {
         stop("file watchdogConfig.R not found in directory ",configdir,". Run setupWatchdog() to generate one")
     } else {
@@ -352,6 +353,13 @@ submitClusterQueue <- function(plateIndir, platename, row, col, configdir, logfi
                 plateIndir = D[I]
             }
         }
+    }
+    # Inject custom function call
+    if(!is.null(custom_function)) {
+      workflows = grep("^PROMISE", as.vector(lsf.str("package:PROMISE")), value = TRUE)
+      if(custom_function %in% workflows) {
+        fctcall = custom_function
+      }
     }
     file.remove(file.path(configdir, "status", "log", platename,
                           sprintf("%s_%s_%s_%s_err.txt",platename,row, col,fctcall)))
@@ -419,7 +427,7 @@ startWorkflow <- function() {
 
 #' @title Submits a job to the cluster queue to process a single well
 #' 
-#' @description This function is called by the bathc script processWell.sh.
+#' @description This function is called by the batch script processWell.sh.
 #'  It submits a single well process to the cluster queue.
 #' 
 #' @return Nothing is returned
