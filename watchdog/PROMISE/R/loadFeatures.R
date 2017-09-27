@@ -36,7 +36,7 @@ loadFeatures <- function(platename, configdir, feature_type) {
     "organoids" = c("features", "feature_names", "well_names"),
     "clumps" = c("features_clumps", "feature_names_clumps", "well_names_clumps"),
     "foreground" = c("features_noseg", "feature_names_noseg", "well_names_noseg"),
-    "inception" = "inception")
+    "inception" = c("inception", "inception", "inception"))
   if(is.null(hdf5key)) {
     warning(paste0(
       "'feature_type' must be one of 'organoids', 'clumps', ",
@@ -45,7 +45,7 @@ loadFeatures <- function(platename, configdir, feature_type) {
   }
   
   # Inception features are a special case
-  if(hdf5key == "inception") {
+  if(identical(hdf5key, "inception")) {
     feature_fn = file.path(
       featuresdir, "inception", 
       platename, sprintf("%s_features_inception.h5", platename))
