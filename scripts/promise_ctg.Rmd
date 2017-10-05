@@ -596,11 +596,11 @@ names(ann_colors$CMS) <- c("CMS1", "CMS2", "CMS3")
 
 
 auc_ccp %>%
+  dplyr::filter(!grepl(drug, pattern = 'mit')) %>%
+  filter(!drug %in% c( "DMSO", "Staurosporine_500nM")) %>%
   group_by(line, drug) %>%
   summarise(auc.mean = mean(auc, na.rm = TRUE)) %>%
   select(line, drug, auc.mean) %>%
-  filter(!drug %in% c( "DMSO")) %>%
-  #filter(!grepl(.$drug, pattern = 'mit')) %>%
   spread(line, auc.mean) %>%
   remove_rownames() %>%
   column_to_rownames('drug') %>%
@@ -633,10 +633,11 @@ dodge <- position_dodge(width=0.15)
 ctg_ccp %>%
   #filter(drug %in% c( "Methotrexate", "Birinapant",  "Ponatinib",  "Nutlin3a", 
   #                   "Panobinostat", "Erlotinib")) %>%
-  filter(drug %in% c(  "5-FU", "Irinotecan / SN-38",
-                    "Gefitinib", "Erlotinib")) %>%
+  filter(drug %in% c(  "5-FU", "Irinotecan / SN-38", #YM-155, 5-FU, SN-38/Irinotecan, Venetoclax, Birinapant
+                    "Venetoclax", "Birinapant", "YM155")) %>%
   mutate(line = as.factor(line),
-         drug = factor(drug, levels = c("Irinotecan / SN-38", "5-FU", 
+         # drug = factor(drug)) %>%
+         drug = factor(drug, levels = c("Irinotecan / SN-38", "5-FU",
                     "Gefitinib", "Erlotinib"))) %>%
   group_by(line, drug, concentration_factor) %>%
      dplyr::summarise(mean_photons = mean(treat.ctrl.median, na.rm = TRUE),
@@ -787,6 +788,40 @@ tmp %>%
 
  
 ```
+
+#Molecular associations 
+##Propapoptotic compounds and CMS 
+```{r}
+dodge <- position_dodge(width=0.15)
+ctg_ccp %>%
+  #filter(drug %in% c( "Methotrexate", "Birinapant",  "Ponatinib",  "Nutlin3a", 
+  #                   "Panobinostat", "Erlotinib")) %>%
+  filter(drug %in% c(  "5-FU", "Irinotecan / SN-38", #YM-155, 5-FU, SN-38/Irinotecan, Venetoclax, Birinapant
+                     "Birinapant", "YM155")) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = c(  "5-FU", "Irinotecan / SN-38", #YM-155, 5-FU, SN-38/Irinotecan, Venetoclax, Birinapant
+                     "Birinapant", "YM155"))) %>%
+  left_join(., subtypes_organoids) %>%
+  mutate(RF.predictedCMS = if_else(is.na(RF.predictedCMS), "no CMS", RF.predictedCMS),
+         RF.nearestCMS = if_else(is.na(RF.nearestCMS), "no CMS", RF.nearestCMS)) %>%
+  group_by(line, drug, concentration_factor) %>%
+     dplyr::mutate(mean_photons = mean(treat.ctrl.median, na.rm = TRUE),
+                     sd_photons = sd(treat.ctrl.median, na.rm = TRUE),
+                     range_low_photons = range(treat.median)[1],
+                     range_high_photons = range(treat.median)[2]) %>%
+    ggplot(aes(y = mean_photons, x = concentration_factor)) + 
+    geom_point(position = dodge,  stat = "identity", aes( colour = RF.nearestCMS), size = 2)  + 
+    geom_path(aes(group = line, colour = RF.nearestCMS), alpha = 0.6, position = dodge, size = 2) + 
+    #geom_errorbar(aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    #geom_ribbon( aes(x=concentration_factor, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2) +
+    scale_x_log10(breaks = c(7,14)) + 
+    ylab("Photon count normalized to control") + 
+    facet_wrap(~drug) + 
+    xlab("Concentration factor 5-fold") + 
+    scale_color_manual(values=c("#377EB8", "#E41A1C", "#4DAF4A", "#9E9A99")) + 
+    theme_minimal()
+```
+
 
 #Work in Progress
 ```{r, eval = FALSE}
@@ -946,7 +981,7 @@ if(nrow(img.path) > 41){img.path <- img.path %>% group_by(plate_barcode_m1) %>% 
 Print separate response curves for selected compounds
 ```{r, eval = FALSE}
 
-for(i in c("Ponatinib", "Afatinib", "AZD 4547")){
+for(i in c("YM155", "Venetoclax", "Birinapant")){
 dodge <- position_dodge(width=0.15)
 p <- ctg_ccp %>%
   group_by(complete_barcode) %>%
@@ -1191,7 +1226,7 @@ tmp %>% dplyr::select(line, m) %>% distinct(line, m) %>% ggplot(aes(line, m)) + 
 
 The estimation of doubling time is not considerably improved if positional effects are respected and every well is handled as a separate experiment
 
-```{r}
+```{r, eval = FALSE}
 tmp <- ctg_ccp %>% 
   mutate(time = 144) %>%
   dplyr::rename(concentration = concentration_factor) %>%
@@ -1244,11 +1279,11 @@ GRgetMetrics(drc_output) %>%
   ) 
 ```
 
-```{r}
+```{r, eval=FALSE}
 auc_ccp %>%
   group_by(line, drug) %>%
   summarise(auc.mean = mean(auc, na.rm = TRUE)) %>%
-  select(line, drug, auc.mean) %>%
+  select(line, drug, auc.mean)
   
 ```
 
