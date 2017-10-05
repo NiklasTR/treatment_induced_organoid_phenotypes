@@ -67,6 +67,16 @@ extractOrganoidFeatures <- function(plateIndir, platename, row, col, configdir) 
     # original mask
     mask_labeled = propagate(x = mask, seeds = wshed, mask = mask)
     
+    # This is a hacky solution to avoid errors due to missing segmentation.
+    # WARNING: If anybody changes the number of features to compute (haralick scales), 
+    # then the size of the array must be modified.
+    if(sum(mask_labeled != 0) == 0) {
+      features[[fld]] = matrix(0, nrow = 0, ncol = 1572)
+      features_clumps[[fld]] = matrix(0, nrow = 0, ncol = 1572)
+      features_noseg[[fld]] = matrix(0, nrow = 0, ncol = 118)
+      next
+    }
+    
     features[[fld]] = computeFeatures(
       x = mask_labeled, ref = normalize(img), 
       haralick.scales = c(1, 2, 4, 8, 16, 32, 64, 128, 256))
