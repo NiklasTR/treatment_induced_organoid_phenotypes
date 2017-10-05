@@ -1,5 +1,12 @@
 .Rproj.user
-.Rhistory
+**/*.Rhistory
 .RData
 .Ruserdata
+**/*.Rcheck
 methods/coculture
+**/*.tar.gz
+**/*.gz
+**/*.tar
+**/*.idea
+**/*.h5
+**/*.pkl
