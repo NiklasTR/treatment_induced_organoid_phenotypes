@@ -1,4 +1,4 @@
-# Analysis of image features
+# Analysis of Image Features Averaged Over Wells
 
 Image features, e.g. haralick texture features, potentially contains rich biological information. This vignette attempts to determine the effects drugs have on organoids, when compared to the DMSO control, for a given cell line.
 
@@ -23,33 +23,29 @@ blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/b
 feature_type = "organoids"
 ```
 
-## Averaged organoid features
-
 Due to the sheer amount of features, a first attempt is made at an analysis with the averaged features for each organoid in wells. Both the median and the median absolute deviation (mad) of the features for each organoid in a well are used. In addition, I averaged the values of large and small objects separately. Proper organoids most likely have an area of at least 5000 pixels, so all objects larger than this were grouped together. All objects smaller than 5000 pixels in area were also grouped and considered to be either individual cells or fragments of organoids. These two sets of summary features were concatenated for each well so that for each well, the feature set looks like:
 
     [organoids_feature1_median, ... , organoids_featureN_median, organoids_feature1_mad, ... , organoids_featureN_mad, 
      fragments_feature1_median, ... , fragments_featureN_median, fragments_feature1_mad, ... , fragments_featureN_mad]
 
-## Simple Analysis
+## Load and Normalize Features
 
-A first, simple analysis attempts to differentiate positive from negative controls. For this, I load all data for cell lines and extract the positive ("Staurosporine_500nM") and negative ("DMSO") wells.
-
+As I'm interested in the libraries with concentration information, I use only plates with layout L08.
 ```{r load_data}
 all_cell_lines = unique(substr(list.files(feature_dir, pattern = "D0"), 1, 7))
 
-# D010 has some older plates with library L01 but these are very low quality 
-# and shouldn't be included here as they contain drugs not used for any other cell line
-permitted_libraries = c("L02", "L03", "L08")
+pos_ctrl_treatments = "Irinotecan / SN-38|Bortezomib|Staurosporine_500nM|Volasertib|Methotrexate"
 
 features = lapply(all_cell_lines, function(cell_line) {
   feat = get_median_features(
     cell_line = cell_line, featuredir = feature_dir, 
     configdir = config_dir, feature_type = feature_type)
   lib = substr(rownames(feat), 12, 14)
-  feat = feat[lib %in% permitted_libraries,]
-  pos_ctrl = feat[grep("Staurosporine_500nM", feat$DRUG, ignore.case = TRUE),]
+  feat = feat[lib == "L08",]
+  pos_ctrl = feat[grep(pos_ctrl_treatments, feat$DRUG, ignore.case = TRUE),]
   neg_ctrl = feat[grep("DMSO", feat$DRUG, ignore.case = TRUE),]
   dat = rbind(pos_ctrl, neg_ctrl)
+  dat$CELL.LINE = cell_line
   return(dat)})
 
 # well info
@@ -58,189 +54,316 @@ well_name_info = do.call(c, lapply(features, rownames))
 
 features = data.frame(rbindlist(features, use.names = TRUE, fill = TRUE))
 rownames(features) = well_name_info
+
+metadata_cols = c("REPLICATE", "DRUG", "CONCENTRATION", "CELL.LINE")
+features_metadata = features[,metadata_cols]
+features[,metadata_cols] = NULL
 ```
 
-The most immediately interesting biological features are the number of organoids as well as their average size and the total area. The first two features I extract only from the "signal" elements, leaving out any erroneously segmented single cells or other segmented elements too small to be proper organoids. The total area I extract from both signal and noise. I'm interested in both the medians and the MADs
+To avoid plate batch effects, I normalize all features by the mean and standard deviation of the negative controls (DMSO). The features were already trimmed when the averages over each well were calculated so that further trimming is most likely unnecessary. Features that show no variation across DMSO controls on any single plate are removed as they are most likely unreliable.
 
-### Number of Organoids per Well
-
-For easier interpretability, it makes more sense to look at the unnormalized values for the number of organoids
 ```{r}
-inv_glog = function(y, c=0.05) {
-  return(0.25 * exp(-y) * (4*exp(2*y) - c**2))
-}
+# Remove features that are constant across DMSO wells for any single plate
+dmso_features = features[features_metadata$DRUG == "DMSO",]
+plates = substr(rownames(dmso_features), 1, 14)
+dmso_sd = aggregate(dmso_features, by = list(plates), sd)
+rownames(dmso_sd) = dmso_sd$Group.1
+dmso_sd$Group.1 = NULL
+features[,names(which(colSums(dmso_sd == 0) > 0))] = NULL
 
-sf_numobj = features[,"signal_num.of.objects"]
-sf_numobj_noise = features[,"noise_num.of.objects"]
-sf_drug = features[,"DRUG"]
+# Normalize remaining features on mean and sd of dmso controls
+plates = substr(rownames(features), 1, 14)
+for(plate in unique(plates)) {
+  plate_feats = features[plate == plates,]
+  dmso_feats = features[plate == plates & features_metadata$DRUG == "DMSO",]
+  m = apply(dmso_feats, 2, mean)
+  m = matrix(
+    rep(m, nrow(plate_feats)), 
+    nrow = nrow(plate_feats), 
+    ncol = ncol(plate_feats), 
+    byrow = TRUE)
+  s = apply(dmso_feats, 2, sd)
+  s = matrix(
+    rep(s, nrow(plate_feats)), 
+    nrow = nrow(plate_feats), 
+    ncol = ncol(plate_feats), 
+    byrow = TRUE)
+  features[plate == plates,] = (features[plate == plates,] - m) / s
+}
+```
+
+## Positive controls
+
+The drugs Bortezomib, Irinotecan / SN-38, Staurosporine, Volasertib, and Methotrexate are all potential positive controls. To see how suitable they are for this, I look at how they compare to DMSO, the negative control. To compare treatments, I look at the number of organoids as a proxy for organoid survival.
+```{r}
+sf_drug = features_metadata[,"DRUG"]
+sf_conc = features_metadata[,"CONCENTRATION"]
+sf_drug_conc = ifelse(
+  test = sf_drug %in% c("DMSO", "Staurosporine_500nM"), 
+  yes = sf_drug, no = paste0(sf_drug, " @ ", sf_conc))
 simple_features = data.frame(
-  "Num.Objects" = inv_glog(sf_numobj),
-  "Num.Objects.Noise" = inv_glog(sf_numobj_noise),
+  "Num.Objects" = features[,"signal_num.of.objects"],
+  "Num.Objects.Noise" = features[,"noise_num.of.objects"],
   "Drug" = sf_drug,
+  "Concentration" = sf_conc,
+  "Drug_Conc" = sf_drug_conc,
   "Cell.Line" = substr(rownames(features), 1, 4)
 )
 ```
 
-Note that the filtering between what is and what isn't an organoid is rudimentary at this point. I've simply used a size threshold, i.e. anything with an area < 2500 pixels (corresponding to a radius of approx. 30 pixels for a circular object) is most likely not an organoid and counted as shrapnel. Shrapnel could be individual cells or badly/partially segmented organoids. As the segmentation algorithm was not explicitly trained to recognize individual cells, there is absolutely no guarantee that these are reliably detected. A better detection method for individual cells would be to look at the intensity distribution across an image and compare it with the organoid segmentation to find any "hotspots" not detected by the segmentation.
+### Comparing Positive Controls
 
-All cell lines show a clear trend for DMSO wells having more organoids than the Staurosporine controls. Some cell lines (D013, D019, and D030 in particular) also show that the Staurosporine wells have far more "shrapnel", i.e. individual cells or partially destroyed organoids.
+#### Staurosporine_500nM
 
-```{r}
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) + 
-  ggtitle(label = "Number of Organoids per Well") + xlab("Cell Line") + ylab("Number of Organoids")
+Staurosporine and DMSO were only applied at one concentration.
+
+```{r, fig.width=12, fig.height=6}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Staurosporine_500nM"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Staurosporine_500nM)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
 ```
 
-```{r}
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well", 
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Staurosporine_500nM)", 
           subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Objects")
+  xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-### Mean Area of Organoids per Well
+#### Bortezomib
 
-The area scales quadratically and the resulting large range of potential values makes it more reasonable to look at the log-normalized values here.
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Bortezomib"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Bortezomib)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Bortezomib)", 
+          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+#### Irinotecan / SN-38
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Irinotecan / SN-38"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Irinotecan / SN-38)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Irinotecan / SN-38)", 
+          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+#### Volasertib
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Volasertib"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Volasertib)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Volasertib)", 
+          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+#### Methotrexate
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Methotrexate"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Methotrexate)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Methotrexate)", 
+          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+### Combining Positive Controls
+
+With a few exceptions in individual cell lines, the highest concentrations of positive controls ("0.2" and "1") seem to be well differentiable from the negative controls with regards to the number of organoids in each well. Grouping the positive controls leads to a larger within-group variance but still leaves them clearly differentiable from the negative controls.
 
 ```{r}
-glog = function(x, c=0.05) {
-  return(log((x + sqrt(x**2 + c**2)) / 2))
-}
+valid_entries = features_metadata$DRUG %in% c("DMSO", "Staurosporine_500nM") | 
+  features_metadata$CONCENTRATION %in% c("0.2", "1")
+features_combined = features[valid_entries,]
+features_metadata_combined = features_metadata[valid_entries,]
+features_metadata_combined$DRUG = ifelse(
+  test = features_metadata_combined$DRUG == "DMSO",
+  yes = "NEG_CTRL", no = "POS_CTRL")
+```
 
-inv_glog = function(y, c=0.05) {
-  return(0.25 * exp(-y) * (4*exp(2*y) - c**2))
-}
-
-sf_area_median = features[,"signal_x.0.s.area_median"]
-sf_area_median_noise = features[,"noise_x.0.s.area_median"]
-sf_area_mad = features[,"signal_x.0.s.area_mad"]
-sf_numobj = features[,"signal_num.of.objects"]
-sf_numobj_noise = features[,"noise_num.of.objects"]
-sf_drug = features[,"DRUG"]
-
-total_area = (inv_glog(sf_numobj) * inv_glog(sf_area_median)) + 
-  (inv_glog(sf_numobj_noise) * inv_glog(sf_area_median_noise))
-total_num_objects = inv_glog(sf_numobj) + inv_glog(sf_numobj_noise)
-
+```{r, fig.width=12, fig.height=6}
 simple_features = data.frame(
-  "Area.mean" = sf_area_median, 
-  "Area.sd" = sf_area_mad,
-  "Total.Area" = glog(total_area),
-  "Total.Area.mean" = glog(total_area / total_num_objects),
-  "Drug" = sf_drug,
-  "Cell.Line" = substr(rownames(features), 1, 4)
+  "Num.Objects" = features_combined[,"signal_num.of.objects"],
+  "Num.Objects.Noise" = features_combined[,"noise_num.of.objects"],
+  "Drug" = features_metadata_combined[,"DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 4)
 )
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = "Number of Organoids per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Number of Organoids")
+```
+
+## Finding Characteristic Features
+
+Next, I am interested in finding features that allow for a similar separation between positive and negative controls. The two conditions I impose are:
+
+* The features come from two distinct distributions for positive and negative controls
+* The "vector" pointing from the negative to the positive controls must have the same direction for each cell line, i.e. the mean of the features for the positive controls must be unanimously greater than or less than the mean of the features for the negative controls for across all cell lines. An "error" of two outlier cell line is permitted.
+
+Since I'm only interested in a ranking and not a formal statistical test for the separability of the distributions, I simply look at the ratio of within-group to between-group variances.
+```{r}
+# Begin by removing those features without a unanimous direction between positive and negative
+# control.
+permitted_outliers = 1
+
+pos_ctrl = features_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+pos_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+pos_ctrl_mean = aggregate(pos_ctrl, list(pos_ctrl_metadata$CELL.LINE), mean)
+rownames(pos_ctrl_mean) = pos_ctrl_mean$Group.1
+pos_ctrl_mean$Group.1 = NULL
+
+neg_ctrl = features_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+neg_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+neg_ctrl_mean = aggregate(neg_ctrl, list(neg_ctrl_metadata$CELL.LINE), mean)
+rownames(neg_ctrl_mean) = neg_ctrl_mean$Group.1
+neg_ctrl_mean$Group.1 = NULL
+
+pos_neg_dir = (pos_ctrl_mean - neg_ctrl_mean) > 0
+invalid_features = names(which(
+  (colSums(pos_neg_dir) > permitted_outliers) & 
+  (colSums(pos_neg_dir) < (nrow(pos_neg_dir) - permitted_outliers))))
+features_combined[,invalid_features] = NULL
+
+# Now rank features by the ratio of their between-group to within-group ratio
+pos_ctrl = features_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+pos_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+pos_ctrl_var = aggregate(pos_ctrl, list(pos_ctrl_metadata$CELL.LINE), var)
+rownames(pos_ctrl_var) = pos_ctrl_var$Group.1
+pos_ctrl_var$Group.1 = NULL
+
+# Negative controls
+neg_ctrl = features_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+neg_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+neg_ctrl_var = aggregate(neg_ctrl, list(neg_ctrl_metadata$CELL.LINE), var)
+rownames(neg_ctrl_var) = neg_ctrl_var$Group.1
+neg_ctrl_var$Group.1 = NULL
+
+within_group_var = (pos_ctrl_var + neg_ctrl_var) / 2
+
+# Between-group variance
+between_group_var = aggregate(features_combined, list(features_metadata_combined$CELL.LINE), var)
+rownames(between_group_var) = between_group_var$Group.1
+between_group_var$Group.1 = NULL
+
+# Calculate ratio and apply a trimmed mean (trim 2 cell lines off both ends)
+var_ratio = between_group_var / within_group_var
+var_ratio_trimmed_mean = apply(var_ratio, 2, function(x) {
+  s = sort(x)
+  s = s[3:(length(s) - 2)]
+  mean(s)
+})
+
+qplot(
+  x = seq_along(var_ratio_trimmed_mean), y = sort(var_ratio_trimmed_mean, decreasing = TRUE), 
+  xlab = "Features", ylab = "Variance Ratio", 
+  main = "Between-Group Variance / Within-Group Variance")
+```
+
+The number of organoids, as investigated above, are a good indicator of organoid viability, so I will use the variance ratio for this feature as the lower threshold for the feature selection. Any feature with a better separability and a near-unanimous effect direction between controls can be considered a potential indicator of organoid viability.
+
+```{r}
+lower_thresh = var_ratio_trimmed_mean["signal_num.of.objects"]
+possible_features = names(which(var_ratio_trimmed_mean >= lower_thresh))
+features_combined = features_combined[,possible_features]
+```
+
+As a final step, I want to make sure that the features weren't chosen simply because they correlate strongly. Therefore, I apply a stepwise feature selection, as per Fischer et al. 2015 ("A Map of Directional Genetic Interactions in a Metazoan Cell") and Laufer et al. 2013 ("Mapping genetic interactions in human cancer cells"). Feature selection is performed on the combined feature set for all cell lines. This entails the following steps:
+1. Choose an initial feature set. This will be the number of organoids.
+2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
+3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
+
+```{r}
+# Choose the best three as a starting set
+selected_features = c("signal_num.of.objects")
+remaining_features = colnames(features_combined)[
+  !colnames(features_combined) %in% selected_features]
+
+# Remember statistics on the correlations
+all_correlations = list()
+ratio_positive = c()
+
+# Calculate the fit for each replicate and save the residuals
+while(length(remaining_features) > 0) {
+  residuals = array(0, dim = c(nrow(features_combined), 2, length(remaining_features)))
+  dimnames(residuals) = list(NULL, NULL, remaining_features)
+  for(feat in remaining_features) {
+    model1 = lm(
+    features_combined[features_metadata_combined$REPLICATE == 1, feat] ~
+      as.matrix(features_combined[features_metadata_combined$REPLICATE == 1, selected_features]))
+    model2 = lm(
+      features_combined[features_metadata_combined$REPLICATE == 2, feat] ~
+        as.matrix(features_combined[features_metadata_combined$REPLICATE == 2, selected_features]))
+    residuals[,1,feat] = model1$residuals
+    residuals[,2,feat] = model2$residuals
+  }
+
+  # Calculate the correlation
+  correlations = apply(residuals, 3, function(x) {
+    x1 = x[,1]
+    x2 = x[,2]
+    I = which(is.finite(x1) & is.finite(x2))
+    cor(x1[I], x2[I])
+  })
+
+  to_select = names(correlations)[which.max(correlations)]
+  selected_features = c(selected_features, to_select)
+  remaining_features = colnames(features_combined)[
+    !colnames(features_combined) %in% selected_features]
+  all_correlations = c(all_correlations, list(correlations))
+  ratio_positive = c(ratio_positive, sum(correlations > 0, na.rm = TRUE) / length(correlations))
+}
+
+# Keep only the selected features with a ratio > 0.5 of positively correlated residual matrices
+selected_features = selected_features[c(TRUE, ratio_positive > 0.5)]
 ```
 
 ```{r}
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Area.mean, fill = Drug)) + 
-  ggtitle(label = "Mean Area of Organoids per Well") + xlab("Cell Line") + ylab("Mean Area")
+ratio_color = ifelse(ratio_positive >= 0.5, "1", "2")
+ggplot(data = data.frame(
+  "Iteration" = seq_along(ratio_positive),
+  "Ratio" = ratio_positive-0.5)) +
+  geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") +
+  ggtitle("Ratio of features with positive correlation") +
+  theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5)
 ```
+
+What remains are \Sexp(length(selected_features)) features used to describe organoid viability
 
 ```{r}
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Area.sd, fill = Drug)) + 
-  ggtitle(label = "Standard Deviation of Area of Organoids per Well") + xlab("Cell Line") + ylab("Std. Dev. of Area")
+print(selected_features)
+features_combined = features_combined[,selected_features]
 ```
 
-### Total Area
-
-This result should be appreciated with caution as the segmentation algorithm was not specifically designed to detect shrapnel and individual cells. Nevertheless, a trend towards less biomatter in the positive controls is clear (for most cell lines). A look at the relative intensity distributions can potentially support this result.
-
+An few examples for these features are shown below
 ```{r}
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug)) + 
-  ggtitle(label = "Total Covered Area per Well") + xlab("Cell Line") + ylab("Total Area")
+
 ```
-
-<!-- ## Intensity Distribution -->
-
-<!-- The intensity distributions between the positive and negative controls will hopefully give some more insight into the differences between the organoids. -->
-
-<!-- ```{r int_distr, cache=TRUE} -->
-<!-- # This file is saved because extracting this info takes a LONG time. -->
-<!-- if(file.exists("intensity_distributions_pos_neg.rds")) { -->
-<!--   total_int_distr = readRDS("intensity_distributions_pos_neg.rds") -->
-<!-- } else { -->
-<!--   total_int_distr = setNames( -->
-<!--     object = vector(mode = "list", length = length(all_cell_lines)),  -->
-<!--     nm = all_cell_lines) -->
-<!--   for(cell_line in all_cell_lines) { -->
-<!--     cl_feat = features[cell_line_info == cell_line,] -->
-
-<!--     # Positive controls -->
-<!--     pos_ctrl = cl_feat[cl_feat$DRUG == "Staurosporine_500nM",] -->
-<!--     plate = substr(rownames(pos_ctrl), 1, 14) -->
-<!--     row = substr(rownames(pos_ctrl), 16, 16) -->
-<!--     col = substr(rownames(pos_ctrl), 17, 18) -->
-<!--     well_ids = data.frame(plate, row, col) -->
-<!--     pos_int_distr = array(0L, dim = c(65536, 3, 4, nrow(well_ids))) -->
-<!--     for(i in seq_len(nrow(well_ids))) { -->
-<!--       pos_int_distr[,,,i] = h5read(paste0( -->
-<!--         "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features/intensity_distribution/", -->
-<!--         well_ids[i, "plate"],  -->
-<!--         sprintf("/%s_%s_%s_intensity_distribution.h5",  -->
-<!--                 well_ids[i, "plate"], well_ids[i, "row"], well_ids[i, "col"])),  -->
-<!--         "features")[,,,1] -->
-<!--     } -->
-
-<!--     # Bin into histograms -->
-<!--     n_bins = 256 -->
-<!--     hist_indices = rep(as.character(1:n_bins), times = rep(65536/n_bins, n_bins)) -->
-<!--     dimnames(pos_int_distr) = list( -->
-<!--       "Value" = hist_indices,  -->
-<!--       "Channel" = seq_len(dim(pos_int_distr)[2]), -->
-<!--       "Field" = seq_len(dim(pos_int_distr)[3]), -->
-<!--       "Num.Wells" = seq_len(dim(pos_int_distr)[4]) -->
-<!--     ) -->
-<!--     pos_int_distr_binned = reshape2::acast( -->
-<!--       melt(pos_int_distr), Value ~ Channel ~ Field ~ Num.Wells, fun.aggregate = sum) -->
-<!--     pos_int_distr_mean = apply(pos_int_distr_binned, c(1, 2), mean) -->
-<!--     pos_int_distr_sd = apply(pos_int_distr_binned, c(1, 2), sd) -->
-
-<!--     # Negative controls -->
-<!--     neg_ctrl = cl_feat[cl_feat$DRUG == "DMSO",] -->
-<!--     plate = substr(rownames(neg_ctrl), 1, 14) -->
-<!--     row = substr(rownames(neg_ctrl), 16, 16) -->
-<!--     col = substr(rownames(neg_ctrl), 17, 18) -->
-<!--     well_ids = data.frame(plate, row, col) -->
-<!--     neg_int_distr = array(0L, dim = c(65536, 3, 4, nrow(well_ids))) -->
-<!--     for(i in seq_len(nrow(well_ids))) { -->
-<!--       neg_int_distr[,,,i] = h5read(paste0( -->
-<!--         "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features/intensity_distribution/", -->
-<!--         well_ids[i, "plate"],  -->
-<!--         sprintf("/%s_%s_%s_intensity_distribution.h5",  -->
-<!--                 well_ids[i, "plate"], well_ids[i, "row"], well_ids[i, "col"])),  -->
-<!--         "features")[,,,1] -->
-<!--     } -->
-
-<!--     # Bin into histograms -->
-<!--     n_bins = 256 -->
-<!--     hist_indices = rep(as.character(1:n_bins), times = rep(65536/n_bins, n_bins)) -->
-<!--     dimnames(neg_int_distr) = list( -->
-<!--       "Value" = hist_indices,  -->
-<!--       "Channel" = seq_len(dim(neg_int_distr)[2]), -->
-<!--       "Field" = seq_len(dim(neg_int_distr)[3]), -->
-<!--       "Num.Wells" = seq_len(dim(neg_int_distr)[4]) -->
-<!--     ) -->
-<!--     neg_int_distr_binned = reshape2::acast( -->
-<!--       melt(neg_int_distr), Value ~ Channel ~ Field ~ Num.Wells, fun.aggregate = sum) -->
-
-<!--     neg_int_distr_mean = apply(neg_int_distr_binned, c(1, 2), mean) -->
-<!--     neg_int_distr_sd = apply(neg_int_distr_binned, c(1, 2), sd) -->
-
-<!--     total_int_distr[[cell_line]] = list( -->
-<!--       "pos_ctrl" = pos_int_distr_binned, "neg_ctrl" = neg_int_distr_binned,  -->
-<!--       "pos_ctrl_mean" = pos_int_distr_mean, "neg_ctrl_mean" = neg_int_distr_mean,  -->
-<!--       "pos_ctrl_sd" = pos_int_distr_sd, "neg_ctrl_sd" = neg_int_distr_sd) -->
-<!--   } -->
-<!--   saveRDS(total_int_distr, "intensity_distributions_pos_neg.rds") -->
-<!-- } -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- ggplotdf_ratio = melt(data.frame( -->
-<!--   "Intensity.Bin" = seq_len(nrow(total_int_distr$D004T01$pos_ctrl_mean)), -->
-<!--   "Cy3" = total_int_distr$D004T01$pos_ctrl_mean[,1] / total_int_distr$D004T01$neg_ctrl_mean[,1],  -->
-<!--   "FITC" = total_int_distr$D004T01$pos_ctrl_mean[,2] / total_int_distr$D004T01$neg_ctrl_mean[,2],  -->
-<!--   "DAPI" = total_int_distr$D004T01$pos_ctrl_mean[,3] / total_int_distr$D004T01$neg_ctrl_mean[,3]),  -->
-<!--   id = "Intensity.Bin") -->
-<!-- ggplot(data = ggplotdf_ratio) + geom_point(aes(x = Intensity.Bin, y = value, color = variable)) -->
-<!-- ``` -->
