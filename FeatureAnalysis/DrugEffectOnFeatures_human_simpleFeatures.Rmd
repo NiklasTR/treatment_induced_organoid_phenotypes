@@ -1,8 +1,15 @@
-# Analysis of Image Features Averaged Over Wells
+---
+title: "Feature Selection for Human Organoids based on Organoid Viability"
+author: "Jan Sauer"
+date: "10.10.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
 
-Image features, e.g. haralick texture features, potentially contains rich biological information. This vignette attempts to determine the effects drugs have on organoids, when compared to the DMSO control, for a given cell line.
-
-This vignette concerns the mouse organoids.
+Image features, e.g. haralick texture features, potentially contains rich biological information. Here, I attempt to select features that are capable of differentiating living from dead organoids based on (hand chosen) positive and negative controls (DMSO).
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 # Install and load libraries
@@ -23,12 +30,12 @@ blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/b
 feature_type = "organoids"
 ```
 
-Due to the sheer amount of features, a first attempt is made at an analysis with the averaged features for each organoid in wells. Both the median and the median absolute deviation (mad) of the features for each organoid in a well are used. In addition, I averaged the values of large and small objects separately. Proper organoids most likely have an area of at least 5000 pixels, so all objects larger than this were grouped together. All objects smaller than 5000 pixels in area were also grouped and considered to be either individual cells or fragments of organoids. These two sets of summary features were concatenated for each well so that for each well, the feature set looks like:
+Due to the sheer amount of features, a first attempt is made at an analysis with the averaged features for each organoid in wells. Both the trimmed mean and the trimmed standard deviation of the features for each organoid in a well are used. In addition, I averaged the values of large and small objects separately. Proper organoids most likely have an area of at least 2500 pixels, so all objects larger than this were grouped together. All objects smaller than 2500 pixels in area were also grouped and considered to be either individual cells or fragments of organoids. These two sets of summary features were concatenated for each well so that for each well, the feature set looks like:
 
     [organoids_feature1_median, ... , organoids_featureN_median, organoids_feature1_mad, ... , organoids_featureN_mad, 
      fragments_feature1_median, ... , fragments_featureN_median, fragments_feature1_mad, ... , fragments_featureN_mad]
 
-## Load and Normalize Features
+# Load and Normalize Features
 
 As I'm interested in the libraries with concentration information, I use only plates with layout L08.
 ```{r load_data}
@@ -92,7 +99,7 @@ for(plate in unique(plates)) {
 }
 ```
 
-## Positive controls
+# Positive controls
 
 The drugs Bortezomib, Irinotecan / SN-38, Staurosporine, Volasertib, and Methotrexate are all potential positive controls. To see how suitable they are for this, I look at how they compare to DMSO, the negative control. To compare treatments, I look at the number of organoids as a proxy for organoid survival.
 ```{r}
@@ -111,9 +118,9 @@ simple_features = data.frame(
 )
 ```
 
-### Comparing Positive Controls
+## Comparing Positive Controls
 
-#### Staurosporine_500nM
+### Staurosporine_500nM
 
 Staurosporine and DMSO were only applied at one concentration.
 
@@ -131,7 +138,7 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise,
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-#### Bortezomib
+### Bortezomib
 
 ```{r, fig.width=12}
 ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Bortezomib"),]
@@ -147,7 +154,7 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise,
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-#### Irinotecan / SN-38
+### Irinotecan / SN-38
 
 ```{r, fig.width=12}
 ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Irinotecan / SN-38"),]
@@ -163,7 +170,7 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise,
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-#### Volasertib
+### Volasertib
 
 ```{r, fig.width=12}
 ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Volasertib"),]
@@ -179,7 +186,7 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise,
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-#### Methotrexate
+### Methotrexate
 
 ```{r, fig.width=12}
 ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Methotrexate"),]
@@ -195,7 +202,7 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise,
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
 
-### Combining Positive Controls
+## Combining Positive Controls
 
 With a few exceptions in individual cell lines, the highest concentrations of positive controls ("0.2" and "1") seem to be well differentiable from the negative controls with regards to the number of organoids in each well. Grouping the positive controls leads to a larger within-group variance but still leaves them clearly differentiable from the negative controls.
 
@@ -222,7 +229,7 @@ ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects
   ylab("Number of Organoids")
 ```
 
-## Finding Characteristic Features
+# Finding Characteristic Features
 
 Next, I am interested in finding features that allow for a similar separation between positive and negative controls. The two conditions I impose are:
 
@@ -356,7 +363,7 @@ ggplot(data = data.frame(
   theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5)
 ```
 
-What remains are \Sexp(length(selected_features)) features used to describe organoid viability
+What remains are \Sexpr(length(selected_features)) features used to describe organoid viability
 
 ```{r}
 print(selected_features)
@@ -365,5 +372,40 @@ features_combined = features_combined[,selected_features]
 
 An few examples for these features are shown below
 ```{r}
+feature_of_interest = colnames(features_combined)[2]
+simple_features = data.frame(
+  "Num.Objects" = features_combined[, feature_of_interest],
+  "Num.Objects.Noise" = features_combined[, feature_of_interest],
+  "Drug" = features_metadata_combined[, "DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 4)
+)
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
 
+```{r}
+feature_of_interest = colnames(features_combined)[3]
+simple_features = data.frame(
+  "Num.Objects" = features_combined[, feature_of_interest],
+  "Num.Objects.Noise" = features_combined[, feature_of_interest],
+  "Drug" = features_metadata_combined[, "DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 4)
+)
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+```{r}
+feature_of_interest = colnames(features_combined)[11]
+simple_features = data.frame(
+  "Num.Objects" = features_combined[, feature_of_interest],
+  "Num.Objects.Noise" = features_combined[, feature_of_interest],
+  "Drug" = features_metadata_combined[, "DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 4)
+)
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
+  xlab("Cell Line") + ylab("Number of Organoids")
 ```
