@@ -67,6 +67,30 @@ features_metadata = features[,metadata_cols]
 features[,metadata_cols] = NULL
 ```
 
+I want to add one compound feature: the total area of the biomass in the image. That is:
+
+$$ A = N_{Organoids} \cdot \langle A \rangle_{Organoids} + N_{Shrapnel} * \langle A \rangle_{Shrapnel}$$
+
+```{r}
+inv_glog = function(y, c=0.05) {
+  return(0.25 * exp(-y) * (4*exp(2*y) - c**2))
+}
+
+glog = function(x, c=0.05) {
+  return(log((x + sqrt(x**2 + c**2)) / 2))
+}
+
+num_organoids = features[,"organoids_num.of.objects"]
+num_shrapnel = features[,"shrapnel_num.of.objects"]
+avg_area_orgs = features[,"organoids_x.0.s.area_median"]
+avg_area_shrapnel = features[,"shrapnel_x.0.s.area_median"]
+# logarithmic transformation
+features$total.area.of.biomass = glog(
+  (inv_glog(num_organoids) * inv_glog(avg_area_orgs)) + 
+  (inv_glog(num_shrapnel) * inv_glog(avg_area_shrapnel)))
+
+```
+
 To avoid plate batch effects, I normalize all features by the mean and standard deviation of the negative controls (DMSO). The features were already trimmed when the averages over each well were calculated so that further trimming is most likely unnecessary. Features that show no variation across DMSO controls on any single plate are removed as they are most likely unreliable.
 
 ```{r}
@@ -108,9 +132,14 @@ sf_conc = features_metadata[,"CONCENTRATION"]
 sf_drug_conc = ifelse(
   test = sf_drug %in% c("DMSO", "Staurosporine_500nM"), 
   yes = sf_drug, no = paste0(sf_drug, " @ ", sf_conc))
+sf_num_organoids = features[,"organoids_num.of.objects"]
+sf_avg_org_size = features[,"organoids_x.0.s.area_median"]
+sf_total_area = features[,"total.area.of.biomass"]
+
 simple_features = data.frame(
-  "Num.Objects" = features[,"signal_num.of.objects"],
-  "Num.Objects.Noise" = features[,"noise_num.of.objects"],
+  "Num.Objects" = sf_num_organoids,
+  "Avg.Org.Size" = sf_avg_org_size,
+  "Total.Area" = sf_total_area,
   "Drug" = sf_drug,
   "Concentration" = sf_conc,
   "Drug_Conc" = sf_drug_conc,
@@ -132,10 +161,15 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill 
 ```
 
 ```{r, fig.width=12, fig.height=6}
-ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Staurosporine_500nM)", 
-          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Organoids")
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Staurosporine_500nM)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Staurosporine_500nM)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
 ```
 
 ### Bortezomib
@@ -147,11 +181,16 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill 
   ylab("Number of Organoids")
 ```
 
-```{r, fig.width=12}
-ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Bortezomib)", 
-          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Organoids")
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Bortezomib)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Bortezomib)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
 ```
 
 ### Irinotecan / SN-38
@@ -163,11 +202,16 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill 
   ylab("Number of Organoids")
 ```
 
-```{r, fig.width=12}
-ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Irinotecan / SN-38)", 
-          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Organoids")
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Irinotecan / SN-38)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Irinotecan / SN-38)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
 ```
 
 ### Volasertib
@@ -179,11 +223,16 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill 
   ylab("Number of Organoids")
 ```
 
-```{r, fig.width=12}
-ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Volasertib)", 
-          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Organoids")
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Volasertib)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Volasertib)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
 ```
 
 ### Methotrexate
@@ -195,11 +244,16 @@ ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill 
   ylab("Number of Organoids")
 ```
 
-```{r, fig.width=12}
-ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects.Noise, fill = Drug_Conc)) + 
-  ggtitle(label = "Number of 'Shrapnel' Objects per Well (Methotrexate)", 
-          subtitle = "'Shrapnel' is defined as objects too small to be proper organoids") + 
-  xlab("Cell Line") + ylab("Number of Organoids")
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Methotrexate)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Methotrexate)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
 ```
 
 ## Combining Positive Controls
@@ -218,15 +272,33 @@ features_metadata_combined$DRUG = ifelse(
 
 ```{r, fig.width=12, fig.height=6}
 simple_features = data.frame(
-  "Num.Objects" = features_combined[,"signal_num.of.objects"],
-  "Num.Objects.Noise" = features_combined[,"noise_num.of.objects"],
+  "Num.Objects" = features_combined[,"organoids_num.of.objects"],
+  "Avg.Org.Size" = features_combined[,"organoids_x.0.s.area_median"],
+  "Total.Area" = features_combined[,"total.area.of.biomass"],
   "Drug" = features_metadata_combined[,"DRUG"],
   "Cell.Line" = substr(rownames(features_combined), 1, 4)
 )
+```
+
+```{r}
 ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
   ggtitle(label = "Number of Organoids per Well",
           subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
   ylab("Number of Organoids")
+```
+
+```{r}
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug)) +
+  ggtitle(label = "Average Area of Organoids per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Average Area of of Organoids")
+```
+
+```{r}
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug)) +
+  ggtitle(label = "Total Area of Biomass per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Total Area of Biomass")
 ```
 
 # Finding Characteristic Features
@@ -298,19 +370,20 @@ qplot(
 The number of organoids, as investigated above, are a good indicator of organoid viability, so I will use the variance ratio for this feature as the lower threshold for the feature selection. Any feature with a better separability and a near-unanimous effect direction between controls can be considered a potential indicator of organoid viability.
 
 ```{r}
-lower_thresh = var_ratio_trimmed_mean["signal_num.of.objects"]
+lower_thresh = var_ratio_trimmed_mean["organoids_num.of.objects"]
 possible_features = names(which(var_ratio_trimmed_mean >= lower_thresh))
 features_combined = features_combined[,possible_features]
 ```
 
 As a final step, I want to make sure that the features weren't chosen simply because they correlate strongly. Therefore, I apply a stepwise feature selection, as per Fischer et al. 2015 ("A Map of Directional Genetic Interactions in a Metazoan Cell") and Laufer et al. 2013 ("Mapping genetic interactions in human cancer cells"). Feature selection is performed on the combined feature set for all cell lines. This entails the following steps:
-1. Choose an initial feature set. This will be the number of organoids.
+1. Choose an initial feature set. This will be the number of organoids and the total biomass, both of which suitably separated the positive from negative controls.
 2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
 3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
 
 ```{r}
 # Choose the best three as a starting set
-selected_features = c("signal_num.of.objects")
+initial_set = c("organoids_num.of.objects", "total.area.of.biomass")
+selected_features = initial_set
 remaining_features = colnames(features_combined)[
   !colnames(features_combined) %in% selected_features]
 
@@ -350,7 +423,7 @@ while(length(remaining_features) > 0) {
 }
 
 # Keep only the selected features with a ratio > 0.5 of positively correlated residual matrices
-selected_features = selected_features[c(TRUE, ratio_positive > 0.5)]
+selected_features = selected_features[c(rep(TRUE, length(initial_set)), ratio_positive > 0.5)]
 ```
 
 ```{r}
@@ -359,7 +432,7 @@ ggplot(data = data.frame(
   "Iteration" = seq_along(ratio_positive),
   "Ratio" = ratio_positive-0.5)) +
   geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") +
-  ggtitle("Ratio of features with positive correlation") +
+  ggtitle("Ratio of features with positive correlation after each iteration") +
   theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5)
 ```
 
@@ -371,19 +444,6 @@ features_combined = features_combined[,selected_features]
 ```
 
 An few examples for these features are shown below
-```{r}
-feature_of_interest = colnames(features_combined)[2]
-simple_features = data.frame(
-  "Num.Objects" = features_combined[, feature_of_interest],
-  "Num.Objects.Noise" = features_combined[, feature_of_interest],
-  "Drug" = features_metadata_combined[, "DRUG"],
-  "Cell.Line" = substr(rownames(features_combined), 1, 4)
-)
-ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
-  ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
-  xlab("Cell Line") + ylab("Number of Organoids")
-```
-
 ```{r}
 feature_of_interest = colnames(features_combined)[3]
 simple_features = data.frame(
@@ -398,7 +458,20 @@ ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects
 ```
 
 ```{r}
-feature_of_interest = colnames(features_combined)[11]
+feature_of_interest = colnames(features_combined)[6]
+simple_features = data.frame(
+  "Num.Objects" = features_combined[, feature_of_interest],
+  "Num.Objects.Noise" = features_combined[, feature_of_interest],
+  "Drug" = features_metadata_combined[, "DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 4)
+)
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
+  xlab("Cell Line") + ylab("Number of Organoids")
+```
+
+```{r}
+feature_of_interest = colnames(features_combined)[20]
 simple_features = data.frame(
   "Num.Objects" = features_combined[, feature_of_interest],
   "Num.Objects.Noise" = features_combined[, feature_of_interest],
