@@ -443,7 +443,7 @@ print(selected_features)
 features_combined = features_combined[,selected_features]
 ```
 
-An few examples for these features are shown below
+A few examples for these features are shown below
 ```{r}
 feature_of_interest = colnames(features_combined)[3]
 simple_features = data.frame(
@@ -482,3 +482,7 @@ ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects
   ggtitle(label = sprintf("Feature '%s'", feature_of_interest)) + 
   xlab("Cell Line") + ylab("Number of Organoids")
 ```
+
+# Next Chapter
+
+Hello
