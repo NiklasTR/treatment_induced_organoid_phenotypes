@@ -18,6 +18,8 @@ import sklearn.ensemble
 import re
 import pickle
 import statsmodels.robust
+import pandas as pd
+import scipy.stats.mstats
 
 
 def load_cell_line_features(
@@ -226,7 +228,7 @@ def calc_well_average(features, feature_names, blurry_organoid_clf):
 
     # These are the summary functions. They could later be turned into
     # function parameters
-    middle_func = np.median
+    middle_func = np.nanmedian
     var_func = statsmodels.robust.mad
 
     # Remove the feature "FIELD"
@@ -308,16 +310,60 @@ def transform_features(features, transform_type, **kwargs):
         # tmp2 = np.apply_along_axis(func1d=scipy.stats.boxcox, axis=axis, arr=f)
         # norm_features = scipy.stats.boxcox()
     elif transform_type == "glog":
-        if "c" not in kwargs.keys():
+        if "c" in kwargs.keys():
+            c = kwargs["c"]
+        else:
             c = 0.05
         return np.log((features + np.sqrt(features ** 2 + c ** 2)) / 2.0)
     else:
         raise ValueError("Unsupported transform_type ('%s')" % transform_type)
 
 
+def calc_plate_median(plate, feature_dir, feature_type):
+    """
+    Calculate and return the plate summary
+    :param plate:
+    :param feature_dir:
+    :param feature_type:
+    :return:
+    """
+    wells = sorted([
+        well for well in
+        os.listdir(os.path.join(feature_dir, plate, "wells"))
+        if well.startswith(plate) if well.endswith(".h5")])
+    avg_features = []
+    avg_feature_names = []
+    for well in wells:
+        well_fn = os.path.join(feature_dir, plate, "wells", well)
+        try:
+            with h5py.File(well_fn, "r") as h5handle:
+                features = h5handle["features_%s" % feature_type][()]
+                feature_names = h5handle["feature_names_%s" % feature_type][()]
+            avg = calc_well_average(
+                features=features, feature_names=feature_names,
+                blurry_organoid_clf=blurry_organoid_clf)
+            avg_features.append(avg[0])
+            avg_feature_names.append(avg[1])
+        except:
+            avg_features.append(np.repeat(np.nan, 6286))
+
+    fname_iter = iter(avg_feature_names)
+    if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
+        raise Warning("Not all feature names were identical between files")
+    avg_feature_names = avg_feature_names[0]
+    avg_features = np.stack(avg_features, axis=1)
+    well_names = np.array([well[0:19] for well in wells])
+    return {
+        "features_median": avg_features,
+        "feature_names": avg_feature_names,
+        "well_names": well_names}
+
+
 if __name__ == "__main__":
     basedir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/preprocessing"
     feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+    layout_dir = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
+    segmentation_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
     blurry_well_fn = os.path.join(basedir, "blurry_wells_predicted.txt")
     feature_type = "clumps"
 
@@ -337,46 +383,210 @@ if __name__ == "__main__":
         with open(classifier_fn, "w") as f:
             pickle.dump(blurry_organoid_clf, f)
 
-    # Go through each plate and calculate the well averages
-    all_plates = [
+    all_plates = sorted([
         plate for plate in os.listdir(feature_dir) if
-        plate.startswith("D0") or plate.startswith("M001")]
+        plate.startswith("D0") or plate.startswith("M001")])
 
+    # Go through each plate and:
+    # - calculate the well summaries
+    # - Apply glog transformation
+    # - Subtract the DMSO median of each plate to correct for plate effects
+    # The intermediate steps are stored separately to allow variations in the
+    # normalization to be tested and the well median calculation is a
+    # relatively lengthy process and unlikely to change, making it easier to
+    # adapt to different normalization methods (e.g. replacing glog)
     for plate in all_plates:
         out_fn = os.path.join(
             feature_dir, plate,
             "%s_averaged_features_%s.h5" % (plate, feature_type))
+
+        # Calc median summaries
+        calc_summary = True
         if os.path.isfile(out_fn):
-            print("Plate '%s' already processed" % plate)
+            with h5py.File(out_fn, "r") as h5handle:
+                if "features_median" in h5handle.keys():
+                    print("Medians for plate '%s' already processed" % plate)
+                    calc_summary = False
+        if calc_summary:
+            print("Calculating medians for plate '%s' ..." % plate)
+            median_dat = calc_plate_median(
+                plate=plate, feature_dir=feature_dir,
+                feature_type=feature_type)
+            with h5py.File(out_fn, "w-") as h5handle:
+                h5handle.create_dataset(
+                    name="features_median", data=median_dat["features_median"])
+                h5handle.create_dataset(
+                    name="feature_names", data=median_dat["feature_names"])
+                h5handle.create_dataset(
+                    name="well_names", data=median_dat["well_names"])
+
+        # Add the total biomass as a feature prior to transformation
+        with h5py.File(out_fn, "r") as h5handle:
+            avg_features = h5handle["features_median"][()]
+            feature_names = h5handle["feature_names"][()]
+            well_names = h5handle["well_names"][()]
+        if "Total.Biomass" in feature_names:
+            print("Biomass feature already calculated for plate '%s'" % plate)
+        else:
+            print("Calculating total biomass for plate '%s'" % plate)
+            plate_biomass = []
+            for well_name in well_names:
+                seg_fn = os.path.join(
+                    segmentation_dir, plate,
+                    "%s_DNNsegmentation.h5" % well_name)
+                with h5py.File(seg_fn, "r") as h5handle:
+                    mask = h5handle["mask"][()]
+                    plate_biomass.append(np.sum(mask > 0))
+            avg_features = np.concatenate(
+                (avg_features, np.expand_dims(plate_biomass, 0)))
+            feature_names = np.concatenate(
+                (feature_names, np.array(["Total.Biomass"])))
+            with h5py.File(out_fn, "r+") as h5handle:
+                del h5handle["features_median"]
+                del h5handle["feature_names"]
+                h5handle.create_dataset(
+                    name="features_median", data=avg_features)
+                h5handle.create_dataset(
+                    name="feature_names", data=feature_names)
+
+        # Transform
+        with h5py.File(out_fn, "r+") as h5handle:
+            if "features_glog" in h5handle.keys():
+                print("glog transform for plate '%s' already calculated" % plate)
+            else:
+                print("Calculating glog transform for plate '%s' ..." % plate)
+                avg_features = h5handle["features_median"][()]
+                avg_features_glog = transform_features(
+                    avg_features, "glog", c=0.05)
+                h5handle.create_dataset(
+                    name="features_glog", data=avg_features_glog)
+
+        # Subtract the median DMSO controls
+        calc_dmso_norm = True
+        with h5py.File(out_fn, "r") as h5handle:
+            if "features" in h5handle.keys():
+                print("DMSO Median normalization for plate "
+                      "'%s' already calculated" % plate)
+                calc_dmso_norm = False
+
+        if calc_dmso_norm:
+            print("Calculate DMSO median normalization for plate '%s' ..." % plate)
+            with h5py.File(out_fn, "r") as h5handle:
+                avg_features = h5handle["features_glog"][()]
+                well_names = h5handle["well_names"][()]
+            well_ids = np.array([
+                "".join(well_name.split("_")[1:3])
+                for well_name in well_names])
+            layout_id = plate[11:14]
+            layout = pd.read_excel(
+                io=os.path.join(layout_dir, "%s.xlsx" % layout_id))
+            dmso_wells = layout.loc[
+                layout["Product.Name"] == "DMSO",
+                "Well_ID_384"].values
+            dmso_features = avg_features[:, np.in1d(well_ids, dmso_wells)]
+            median_dmso_features = np.nanmedian(dmso_features, axis=1)
+            plate_norm_features = np.transpose(
+                avg_features.transpose() - median_dmso_features)
+
+            with h5py.File(out_fn, "r+") as h5handle:
+                h5handle.create_dataset(
+                    name="features",
+                    data=plate_norm_features)
+                h5handle.create_dataset(
+                    name="readme", data=np.array(
+                        ["Well Median -> glog -> Subtract DMSO median"]))
+
+    # Go through each cell line and:
+    # - Calculate the z score
+    all_cell_lines = sorted(set([
+        plate[0:7] for plate in os.listdir(feature_dir) if
+        plate.startswith("D0") or plate.startswith("M001")]))
+
+    for cell_line in all_cell_lines:
+        cl_fn = os.path.join(
+            basedir, "%s_averaged_features_%s.h5"
+                     % (cell_line, feature_type))
+        if os.path.isfile(cl_fn):
+            print("Cell line features file already exists for '%s'" % cell_line)
             continue
-        print("Processing plate '%s' ..." % plate)
 
-        wells = sorted([
-            well for well in
-            os.listdir(os.path.join(feature_dir, plate, "wells"))
-            if well.startswith(plate) if well.endswith(".h5")])
-        avg_features = []
-        avg_feature_names = []
-        for well in wells:
-            well_fn = os.path.join(feature_dir, plate, "wells", well)
-            with h5py.File(well_fn, "r") as h5handle:
-                features = h5handle["features_%s" % feature_type][()]
-                feature_names = h5handle["feature_names_%s" % feature_type][()]
-            avg = calc_well_average(
-                features=features, feature_names=feature_names,
-                blurry_organoid_clf=blurry_organoid_clf)
-            avg_features.append(avg[0])
-            avg_feature_names.append(avg[1])
+        print("Combining cell line '%s'" % cell_line)
 
-        fname_iter = iter(avg_feature_names)
+        cl_plates = sorted([
+            plate for plate in all_plates
+            if plate.startswith(cell_line)])
+
+        # Use only re-imaged plates (9XX vs 0XX)
+        plate_ids = [s[8:11] for s in cl_plates]
+        use_plate = []
+        for plate_id in plate_ids:
+            if plate_id[0] == "9":
+                use_plate.append(True)
+                continue
+            reimaged = "9" + plate_id[1:3]
+            if reimaged in plate_ids:
+                use_plate.append(False)
+            else:
+                use_plate.append(True)
+        cl_plates = [cl_plates[i] for i in range(len(cl_plates)) if use_plate[i]]
+
+        # Set replicates
+        plate_ids = [s[12:14] for s in cl_plates]
+        replicates = {k: 0 for k in cl_plates}
+        for plate_id in set(plate_ids):
+            rep_plates = [
+                cl_plates[i] for i in range(len(cl_plates))
+                if plate_ids[i] == plate_id]
+            rep_plates_num = [s[9:11] for s in rep_plates]
+            replicates[rep_plates[rep_plates_num.index(max(rep_plates_num))]] = 2
+            replicates[rep_plates[rep_plates_num.index(min(rep_plates_num))]] = 1
+
+        # Load features and layouts
+        cl_features = []
+        cl_feature_names = []
+        cl_well_names = []
+        cl_replicates = []
+        cl_drugs = []
+        for plate in cl_plates:
+            feature_fn = os.path.join(
+                feature_dir, plate,
+                "%s_averaged_features_%s.h5" % (plate, feature_type))
+            with h5py.File(feature_fn, "r") as h5handle:
+                features = h5handle["features"][()]
+                feature_names = h5handle["feature_names"][()]
+                well_names = h5handle["well_names"][()]
+            cl_replicates.append([replicates[plate]] * len(well_names))
+            cl_features.append(features)
+            cl_feature_names.append(feature_names)
+            cl_well_names.append(well_names)
+
+            layout_id = plate[11:14]
+            layout = pd.read_excel(
+                io=os.path.join(layout_dir, "%s.xlsx" % layout_id))
+            well_ids = np.array([
+                "".join(well_name.split("_")[1:3])
+                for well_name in well_names])
+            for well_id in well_ids:
+                cl_drugs.append(layout.loc[
+                    layout["Well_ID_384"] == well_id,
+                    "Product.Name"].values)
+        fname_iter = iter(cl_feature_names)
         if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
             raise Warning("Not all feature names were identical between files")
-        avg_feature_names = avg_feature_names[0]
-        avg_features = np.stack(avg_features, axis=1)
+        cl_feature_names = cl_feature_names[0]
+        cl_features = np.concatenate(cl_features, axis=1)
+        cl_well_names = np.concatenate(cl_well_names, axis=0)
+        cl_replicates = np.concatenate(cl_replicates, axis=0)
+        cl_drugs = np.concatenate(cl_drugs, axis=0).astype(np.str)
 
-        well_names = np.array([well[0:19] for well in wells])
+        # Calculate z score
+        cl_features_z = scipy.stats.mstats.zscore(a=cl_features, axis=1)
 
-        with h5py.File(out_fn, "w") as h5handle:
-            h5handle.create_dataset(name="features", data=avg_features)
-            h5handle.create_dataset(name="feature_names", data=avg_feature_names)
-            h5handle.create_dataset(name="well_names", data=well_names)
+        # Save data
+        with h5py.File(cl_fn, "w-") as h5handle:
+            h5handle.create_dataset(name="features", data=cl_features_z)
+            h5handle.create_dataset(
+                name="feature_names", data=cl_feature_names)
+            h5handle.create_dataset(name="well_names", data=cl_well_names)
+            h5handle.create_dataset(name="drugs", data=cl_drugs)
+            h5handle.create_dataset(name="replicates", data=cl_replicates)
