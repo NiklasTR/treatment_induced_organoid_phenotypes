@@ -67,6 +67,16 @@ extractOrganoidFeatures <- function(plateIndir, platename, row, col, configdir) 
     # original mask
     mask_labeled = propagate(x = mask, seeds = wshed, mask = mask)
     
+    # This is a hacky solution to avoid errors due to missing segmentation.
+    # WARNING: If anybody changes the number of features to compute (haralick scales), 
+    # then the size of the array must be modified.
+    if(sum(mask_labeled != 0) == 0) {
+      features[[fld]] = matrix(0, nrow = 0, ncol = 1572)
+      features_clumps[[fld]] = matrix(0, nrow = 0, ncol = 1572)
+      features_noseg[[fld]] = matrix(0, nrow = 0, ncol = 118)
+      next
+    }
+    
     features[[fld]] = computeFeatures(
       x = mask_labeled, ref = normalize(img), 
       haralick.scales = c(1, 2, 4, 8, 16, 32, 64, 128, 256))
@@ -184,15 +194,22 @@ combineWellFeatures <- function(platename, configdir) {
     full_path = featuresHdf5Filename(
       filedir = file.path(featuresdir, platename), platename = platename, 
       row = r, col = c, configdir = configdir)
+    keys = h5ls(full_path)$name
+    
     features_organoids[[n]] = data.frame(h5read(file = full_path, name = "features"))
     features_noseg[[n]] = data.frame(h5read(file = full_path, name = "features_noseg"))
     features_clumps[[n]] = data.frame(h5read(file = full_path, name = "features_clumps"))
-    feature_names_organoids[[n]] = h5read(file = full_path, name = "feature_names")
-    feature_names_noseg[[n]] = h5read(file = full_path, name = "feature_names_noseg")
-    feature_names_clumps[[n]] = h5read(file = full_path, name = "feature_names_clumps")
-    colnames(features_organoids[[n]]) = feature_names_organoids[[n]]
-    colnames(features_noseg[[n]]) = feature_names_noseg[[n]]
-    colnames(features_clumps[[n]]) = feature_names_clumps[[n]]
+    
+    if("feature_names" %in% keys) {
+      feature_names_organoids[[n]] = h5read(file = full_path, name = "feature_names")
+      colnames(features_organoids[[n]]) = feature_names_organoids[[n]]}
+    if("feature_names_noseg" %in% keys) {
+      feature_names_noseg[[n]] = h5read(file = full_path, name = "feature_names_noseg")
+      colnames(features_noseg[[n]]) = feature_names_noseg[[n]]}
+    if("feature_names_clumps" %in% keys) {
+      feature_names_clumps[[n]] = h5read(file = full_path, name = "feature_names_clumps")
+      colnames(features_clumps[[n]]) = feature_names_clumps[[n]]}
+    
     well_names_organoids = c(well_names_organoids, rep_len(n, nrow(features_organoids[[n]])))
     well_names_clumps = c(well_names_clumps, rep_len(n, nrow(features_clumps[[n]])))
     well_names_noseg = c(well_names_noseg, rep_len(n, nrow(features_noseg[[n]])))
@@ -200,27 +217,43 @@ combineWellFeatures <- function(platename, configdir) {
   }
   
   # Test that all feature names are identical
-  if(length(unique(feature_names_organoids)) != 1) {
+  unique_fno = unique(feature_names_organoids)
+  unique_fno = unique_fno[!sapply(unique_fno, is.null)]
+  if(length(unique_fno) != 1) {
     warning(paste0(
       "Feature names for '", platename, 
       "' (organoids) are not identical across all wells"))
     return(FALSE)
   }
-  if(length(unique(feature_names_clumps)) != 1) {
+  unique_fnc = unique(feature_names_clumps)
+  unique_fnc = unique_fnc[!sapply(unique_fnc, is.null)]
+  if(length(unique_fnc) != 1) {
     warning(paste0(
       "Feature names for '", platename, 
       "' (clumps) are not identical across all wells"))
     return(FALSE)
   }
-  if(length(unique(feature_names_noseg)) != 1) {
+  unique_fnns = unique(feature_names_noseg)
+  unique_fnns = unique_fnns[!sapply(unique_fnns, is.null)]
+  if(length(unique_fnns) != 1) {
     warning(paste0(
       "Feature names for '", platename, 
       "' (foreground haralick) are not identical across all wells"))
     return(FALSE)
   }
   
-  # Combine features (rbindlist is MUCH faster)
+  # Apply column names to features because empty feature sets have no column names
+  for(well in names(features_organoids)) {
+    colnames(features_organoids[[well]]) = as.character(unique_fno[[1]])
+  }
+  for(well in names(features_clumps)) {
+    colnames(features_clumps[[well]]) = as.character(unique_fnc[[1]])
+  }
+  for(well in names(features_noseg)) {
+    colnames(features_noseg[[well]]) = as.character(unique_fnns[[1]])
+  }
   
+  # Combine features (rbindlist is MUCH faster)
   features_noseg = as.data.frame(data.table::rbindlist(
     features_noseg, use.names = TRUE, fill = FALSE))
   features_organoids = as.data.frame(data.table::rbindlist(
