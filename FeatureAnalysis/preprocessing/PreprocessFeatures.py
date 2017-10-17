@@ -20,63 +20,18 @@ import pickle
 import statsmodels.robust
 import pandas as pd
 import scipy.stats.mstats
+import sys
 
 
-def load_cell_line_features(
-        cell_line, feature_dir, feature_type="clumps"):
-    """
-    Load all features of a cell line into a single array
-    :param cell_line:
-    :param feature_dir:
-    :param feature_type
-    :return:
-    """
-
-    plates = sorted([
-        s for s in os.listdir(feature_dir)
-        if s.startswith(cell_line)])
-
-    # Use only re-imaged plates (9XX vs 0XX)
-    plate_ids = [s[8:11] for s in plates]
-    use_plate = []
-    for plate_id in plate_ids:
-        if plate_id[0] == "9":
-            use_plate.append(True)
-            continue
-        reimaged = "9" + plate_id[1:3]
-        if reimaged in plate_ids:
-            use_plate.append(False)
-        else:
-            use_plate.append(True)
-    plates = [plates[i] for i in range(len(plates)) if use_plate[i]]
-
-    # Load features for plates
-    features = []
-    feature_names = []
-    well_names = []
-    for plate in plates:
-        feature_fn = os.path.join(
-            feature_dir, plate, "%s_features.h5" % plate)
-        with h5py.File(feature_fn, "r") as h5handle:
-            features.append(
-                h5handle["features_%s" % feature_type][()])
-            feature_names.append(
-                h5handle["feature_names_%s" % feature_type][()])
-            well_names.append(
-                [plate + "_" + wn for wn in
-                 h5handle["well_names_%s" % feature_type][()]])
-
-    fname_iter = iter(feature_names)
-    if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
-        raise Warning("Not all feature names were identical between files")
-    feature_names = feature_names[0]
-    well_names = np.concatenate(well_names)
-    features = np.concatenate(features, axis=1)
-
-    return features, feature_names, well_names
+BASEDIR = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/preprocessing"
+FEATUREDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+LAYOUTDIR = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
+SEGMENTATIONDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
+BLURRYWELLFN = os.path.join(BASEDIR, "blurry_wells_predicted.txt")
+FEATURETYPE = "organoids"
 
 
-def trim_func(func, a, percent, axis):
+def trim_func(a, func, percent, axis):
     """
     Apply a function to a trimmed matrix along an axis. The function must be
     of a type that takes the 'axis' keyword, e.g. np.mean, np.std, np.median,
@@ -102,7 +57,7 @@ def trim_func(func, a, percent, axis):
         return func(atrim, axis=axis)
 
 
-def learn_blurry_organoids(blurry_well_fn, feature_dir, feature_type):
+def learn_blurry_organoids():
     """
     Trains a classifier to tell the difference between blurry and in-focus
     organoids based on the features. This function currently explicitly
@@ -115,9 +70,6 @@ def learn_blurry_organoids(blurry_well_fn, feature_dir, feature_type):
     2. Train random forest classifier on all unrelated features to prevent
        overfitting
 
-    :param blurry_well_fn:
-    :param feature_dir:
-    :param feature_type:
     :return:
         - A random forest classifier object
         - The names of features used to train the RF
@@ -125,32 +77,35 @@ def learn_blurry_organoids(blurry_well_fn, feature_dir, feature_type):
     """
 
     keymap = {
-        "organoids": ("features", "feature_names"),
+        "organoids": ("features_organoids", "feature_names_organoids"),
         "clumps": ("features_clumps", "feature_names_clumps")}
 
-    if feature_type not in keymap.keys():
+    if FEATURETYPE not in keymap.keys():
         raise KeyError("'feature_type' must be one of '%s'"
                        % str(keymap.keys()))
 
-    hdf5_keys = keymap[feature_type]
+    hdf5_keys = keymap[FEATURETYPE]
 
-    with open(blurry_well_fn, "r") as f:
+    with open(BLURRYWELLFN, "r") as f:
         blurry_wells = [s.strip() for s in f.readlines()]
     all_plates = [
-        s for s in os.listdir(feature_dir) if
+        s for s in os.listdir(FEATUREDIR) if
         s.startswith("M001") or s.startswith("D0")]
     features = []
     feature_names = []
     for plate in all_plates:
         wells = [s for s in os.listdir(
-            os.path.join(feature_dir, plate, "wells"))]
+            os.path.join(FEATUREDIR, plate, "wells"))]
         wells = [s for s in wells if s[0:19] not in blurry_wells]
         wells = random.sample(wells, 15)
         for well in wells:
-            feature_fn = os.path.join(feature_dir, plate, "wells", well)
-            with h5py.File(feature_fn, "r") as h5handle:
-                features.append(h5handle[hdf5_keys[0]][()])
-                feature_names.append(h5handle[hdf5_keys[1]][()])
+            feature_fn = os.path.join(FEATUREDIR, plate, "wells", well)
+            try:
+                with h5py.File(feature_fn, "r") as h5handle:
+                    features.append(h5handle[hdf5_keys[0]][()])
+                    feature_names.append(h5handle[hdf5_keys[1]][()])
+            except KeyError:
+                pass
     features = np.concatenate(features, axis=1)
     features = features.transpose()
     feature_names = feature_names[0]
@@ -211,25 +166,28 @@ def learn_blurry_organoids(blurry_well_fn, feature_dir, feature_type):
         "accuracy": val_acc}
 
 
-def calc_well_average(features, feature_names, blurry_organoid_clf):
+def calc_well_average(
+        features, feature_names, blurry_organoid_clf,
+        summary_func_middle, summary_func_var, kwargs_middle,
+        kwargs_var):
     """
-    Calculate the trimmed mean and standard deviation of a well's organoid
-    features.
+    Calculate the well summaries.
 
     'blurry_well_clf' should be the dictionary object returned by the
     function 'learn_blurry_organoids()'
 
     :param features: A 2D numpy matrix with the shape (features, samples)
+    :param feature_names:
     :param blurry_organoid_clf: A dictionary.
+    :param summary_func_middle:
+    :param summary_func_var:
+    :param kwargs_middle:
+    :param kwargs_var:
+
     :return:
         - A feature vector for the well
         - A list of feature names
     """
-
-    # These are the summary functions. They could later be turned into
-    # function parameters
-    middle_func = np.nanmedian
-    var_func = statsmodels.robust.mad
 
     # Remove the feature "FIELD"
     features = np.delete(
@@ -251,17 +209,17 @@ def calc_well_average(features, feature_names, blurry_organoid_clf):
     features_shrapnel = features[:, f_size < size_threshold]
     features_organoids = features[:, f_size >= size_threshold]
 
-    # Calculate feature summaries
+    # Calculate feature summaries (median)
     if features_shrapnel.shape[1] == 0:
         features_shrapnel_m = np.zeros(
             shape=features_shrapnel.shape[0])
         features_shrapnel_v = np.zeros(
             shape=features_shrapnel.shape[0])
     else:
-        features_shrapnel_m = middle_func(
-            features_shrapnel, axis=1)
-        features_shrapnel_v = var_func(
-            features_shrapnel, axis=1)
+        features_shrapnel_m = summary_func_middle(
+            features_shrapnel, axis=1, **kwargs_middle)
+        features_shrapnel_v = summary_func_var(
+            features_shrapnel, axis=1, **kwargs_var)
     features_shrapnel_summary = np.concatenate(
         (features_shrapnel_m, features_shrapnel_v,
          (features_shrapnel.shape[1],)))
@@ -272,10 +230,10 @@ def calc_well_average(features, feature_names, blurry_organoid_clf):
         features_organoids_v = np.zeros(
             shape=features_organoids.shape[0])
     else:
-        features_organoids_m = middle_func(
-            features_organoids, axis=1)
-        features_organoids_v = var_func(
-            features_organoids, axis=1)
+        features_organoids_m = summary_func_middle(
+            features_organoids, axis=1, **kwargs_middle)
+        features_organoids_v = summary_func_var(
+            features_organoids, axis=1, **kwargs_var)
     features_organoids_summary = np.concatenate(
         (features_organoids_m, features_organoids_v,
          (features_organoids.shape[1],)))
@@ -319,193 +277,359 @@ def transform_features(features, transform_type, **kwargs):
         raise ValueError("Unsupported transform_type ('%s')" % transform_type)
 
 
-def calc_plate_median(plate, feature_dir, feature_type):
+def calc_plate_median(plate, blurry_organoid_clf):
     """
-    Calculate and return the plate summary
+    Calculate and return the plate summary.
+
+    It calculates:
+    - median / mad
+    - trimmed mean / trimmed sd @ 5% trimming
+    - trimmed mean / trimmed sd @ 10% trimming
+    - trimmed mean / trimmed sd @ 15% trimming
+
     :param plate:
-    :param feature_dir:
-    :param feature_type:
+    :param blurry_organoid_clf:
     :return:
     """
     wells = sorted([
         well for well in
-        os.listdir(os.path.join(feature_dir, plate, "wells"))
+        os.listdir(os.path.join(FEATUREDIR, plate, "wells"))
         if well.startswith(plate) if well.endswith(".h5")])
-    avg_features = []
-    avg_feature_names = []
+    median_features = []
+    trimmed_features_05 = []
+    trimmed_features_10 = []
+    trimmed_features_15 = []
+    plate_feature_names = []
     for well in wells:
-        well_fn = os.path.join(feature_dir, plate, "wells", well)
+        well_fn = os.path.join(FEATUREDIR, plate, "wells", well)
         try:
             with h5py.File(well_fn, "r") as h5handle:
-                features = h5handle["features_%s" % feature_type][()]
-                feature_names = h5handle["feature_names_%s" % feature_type][()]
-            avg = calc_well_average(
+                features = h5handle["features_%s" % FEATURETYPE][()]
+                feature_names = h5handle["feature_names_%s" % FEATURETYPE][()]
+            median = calc_well_average(
                 features=features, feature_names=feature_names,
-                blurry_organoid_clf=blurry_organoid_clf)
-            avg_features.append(avg[0])
-            avg_feature_names.append(avg[1])
-        except:
-            avg_features.append(np.repeat(np.nan, 6286))
+                blurry_organoid_clf=blurry_organoid_clf,
+                summary_func_middle=np.nanmedian,
+                summary_func_var=statsmodels.robust.mad,
+                kwargs_middle=dict(), kwargs_var={"center": np.nanmedian})
+            trimmed_05 = calc_well_average(
+                features=features, feature_names=feature_names,
+                blurry_organoid_clf=blurry_organoid_clf,
+                summary_func_middle=trim_func,
+                summary_func_var=trim_func,
+                kwargs_middle={"func": np.mean, "percent": 0.05},
+                kwargs_var={"func": np.std, "percent": 0.05})
+            trimmed_10 = calc_well_average(
+                features=features, feature_names=feature_names,
+                blurry_organoid_clf=blurry_organoid_clf,
+                summary_func_middle=trim_func,
+                summary_func_var=trim_func,
+                kwargs_middle={"func": np.mean, "percent": 0.10},
+                kwargs_var={"func": np.std, "percent": 0.10})
+            trimmed_15 = calc_well_average(
+                features=features, feature_names=feature_names,
+                blurry_organoid_clf=blurry_organoid_clf,
+                summary_func_middle=trim_func,
+                summary_func_var=trim_func,
+                kwargs_middle={"func": np.mean, "percent": 0.15},
+                kwargs_var={"func": np.std, "percent": 0.15})
+            if not np.all(median[1] == trimmed_05[1]):
+                raise Exception("Feature names not identical")
+            if not np.all(median[1] == trimmed_10[1]):
+                raise Exception("Feature names not identical")
+            if not np.all(median[1] == trimmed_15[1]):
+                raise Exception("Feature names not identical")
+            median_features.append(median[0])
+            trimmed_features_05.append(trimmed_05[0])
+            trimmed_features_10.append(trimmed_10[0])
+            trimmed_features_15.append(trimmed_15[0])
+            plate_feature_names.append(median[1])
+        except Exception:
+            median_features.append(np.repeat(np.nan, 6286))
+            trimmed_features_05.append(np.repeat(np.nan, 6286))
+            trimmed_features_10.append(np.repeat(np.nan, 6286))
+            trimmed_features_15.append(np.repeat(np.nan, 6286))
 
-    fname_iter = iter(avg_feature_names)
+    fname_iter = iter(plate_feature_names)
     if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
         raise Warning("Not all feature names were identical between files")
-    avg_feature_names = avg_feature_names[0]
-    avg_features = np.stack(avg_features, axis=1)
+    plate_feature_names = plate_feature_names[0]
+
+    median_features = np.stack(median_features, axis=1)
+    trimmed_features_05 = np.stack(trimmed_features_05, axis=1)
+    trimmed_features_10 = np.stack(trimmed_features_10, axis=1)
+    trimmed_features_15 = np.stack(trimmed_features_15, axis=1)
     well_names = np.array([well[0:19] for well in wells])
     return {
-        "features_median": avg_features,
-        "feature_names": avg_feature_names,
+        "features_median": median_features,
+        "features_trimmed_mean_05": trimmed_features_05,
+        "features_trimmed_mean_10": trimmed_features_10,
+        "features_trimmed_mean_15": trimmed_features_15,
+        "feature_names": plate_feature_names,
         "well_names": well_names}
 
 
-if __name__ == "__main__":
-    basedir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/preprocessing"
-    feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
-    layout_dir = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
-    segmentation_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
-    blurry_well_fn = os.path.join(basedir, "blurry_wells_predicted.txt")
-    feature_type = "clumps"
+def cmd_learn_blurry_organoids():
+    """
+    This function is called when the program is called with the command line
+    option "LEARN_BLURRY_ORGANOIDS"
 
-    # Begin by loading or learning a classifier to filter out blurry wells
+    :return:
+    """
     classifier_fn = os.path.join(
-        basedir, "blurry_organoid_classifier_%s.pkl" % feature_type)
+        BASEDIR, "blurry_organoid_classifier_%s.pkl" % FEATURETYPE)
     if os.path.isfile(classifier_fn):
         with open(classifier_fn, "r") as f:
-            blurry_organoid_clf = pickle.load(f)
+            clf = pickle.load(f)
     else:
-        print("Training blurry organoid classifier")
-        blurry_organoid_clf = learn_blurry_organoids(
-            blurry_well_fn=blurry_well_fn,
-            feature_dir=feature_dir,
-            feature_type=feature_type)
-        blurry_organoid_clf["feature_type"] = feature_type
+        clf = learn_blurry_organoids()
+        clf["feature_type"] = FEATURETYPE
         with open(classifier_fn, "w") as f:
-            pickle.dump(blurry_organoid_clf, f)
+            pickle.dump(clf, f)
+    return clf
 
-    all_plates = sorted([
-        plate for plate in os.listdir(feature_dir) if
-        plate.startswith("D0") or plate.startswith("M001")])
 
-    # Go through each plate and:
-    # - calculate the well summaries
-    # - Apply glog transformation
-    # - Subtract the DMSO median of each plate to correct for plate effects
-    # The intermediate steps are stored separately to allow variations in the
-    # normalization to be tested and the well median calculation is a
-    # relatively lengthy process and unlikely to change, making it easier to
-    # adapt to different normalization methods (e.g. replacing glog)
-    for plate in all_plates:
-        out_fn = os.path.join(
-            feature_dir, plate,
-            "%s_averaged_features_%s.h5" % (plate, feature_type))
+def cmd_run_plate(plate, blurry_organoid_clf, steps_to_calc):
+    """
+    This function is called when the program is called with the command line
+    option "RUN_PLATE"
 
-        # Calc median summaries
-        calc_summary = True
-        if os.path.isfile(out_fn):
-            with h5py.File(out_fn, "r") as h5handle:
-                if "features_median" in h5handle.keys():
-                    print("Medians for plate '%s' already processed" % plate)
-                    calc_summary = False
-        if calc_summary:
-            print("Calculating medians for plate '%s' ..." % plate)
-            median_dat = calc_plate_median(
-                plate=plate, feature_dir=feature_dir,
-                feature_type=feature_type)
-            with h5py.File(out_fn, "w-") as h5handle:
-                h5handle.create_dataset(
-                    name="features_median", data=median_dat["features_median"])
-                h5handle.create_dataset(
-                    name="feature_names", data=median_dat["feature_names"])
-                h5handle.create_dataset(
-                    name="well_names", data=median_dat["well_names"])
+    Go through each plate and:
+        - calculate the well summaries
+        - Apply glog transformation
+        - Subtract the DMSO median of each plate to correct for plate effects
+    The intermediate steps are stored separately to allow variations in the
+    normalization to be tested and the well median calculation is a
+    relatively lengthy process and unlikely to change, making it easier to
+    adapt to different normalization methods (e.g. replacing glog)
 
-        # Add the total biomass as a feature prior to transformation
+    'steps_to_calc' is a tuple of steps of the calculation that should be
+    performed, deleting any preexisting results out of the dataset. Recognized
+    values are ("summaries", "transform", "dmso_normalization"). All other
+    values are ignored. WARNING: subsequent steps expect previous steps to have
+    been completed. E.g. if the expected datasets from the 'summaries' steps do
+    not exist, then running only the 'transform' step will cause an error.
+
+    :param plate:
+    :param blurry_organoid_clf:
+    :param steps_to_calc: A tuple
+    :return:
+    """
+    out_fn = os.path.join(
+        FEATUREDIR, plate,
+        "%s_averaged_features_%s.h5" % (plate, FEATURETYPE))
+
+    # Calc summaries
+    if "summaries" in steps_to_calc:
+        print("Calculating the plate summaries for '%s'" % plate)
+        summary_dat = calc_plate_median(
+            plate=plate, blurry_organoid_clf=blurry_organoid_clf)
+        with h5py.File(out_fn, "w") as h5handle:
+            h5handle.create_dataset(
+                name="features_median",
+                data=summary_dat["features_median"])
+            h5handle.create_dataset(
+                name="features_trimmed_mean_05",
+                data=summary_dat["features_trimmed_mean_05"])
+            h5handle.create_dataset(
+                name="features_trimmed_mean_10",
+                data=summary_dat["features_trimmed_mean_10"])
+            h5handle.create_dataset(
+                name="features_trimmed_mean_15",
+                data=summary_dat["features_trimmed_mean_15"])
+            h5handle.create_dataset(
+                name="feature_names",
+                data=summary_dat["feature_names"])
+            h5handle.create_dataset(
+                name="well_names",
+                data=summary_dat["well_names"])
+
+    # Add the total biomass as a feature if it doesn't exist yet
+    with h5py.File(out_fn, "r") as h5handle:
+        feature_names = h5handle["feature_names"][()]
+    if "Total.Biomass" not in feature_names:
         with h5py.File(out_fn, "r") as h5handle:
-            avg_features = h5handle["features_median"][()]
-            feature_names = h5handle["feature_names"][()]
+            features_median = h5handle["features_median"][()]
+            features_trimmed_05 = h5handle["features_trimmed_mean_05"][()]
+            features_trimmed_10 = h5handle["features_trimmed_mean_10"][()]
+            features_trimmed_15 = h5handle["features_trimmed_mean_15"][()]
             well_names = h5handle["well_names"][()]
-        if "Total.Biomass" in feature_names:
-            print("Biomass feature already calculated for plate '%s'" % plate)
-        else:
-            print("Calculating total biomass for plate '%s'" % plate)
-            plate_biomass = []
-            for well_name in well_names:
-                seg_fn = os.path.join(
-                    segmentation_dir, plate,
-                    "%s_DNNsegmentation.h5" % well_name)
-                with h5py.File(seg_fn, "r") as h5handle:
-                    mask = h5handle["mask"][()]
-                    plate_biomass.append(np.sum(mask > 0))
-            avg_features = np.concatenate(
-                (avg_features, np.expand_dims(plate_biomass, 0)))
-            feature_names = np.concatenate(
-                (feature_names, np.array(["Total.Biomass"])))
-            with h5py.File(out_fn, "r+") as h5handle:
-                del h5handle["features_median"]
-                del h5handle["feature_names"]
-                h5handle.create_dataset(
-                    name="features_median", data=avg_features)
-                h5handle.create_dataset(
-                    name="feature_names", data=feature_names)
-
-        # Transform
+        print("Calculating total biomass for plate '%s'" % plate)
+        plate_biomass = []
+        for well_name in well_names:
+            seg_fn = os.path.join(
+                SEGMENTATIONDIR, plate,
+                "%s_DNNsegmentation.h5" % well_name)
+            with h5py.File(seg_fn, "r") as h5handle:
+                mask = h5handle["mask"][()]
+                plate_biomass.append(np.sum(mask > 0))
+        features_median = np.concatenate(
+            (features_median, np.expand_dims(plate_biomass, 0)))
+        features_trimmed_05 = np.concatenate(
+            (features_trimmed_05, np.expand_dims(plate_biomass, 0)))
+        features_trimmed_10 = np.concatenate(
+            (features_trimmed_10, np.expand_dims(plate_biomass, 0)))
+        features_trimmed_15 = np.concatenate(
+            (features_trimmed_15, np.expand_dims(plate_biomass, 0)))
+        feature_names = np.concatenate(
+            (feature_names, np.array(["Total.Biomass"])))
         with h5py.File(out_fn, "r+") as h5handle:
-            if "features_glog" in h5handle.keys():
-                print("glog transform for plate '%s' already calculated" % plate)
-            else:
-                print("Calculating glog transform for plate '%s' ..." % plate)
-                avg_features = h5handle["features_median"][()]
-                avg_features_glog = transform_features(
-                    avg_features, "glog", c=0.05)
-                h5handle.create_dataset(
-                    name="features_glog", data=avg_features_glog)
+            del h5handle["features_median"]
+            del h5handle["features_trimmed_mean_05"]
+            del h5handle["features_trimmed_mean_10"]
+            del h5handle["features_trimmed_mean_15"]
+            del h5handle["feature_names"]
+            h5handle.create_dataset(
+                name="features_median", data=features_median)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_05", data=features_trimmed_05)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_10", data=features_trimmed_10)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_15", data=features_trimmed_15)
+            h5handle.create_dataset(
+                name="feature_names", data=feature_names)
 
-        # Subtract the median DMSO controls
-        calc_dmso_norm = True
+    # Transform
+    if "transform" in steps_to_calc:
+        print("Calculating glog transform for plate '%s' ..." % plate)
+        with h5py.File(out_fn, "r+") as h5handle:
+            if "features_median_glog" in h5handle.keys():
+                del h5handle["features_median_glog"]
+            if "features_trimmed_mean_05_glog" in h5handle.keys():
+                del h5handle["features_trimmed_mean_05_glog"]
+            if "features_trimmed_mean_10_glog" in h5handle.keys():
+                del h5handle["features_trimmed_mean_10_glog"]
+            if "features_trimmed_mean_15_glog" in h5handle.keys():
+                del h5handle["features_trimmed_mean_15_glog"]
+
+            features_median = h5handle["features_median"][()]
+            features_trimmed_05 = h5handle["features_trimmed_mean_05"][()]
+            features_trimmed_10 = h5handle["features_trimmed_mean_10"][()]
+            features_trimmed_15 = h5handle["features_trimmed_mean_15"][()]
+
+            features_median = transform_features(
+                features_median, "glog", c=0.05)
+            features_trimmed_05 = transform_features(
+                features_trimmed_05, "glog", c=0.05)
+            features_trimmed_10 = transform_features(
+                features_trimmed_10, "glog", c=0.05)
+            features_trimmed_15 = transform_features(
+                features_trimmed_15, "glog", c=0.05)
+
+            h5handle.create_dataset(
+                name="features_median_glog",
+                data=features_median)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_05_glog",
+                data=features_trimmed_05)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_10_glog",
+                data=features_trimmed_10)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_15_glog",
+                data=features_trimmed_15)
+
+    if "dmso_normalization" in steps_to_calc:
+        print("Calculate DMSO median normalization for plate '%s' ..." % plate)
         with h5py.File(out_fn, "r") as h5handle:
-            if "features" in h5handle.keys():
-                print("DMSO Median normalization for plate "
-                      "'%s' already calculated" % plate)
-                calc_dmso_norm = False
+            features_median = h5handle["features_median_glog"][()]
+            features_trimmed_05 = h5handle["features_trimmed_mean_05_glog"][()]
+            features_trimmed_10 = h5handle["features_trimmed_mean_10_glog"][()]
+            features_trimmed_15 = h5handle["features_trimmed_mean_15_glog"][()]
+            well_names = h5handle["well_names"][()]
+        well_ids = np.array([
+            "".join(well_name.split("_")[1:3])
+            for well_name in well_names])
+        layout_id = plate[11:14]
+        layout = pd.read_excel(
+            io=os.path.join(LAYOUTDIR, "%s.xlsx" % layout_id))
+        dmso_wells = layout.loc[
+            layout["Product.Name"] == "DMSO",
+            "Well_ID_384"].values
 
-        if calc_dmso_norm:
-            print("Calculate DMSO median normalization for plate '%s' ..." % plate)
-            with h5py.File(out_fn, "r") as h5handle:
-                avg_features = h5handle["features_glog"][()]
-                well_names = h5handle["well_names"][()]
-            well_ids = np.array([
-                "".join(well_name.split("_")[1:3])
-                for well_name in well_names])
-            layout_id = plate[11:14]
-            layout = pd.read_excel(
-                io=os.path.join(layout_dir, "%s.xlsx" % layout_id))
-            dmso_wells = layout.loc[
-                layout["Product.Name"] == "DMSO",
-                "Well_ID_384"].values
-            dmso_features = avg_features[:, np.in1d(well_ids, dmso_wells)]
-            median_dmso_features = np.nanmedian(dmso_features, axis=1)
-            plate_norm_features = np.transpose(
-                avg_features.transpose() - median_dmso_features)
+        m_dmso_features_median = np.nanmean(
+            features_median[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        m_dmso_features_tm05 = np.nanmean(
+            features_trimmed_05[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        m_dmso_features_tm10 = np.nanmean(
+            features_trimmed_10[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        m_dmso_features_tm15 = np.nanmean(
+            features_trimmed_15[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        s_dmso_features_median = np.nanstd(
+            features_median[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        s_dmso_features_tm05 = np.nanstd(
+            features_trimmed_05[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        s_dmso_features_tm10 = np.nanstd(
+            features_trimmed_10[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
+        s_dmso_features_tm15 = np.nanstd(
+            features_trimmed_15[:, np.in1d(well_ids, dmso_wells)],
+            axis=1)
 
-            with h5py.File(out_fn, "r+") as h5handle:
-                h5handle.create_dataset(
-                    name="features",
-                    data=plate_norm_features)
-                h5handle.create_dataset(
-                    name="readme", data=np.array(
-                        ["Well Median -> glog -> Subtract DMSO median"]))
+        features_median_norm = np.transpose(
+            (features_median.transpose() - m_dmso_features_median) /
+            s_dmso_features_median)
+        features_tm05_norm = np.transpose(
+            (features_trimmed_05.transpose() - m_dmso_features_tm05) /
+            s_dmso_features_tm05)
+        features_tm10_norm = np.transpose(
+            (features_trimmed_10.transpose() - m_dmso_features_tm10) /
+            s_dmso_features_tm10)
+        features_tm15_norm = np.transpose(
+            (features_trimmed_15.transpose() - m_dmso_features_tm15) /
+            s_dmso_features_tm15)
 
+        with h5py.File(out_fn, "r+") as h5handle:
+            if "features_median_normalized" in h5handle.keys():
+                del h5handle["features_median_normalized"]
+            if "features_trimmed_mean_05_normalized" in h5handle.keys():
+                del h5handle["features_trimmed_mean_05_normalized"]
+            if "features_trimmed_mean_10_normalized" in h5handle.keys():
+                del h5handle["features_trimmed_mean_10_normalized"]
+            if "features_trimmed_mean_15_normalized" in h5handle.keys():
+                del h5handle["features_trimmed_mean_15_normalized"]
+            if "readme" in h5handle.keys():
+                del h5handle["readme"]
+
+            h5handle.create_dataset(
+                name="features_median_normalized",
+                data=features_median_norm)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_05_normalized",
+                data=features_tm05_norm)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_10_normalized",
+                data=features_tm10_norm)
+            h5handle.create_dataset(
+                name="features_trimmed_mean_15_normalized",
+                data=features_tm15_norm)
+            h5handle.create_dataset(
+                name="readme", data=np.array(
+                    ["Well Median -> glog -> Subtract DMSO median"]))
+
+
+def cmd_run_cell_lines():
     # Go through each cell line and:
     # - Calculate the z score
     all_cell_lines = sorted(set([
-        plate[0:7] for plate in os.listdir(feature_dir) if
+        plate[0:7] for plate in os.listdir(FEATUREDIR) if
         plate.startswith("D0") or plate.startswith("M001")]))
+
+    all_plates = sorted([
+        plate for plate in os.listdir(FEATUREDIR) if
+        plate.startswith("D0") or plate.startswith("M001")])
 
     for cell_line in all_cell_lines:
         cl_fn = os.path.join(
-            basedir, "%s_averaged_features_%s.h5"
-                     % (cell_line, feature_type))
+            BASEDIR, "%s_averaged_features_%s.h5"
+                     % (cell_line, FEATURETYPE))
         if os.path.isfile(cl_fn):
             print("Cell line features file already exists for '%s'" % cell_line)
             continue
@@ -528,7 +652,9 @@ if __name__ == "__main__":
                 use_plate.append(False)
             else:
                 use_plate.append(True)
-        cl_plates = [cl_plates[i] for i in range(len(cl_plates)) if use_plate[i]]
+        cl_plates = [
+            cl_plates[i] for i in
+            range(len(cl_plates)) if use_plate[i]]
 
         # Set replicates
         plate_ids = [s[12:14] for s in cl_plates]
@@ -542,51 +668,129 @@ if __name__ == "__main__":
             replicates[rep_plates[rep_plates_num.index(min(rep_plates_num))]] = 1
 
         # Load features and layouts
-        cl_features = []
+        cl_features_median = []
+        cl_features_tm05 = []
+        cl_features_tm10 = []
+        cl_features_tm15 = []
         cl_feature_names = []
         cl_well_names = []
         cl_replicates = []
         cl_drugs = []
+        cl_concentrations = []
         for plate in cl_plates:
             feature_fn = os.path.join(
-                feature_dir, plate,
-                "%s_averaged_features_%s.h5" % (plate, feature_type))
+                FEATUREDIR, plate,
+                "%s_averaged_features_%s.h5" % (plate, FEATURETYPE))
             with h5py.File(feature_fn, "r") as h5handle:
-                features = h5handle["features"][()]
+                features_median = h5handle["features_median_normalized"][()]
+                features_tm05 = h5handle["features_trimmed_mean_05_normalized"][()]
+                features_tm10 = h5handle["features_trimmed_mean_10_normalized"][()]
+                features_tm15 = h5handle["features_trimmed_mean_15_normalized"][()]
                 feature_names = h5handle["feature_names"][()]
                 well_names = h5handle["well_names"][()]
             cl_replicates.append([replicates[plate]] * len(well_names))
-            cl_features.append(features)
+            cl_features_median.append(features_median)
+            cl_features_tm05.append(features_tm05)
+            cl_features_tm10.append(features_tm10)
+            cl_features_tm15.append(features_tm15)
             cl_feature_names.append(feature_names)
             cl_well_names.append(well_names)
 
             layout_id = plate[11:14]
             layout = pd.read_excel(
-                io=os.path.join(layout_dir, "%s.xlsx" % layout_id))
+                io=os.path.join(LAYOUTDIR, "%s.xlsx" % layout_id))
             well_ids = np.array([
                 "".join(well_name.split("_")[1:3])
                 for well_name in well_names])
             for well_id in well_ids:
                 cl_drugs.append(layout.loc[
-                    layout["Well_ID_384"] == well_id,
-                    "Product.Name"].values)
+                                    layout["Well_ID_384"] == well_id,
+                                    "Product.Name"].values)
+                if "concentration" in layout.columns:
+                    cl_concentrations.append(layout.loc[
+                                                 layout["Well_ID_384"] == well_id,
+                                                 "concentration"].values)
+                else:
+                    cl_concentrations.append(np.array([np.nan]))
         fname_iter = iter(cl_feature_names)
         if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
             raise Warning("Not all feature names were identical between files")
         cl_feature_names = cl_feature_names[0]
-        cl_features = np.concatenate(cl_features, axis=1)
+        cl_features_median = np.concatenate(cl_features_median, axis=1)
+        cl_features_tm05 = np.concatenate(cl_features_tm05, axis=1)
+        cl_features_tm10 = np.concatenate(cl_features_tm10, axis=1)
+        cl_features_tm15 = np.concatenate(cl_features_tm15, axis=1)
         cl_well_names = np.concatenate(cl_well_names, axis=0)
         cl_replicates = np.concatenate(cl_replicates, axis=0)
         cl_drugs = np.concatenate(cl_drugs, axis=0).astype(np.str)
+        cl_concentrations = np.concatenate(cl_concentrations, axis=0)
 
         # Calculate z score
-        cl_features_z = scipy.stats.mstats.zscore(a=cl_features, axis=1)
+        cl_features_median_masked = np.ma.array(
+            cl_features_median, mask=np.isnan(cl_features_median))
+        cl_features_median_z = scipy.stats.mstats.zscore(
+            a=cl_features_median_masked, axis=1)
+        cl_features_tm05_masked = np.ma.array(
+            cl_features_tm05, mask=np.isnan(cl_features_tm05))
+        cl_features_tm05_z = scipy.stats.mstats.zscore(
+            a=cl_features_tm05_masked, axis=1)
+        cl_features_tm10_masked = np.ma.array(
+            cl_features_tm10, mask=np.isnan(cl_features_tm10))
+        cl_features_tm10_z = scipy.stats.mstats.zscore(
+            a=cl_features_tm10_masked, axis=1)
+        cl_features_tm15_masked = np.ma.array(
+            cl_features_tm15, mask=np.isnan(cl_features_tm15))
+        cl_features_tm15_z = scipy.stats.mstats.zscore(
+            a=cl_features_tm15_masked, axis=1)
 
         # Save data
         with h5py.File(cl_fn, "w-") as h5handle:
-            h5handle.create_dataset(name="features", data=cl_features_z)
+            h5handle.create_dataset(
+                name="features_median_zscore", data=cl_features_median_z)
+            h5handle.create_dataset(
+                name="features_tm05_zscore", data=cl_features_tm05_z)
+            h5handle.create_dataset(
+                name="features_tm10_zscore", data=cl_features_tm10_z)
+            h5handle.create_dataset(
+                name="features_tm15_zscore", data=cl_features_tm15_z)
+            h5handle.create_dataset(
+                name="features_median", data=cl_features_median)
+            h5handle.create_dataset(
+                name="features_tm05", data=cl_features_tm05)
+            h5handle.create_dataset(
+                name="features_tm10", data=cl_features_tm10)
+            h5handle.create_dataset(
+                name="features_tm15", data=cl_features_tm15)
             h5handle.create_dataset(
                 name="feature_names", data=cl_feature_names)
             h5handle.create_dataset(name="well_names", data=cl_well_names)
             h5handle.create_dataset(name="drugs", data=cl_drugs)
             h5handle.create_dataset(name="replicates", data=cl_replicates)
+            h5handle.create_dataset(
+                name="concentrations", data=cl_concentrations)
+
+
+if __name__ == "__main__":
+    # Set up command line arguments
+    cmd_args = sys.argv
+    if len(cmd_args) < 2:
+        print(
+            "Usage: %s [LEARN_BLURRY_ORGANOIDS|RUN_PLATE|RUN_CELL_LINES] "
+            "<PLATE>" % cmd_args[0])
+        sys.exit()
+
+    if cmd_args[1] == "LEARN_BLURRY_ORGANOIDS":
+        cmd_learn_blurry_organoids()
+        sys.exit()
+    elif cmd_args[1] == "RUN_PLATE":
+        bo_clf = cmd_learn_blurry_organoids()
+        cmd_run_plate(cmd_args[2], bo_clf, cmd_args[2:])
+        sys.exit()
+    elif cmd_args[1] == "RUN_CELL_LINES":
+        cmd_run_cell_lines()
+        pass
+    else:
+        print(
+            "Usage: %s [LEARN_BLURRY_ORGANOIDS|RUN_PLATE"
+            "|RUN_CELL_LINES] <PLATE>" % cmd_args[0])
+        sys.exit()
