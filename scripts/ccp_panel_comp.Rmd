@@ -1,0 +1,31 @@
+---
+title: "CCP Panel composition"
+author: "Niklas Rindtorff"
+date: "10/11/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I quickly loaded the CCP annotation and created this graph. 
+
+```{r}
+drug_targets %>%
+  filter(broad_summary != "control" & grepl(input, pattern = "mit") != TRUE) %>%
+  group_by(broad_summary) %>%
+  mutate(count = n()) %>%
+  arrange(count) %>%
+  ungroup(broad_summary) %>%
+  mutate(broad_summary = factor(broad_summary, levels = broad_summary %>% unique())) %>%
+  ggplot(aes(broad_summary)) + 
+  geom_histogram(stat = "count") +
+  theme_minimal() + 
+  coord_flip() + 
+  ggtitle("Composition of clinical target compound panel") + 
+  xlab("Molecular mechansims") + 
+  ylab("Count")
+  
+```
+
