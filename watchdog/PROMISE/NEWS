@@ -1,3 +1,6 @@
+2017-09-26: Version 0.1.22 (Jan Sauer)
+- Updated thumbnail function to normalize each channel individually
+
 2017-09-26: Version 0.1.21 (Jan Sauer)
 - Updated functions to combine features well features and load features
 
