@@ -1,0 +1,646 @@
+# Analysis of image features
+
+Image features, e.g. haralick texture features, potentially contains rich biological information. This vignette attempts to determine the effects drugs have on organoids, when compared to the DMSO control, for a given cell line.
+
+This vignette concerns the mouse organoids.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Install and load libraries
+library(PROMISE)
+library(ggplot2)
+library(data.table)
+library(rhdf5)
+
+# Directories and files
+feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/features"
+source(file.path(dirname(feature_dir), "SelectFeaturesMedian.R"))
+# configdir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+config_dir = "/Users/jansauer/tmp/watchdog_local/configdir"
+source(file.path(config_dir, "watchdogConfig.R"))
+blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/blurry_wells_predicted.txt"
+
+# Parameters
+feature_type = "organoids"
+```
+
+There are four mouse cell lines:
+* W: wildtype
+* A: APC knockdown
+* K: KRAS knockdown
+* B: APC+KRAS knockdown
+
+## Averaged organoid features
+
+Due to the sheer amount of features, a first attempt is made at an analysis with the averaged features for each organoid in wells. Both the median and the median absolute deviation (mad) of the features for each organoid in a well are used. In addition, I averaged the values of large and small objects separately. Proper organoids most likely have an area of at least 5000 pixels, so all objects larger than this were grouped together. All objects smaller than 5000 pixels in area were also grouped and considered to be either individual cells or fragments of organoids. These two sets of summary features were concatenated for each well so that for each well, the feature set looks like:
+
+    [organoids_feature1_median, ... , organoids_featureN_median, organoids_feature1_mad, ... , organoids_featureN_mad, 
+     fragments_feature1_median, ... , fragments_featureN_median, fragments_feature1_mad, ... , fragments_featureN_mad]
+
+Load features
+
+```{r}
+cell_lines = c("W01", "K02", "A03", "B04")
+features = lapply(cell_lines, function(cl) {
+  get_median_features(
+    cell_line = paste0("M001", cl), featuredir = feature_dir, 
+    configdir = config_dir, feature_type = feature_type)})
+names(features) = cell_lines
+```
+
+### Remove blurry wells
+
+Some of the mouse images are too blurry to be used here. Remove these and the corresponding replicate
+
+```{r remove_blurry}
+blurry_wells = read.csv(blurrywells, header = FALSE, stringsAsFactors = FALSE)$V1
+blurry_wells = sapply(strsplit(blurry_wells, "_"), function(x) paste0(x[1], "_", x[2], x[3]))
+for(cell_line in cell_lines) {
+  blurry_wells_cl = grep(pattern = sprintf("^M001%s", cell_line), x = blurry_wells, value = TRUE)
+  blurry_wells_cl_id = unique(substr(blurry_wells_cl, 12, 18))
+  rownames_id = substr(rownames(features[[cell_line]]), 12, 18)
+  features[[cell_line]] = features[[cell_line]][!rownames_id %in% blurry_wells_cl_id,]
+}
+```
+
+```{r strip_feature_columns}
+# Strip the matrix down to the feature columns
+features_stripped = lapply(features, function(x) {
+  non_feature_cols = which(colnames(x) %in% c("REPLICATE", "DRUG", "CELL.LINE"))
+  x[,-non_feature_cols]
+})
+names(features_stripped) = names(features)
+```
+
+### Normalization
+
+It is reasonable to assume that the negative controls on each plate should come from the same distribution for each cell line.
+
+```{r}
+cell_line = "K02"
+feat = features_stripped[[cell_line]]
+plates = unique(sapply(strsplit(rownames(feat), "_"), "[[", 1))
+dmso_wells = features[[cell_line]]$DRUG == "DMSO"
+```
+
+
+
+
+
+
+
+
+
+
+### Feature selection
+
+The first step of feature selection involves removing any obviously useless features. These are features that have too many instances of the same value, e.g. too many 0's. I arbitrarily demand that a single value may appear in no more than 10% of all wells.
+
+```{r}
+# It is slightly faster to first remove columns that are completely identical and then
+# calculate the frequencies of the remaining columns.
+for(cell_line in cell_lines) {
+  feat_range = apply(features_stripped[[cell_line]], 2, function(x) max(x) - min(x))
+  features_stripped[[cell_line]] = features_stripped[[cell_line]][,feat_range > 0]
+}
+
+max_frequency = lapply(cell_lines, function(x) { apply(features_stripped[[x]], 2, function(column) max(table(column)))})
+names(max_frequency) = cell_lines
+max_frequency_collapsed = do.call(c, lapply(max_frequency, sort))
+max_frequency_celllines = substr(names(max_frequency_collapsed), 1, 3)
+max_frequency_x = do.call(c, lapply(max_frequency, function(x) seq_along(x)))
+max_frequency_df = data.frame(
+  "Unique.Values" = max_frequency_collapsed, 
+  "Features" = max_frequency_x, 
+  "Cell.Line" = max_frequency_celllines)
+continuous_features = lapply(cell_lines, function(x) {
+  ncases = nrow(features_stripped[[x]])
+  names(which(max_frequency[[x]] < ncases*0.1))
+})
+names(continuous_features) = cell_lines
+for(cell_line in cell_lines) {
+  features_stripped[[cell_line]] = features_stripped[[cell_line]][,continuous_features[[cell_line]]]
+}
+ggplot(data = max_frequency_df) + geom_line(aes(x = Features, y = Unique.Values, color = Cell.Line)) + 
+  labs(title = "Number of unique values for each feature", 
+       subtitle="Feature sorting is done independently for each cell line")
+```
+
+```{r calc_correlations}
+ggplotdfs = list()
+for(cell_line in cell_lines) {
+  rep1 = features_stripped[[cell_line]][features[[cell_line]]$REPLICATE == 1,]
+  rep2 = features_stripped[[cell_line]][features[[cell_line]]$REPLICATE == 2,]
+  # Sanity check to ensure the wells in both replicates are in the same order
+  if(!identical(substr(rownames(rep1), 12, 18), substr(rownames(rep2), 12, 18))) {
+    warning("Wells are NOT in the same order between replicates!")
+  }
+  correlations = setNames(
+    object = vector(mode = "numeric", length = ncol(features_stripped[[cell_line]])), 
+    nm = colnames(features_stripped[[cell_line]]))
+  for(feat in colnames(features_stripped[[cell_line]])) {
+    correlations[feat] = cor(
+      rep1[,feat], rep2[,feat], use = "pairwise.complete.obs")
+  }
+  
+  ggplotdfs[[cell_line]] = data.frame(
+    "Features" = seq_len(length(correlations)),
+    "Correlation" = sort(correlations, decreasing = TRUE), 
+    "Cell.Line" = cell_line)
+}
+```
+
+```{r}
+full_df = do.call(rbind, ggplotdfs)
+ggplot(data = full_df) + geom_line(aes(x = Features, y = Correlation, color = Cell.Line)) + 
+  geom_hline(aes(yintercept = 0.5))
+```
+
+If the experiment is viewed as a whole, i.e. the four "cell lines" are combined into two replicates, the correlation averages out.
+```{r}
+features_full = data.frame(rbindlist(features, use.names = TRUE, fill = FALSE))
+common_features = Reduce(intersect, lapply(features_stripped, colnames))
+tmp = features_stripped
+for(i in seq_along(tmp)) {
+  tmp[[i]] = tmp[[i]][,common_features]
+}
+features_stripped_full = data.frame(rbindlist(tmp, use.names = TRUE, fill = FALSE))
+```
+
+```{r calc_correlations2}
+rep1 = features_stripped_full[features_full$REPLICATE == 1,]
+rep2 = features_stripped_full[features_full$REPLICATE == 2,]
+# Sanity check to ensure the wells in both replicates are in the same order
+if(!identical(substr(rownames(rep1), 12, 18), substr(rownames(rep2), 12, 18))) {
+  warning("Wells are NOT in the same order between replicates!")
+}
+correlations = setNames(
+  object = vector(mode = "numeric", length = ncol(features_stripped_full)), 
+  nm = colnames(features_stripped_full))
+for(feat in colnames(features_stripped_full)) {
+  correlations[feat] = cor(
+    rep1[,feat], rep2[,feat], use = "pairwise.complete.obs")
+}
+  
+ggplotdf = data.frame(
+  "Features" = seq_len(length(correlations)),
+  "Correlation" = sort(correlations, decreasing = TRUE))
+
+ggplot(data = ggplotdf) + geom_line(aes(x = Features, y = Correlation)) + 
+  geom_hline(aes(yintercept = 0.5))
+```
+
+Normalize features to lie between -1 and 1. Since each feature will be individually distributed, e.g. some normally, some bounded between a maximum and minimum, and some heavily skewed, finding an individual transformation for each feature isn't feasible. This makes a normalization to an interval the most universal way to scale them to the same range.
+
+```{r}
+features_stripped = as.data.frame(apply(
+  features_stripped, 2, 
+  function(x) 2 * ((x - min(x)) / (max(x) - min(x))) - 1))
+```
+
+I use a stepwise feature selection like in Fischer et al. 2015. This entails the following steps:
+1. Choose an initial feature set. This feature set will be those features with the largest ratio of between to within class variance. This is determined by modelling each feature as a function of the treatment. Note that because a linear model of what would effectively be thousands of predictors takes far too long to execute, the features are modeled against the two treatment classes: DMSO (negative control) and drugs (treatment). There are no positive controls in the mouse data set. I will chose the single "best"" feature as the starting point.
+2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
+3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
+
+```{r}
+# Find the feature with the greates ratio of between to within class variance
+ratios = setNames(
+  object = vector(mode = "numeric", length = ncol(features_stripped)), 
+  nm = colnames(features_stripped))
+
+treatment = as.factor(paste0(
+  features$CELL.LINE, "__", 
+  ifelse(test = features$DRUG == "DMSO", yes = "CONTROL", no = "TREATMENT")))
+
+for(feat in colnames(features_stripped)) {
+  # model = .lm.fit(y = features_stripped[,feat], x = matrix(group))
+  # model = fastLm(X = as.vector(features_stripped[,feat]), y = group)
+  model = lm(features_stripped[,feat] ~ treatment)
+  anova_model = anova(model)
+  within_group_var = anova_model["Residuals", "Mean Sq"]
+  between_group_var = anova_model["treatment", "Mean Sq"]
+  ratios[feat] = between_group_var / within_group_var
+}
+
+# Choose the best three as a starting set
+selected_features = names(sort(ratios, decreasing = TRUE)[1])
+remaining_features = colnames(features_stripped)[
+  !colnames(features_stripped) %in% selected_features]
+
+# Remember statistics on the correlations
+all_correlations = list()
+ratio_positive = c()
+
+# Calculate the fit for each replicate and save the residuals
+while(length(remaining_features) > 0) {
+  residuals = array(0, dim = c(nrow(features_stripped), 2, length(remaining_features)))
+  dimnames(residuals) = list(NULL, NULL, remaining_features)
+  for(feat in remaining_features) {
+    model1 = lm(
+    features_stripped[features$REPLICATE == 1,feat] ~ 
+      as.matrix(features_stripped[features$REPLICATE == 1,selected_features]))
+    model2 = lm(
+      features_stripped[features$REPLICATE == 2,feat] ~ 
+        as.matrix(features_stripped[features$REPLICATE == 2,selected_features]))
+    residuals[,1,feat] = model1$residuals
+    residuals[,2,feat] = model2$residuals
+  }
+  
+  # Calculate the correlation
+  correlations = apply(residuals, 3, function(x) {
+    x1 = x[,1]
+    x2 = x[,2]
+    I = which(is.finite(x1) & is.finite(x2))
+    cor(x1[I], x2[I])
+  })
+  
+  to_select = names(correlations)[which.max(correlations)]
+  selected_features = c(selected_features, to_select)
+  remaining_features = colnames(features_stripped)[
+    !colnames(features_stripped) %in% selected_features]
+  all_correlations = c(all_correlations, list(correlations))
+  ratio_positive = c(ratio_positive, sum(correlations > 0, na.rm = TRUE) / length(correlations))
+}
+```
+
+```{r}
+ratio_color = ifelse(ratio_positive >= 0.5, "1", "2")
+ggplot(data = data.frame(
+  "Iteration" = seq_along(ratio_positive), 
+  "Ratio" = ratio_positive-0.5)) + 
+  geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") + 
+  ggtitle("Ratio of features with positive correlation") + 
+  theme(legend.position = "none")
+```
+
+```{r}
+cor_color = ifelse(sort(all_correlations[[1]], decreasing = TRUE) > 0, "positive", "negative")
+ggplot(data = data.frame(
+  "Features" = seq_along(all_correlations[[1]]), 
+  "Correlation" = sort(all_correlations[[1]], decreasing = TRUE))) + 
+  geom_bar(aes(x = Features, y = Correlation, fill = cor_color), stat = "identity") + 
+  ggtitle("Correlation of Features at Iteration 1 (1 selected feature)") + theme(legend.position = "none")
+```
+
+```{r}
+cor_color = ifelse(sort(all_correlations[[80]], decreasing = TRUE) > 0, "positive", "negative")
+ggplot(data = data.frame(
+  "Features" = seq_along(all_correlations[[80]]), 
+  "Correlation" = sort(all_correlations[[80]], decreasing = TRUE))) + 
+  geom_bar(aes(x = Features, y = Correlation, fill = cor_color), stat = "identity") + 
+  ggtitle("Correlation of Features at Iteration 80 (80 selected features)") + theme(legend.position = "none")
+```
+
+```{r}
+cor_color = ifelse(sort(all_correlations[[120]], decreasing = TRUE) > 0, "positive", "negative")
+ggplot(data = data.frame(
+  "Features" = seq_along(all_correlations[[120]]), 
+  "Correlation" = sort(all_correlations[[120]], decreasing = TRUE))) + 
+  geom_bar(aes(x = Features, y = Correlation, fill = cor_color), stat = "identity") + 
+  ggtitle("Correlation of Features at Iteration 120 (120 selected features)") + theme(legend.position = "none")
+```
+
+This leaves 89 features as relevant
+```{r}
+selection_dir = file.path(basedir, "feature_selection")
+if(!dir.exists(selection_dir)) {
+  dir.create(selection_dir, showWarnings = FALSE)
+}
+saveRDS(selected_features, file.path(selection_dir, "selected_features.rds"))
+saveRDS(all_correlations, file.path(selection_dir, "iteration_correlations.rds"))
+saveRDS(ratio_positive, file.path(selection_dir, "ratio_positive.rds"))
+```
+
+### Drug clustering
+This section can be run independently of the previous one.
+```{r}
+# Load and select relevant features based on correlation ratios (see above)
+selection_dir = file.path(basedir, "feature_selection")
+selected_features = readRDS(file = file.path(selection_dir, "selected_features.rds"))
+ratio_positive = readRDS(file = file.path(selection_dir, "ratio_positive.rds"))
+last_iteration = which(ratio_positive < 0.5)[1]-1
+selected_features = selected_features[seq_len(last_iteration)]
+
+# Normalize features
+features_stripped = features[,selected_features]
+features_stripped = as.data.frame(apply(
+  features_stripped, 2, 
+  function(x) 2 * ((x - min(x)) / (max(x) - min(x))) - 1))
+
+# As the features were already selected to correlate between replicates, the 
+# replicates can be averaged together for the clustering
+well_id = paste0(features$CELL.LINE, "__", features$DRUG)
+features_agg = aggregate(features_stripped, list(well_id), median)
+well_id_agg = features_agg$Group.1
+features_agg$Group.1 = NULL
+rownames(features_agg) = well_id_agg
+d = dist(features_agg)
+h = hclust(d)
+tmp = cutree(h, k=100)
+```
+
+
+<!--
+Because this step takes a long time, I first prune features that strongly correlate with other features. These would be excluded by the stepwise selection, anyway.
+```{r}
+feature_cor = cor(features_stripped)
+feature_cor_vector = feature_cor[upper.tri(feature_cor, diag = FALSE)]
+feature_cor[upper.tri(feature_cor, diag = TRUE)] = 0
+features_stripped <- features_stripped[,!apply(feature_cor,2,function(x) any(x > 0.95))]
+```
+
+
+Attempt an LDA on the treatment groups (cell_lines + treatment)
+```{r}
+library(MASS)
+treatment = as.factor(paste0(
+  features$CELL.LINE, "__", 
+  ifelse(test = features$DRUG == "DMSO", yes = "CONTROL", no = "TREATMENT")))
+fit.df = cbind.data.frame(features_stripped, "y" = treatment)
+fit_lda = lda(y ~ ., data = fit.df)
+```
+
+
+
+features_stripped$REPLICATE = features$REPLICATE
+features_stripped$DRUG = features$DRUG
+
+# Try to perform an LDA on the features
+non_feature_cols = which(colnames(features_stripped) %in% c("REPLICATE"))
+raw_features = features[,-non_feature_cols]
+fit_lda = lda(DRUG ~ ., data = raw_features)
+
+# Remove features that aren't sufficiently often non-zero
+zero_freq = colSums(features == 0)
+```
+
+
+
+
+
+Begin by initializing the plates, discarding re-imaged plates (0XX vs 9XX plates), and assigning replicates (the lower plate number will be replicate 1 and the higher plate number replicate 2)
+
+```{r}
+all_plates = list.files(featuresdir, "M001")
+
+# Remove reimaged plates (any plate that has a 9XX variant should be chosen over the 0XX variant)
+cell_line = substr(all_plates, 5, 5)
+plate_num = substr(all_plates, 10, 11)
+plate_id = paste0(cell_line, "_", plate_num)
+filtered_plates = aggregate(all_plates, list(plate_id), function(x) {
+  lowint_flag = as.numeric(substr(x, 9, 9))
+  return(as.character(x[lowint_flag == max(lowint_flag)]))
+})$x
+
+# Assign replicates
+cell_line = substr(filtered_plates, 5, 5)
+plate_layout = substr(filtered_plates, 13, 14)
+plate_id = paste0(cell_line, "_", plate_layout)
+rep2_plates = aggregate(filtered_plates, list(plate_id), function(x) {
+  plate_num = as.numeric(substr(x, 10, 11))
+  return(as.character(x[plate_num == max(plate_num)]))
+})$x
+replicate = setNames(
+  object = (filtered_plates %in% rep2_plates) + 1,
+  nm = filtered_plates)
+```
+
+
+
+
+
+
+
+
+
+
+## Organoid clump features
+
+The simplest feature type to look at are the organoid "clumps". These are contiguous areas of the foreground/background segmentation. In most cases, these will correspond to single organoids, but occassionally organoids might be in contact or overlap within the well. In general, it could very well be of interest to determine whether organoid clumping (and therefor the general morphology within the well) is affected by the drugs
+
+```{r}
+# Load features
+features = setNames(
+  object = vector(mode = "list", length = length(filtered_plates)),
+  nm = filtered_plates)
+for(plate in filtered_plates) {
+  features[[plate]] = loadFeatures(
+    platename = plate, configdir = configdir, 
+    feature_type = "organoids")
+  features[[plate]]$CELLLINE = substr(plate, 5, 5)
+  features[[plate]]$LAYOUT = substr(plate, 12, 14)
+  features[[plate]]$REPLICATE = replicate[plate]
+  features[[plate]]$ID = paste0(
+    substr(plate, 5, 5), "_", substr(plate, 12, 14), "_", features[[plate]]$WELL)
+}
+features = data.frame(rbindlist(l = features, use.names = TRUE, fill = FALSE))
+
+# Load layouts
+layout_ids = unique(substr(filtered_plates, 12, 14))
+layouts = lapply(layout_ids, function(x) {
+  lib = loadLibrary(library = x, configdir = configdir)
+  lib$ID = x
+  rownames(lib) = paste0(x, "_", lib$Well_ID_384)
+  return(lib)
+})
+layouts = do.call(rbind, layouts)
+
+# Get the drugs associated with each well. These are the categories for the LDA
+features$DRUG = as.character(layouts[substr(features$ID, 3, 9),"Product.Name"])
+```
+
+## Feature Selection
+
+```{r}
+non_feature_cols = c("FIELD", "WELL", "CELLLINE", "LAYOUT", "REPLICATE", "ID", "DRUG")
+```
+
+A feature dimensionality reduction is performed with a linear discriminant analysis (LDA). This method finds linear combinations of features that maximize the ratio of intra- to interclass variance. To get comparable features between cell lines, the categories trained on will be a combination of the cell line and the drug treatment. Prior to the dimensionality reduction, however, the correlation between features is calculated and strongly correlated features removed. Strongly correlated is defined as correlation > 0.95.
+```{r}
+lda_label = as.factor(paste0(features$CELLLINE, "_", features$DRUG))
+features_stripped = features[,!colnames(features) %in% non_feature_cols]
+
+# Remove features that correlate strongly with other features
+feature_cor = cor(features_stripped)
+feature_cor_vector = feature_cor[upper.tri(feature_cor, diag = FALSE)]
+feature_cor[upper.tri(feature_cor, diag = TRUE)] = 0
+features_stripped <- features_stripped[,!apply(feature_cor,2,function(x) any(x > 0.95))]
+
+features_stripped$ID = lda_label
+fit_lda = lda(ID ~ ., data = features_stripped)
+
+tmp = predict(fit_lda, features_stripped)
+
+ggplot(data = data.frame("svd" = cumsum(fit_lda$svd) / sum(fit_lda$svd))) + 
+  geom_point(aes(y = svd))
+```
+
+
+
+
+
+
+To get an idea of how "good" the features are, I look at a t-SNE plot of the features. An interactive version of this can be viewed in the shiny app. Shown here is an example comparing DMSO and Bortezomib
+```{r, eval=FALSE}
+# Don't evaluate this block when creating the vignette as it takes a very long time to run the tSNE
+all_cell_lines = c("W", "A", "K", "B")
+tsne_y = setNames(
+  object = vector(mode = "list", length = 4),
+  nm = all_cell_lines
+)
+for(cell_line in all_cell_lines) {
+  features_stripped = features[
+    features$CELLLINE == cell_line,
+    !colnames(features) %in% non_feature_cols]
+
+  features_tsne = Rtsne(X = as.matrix(features_stripped), dims = 2, verbose = TRUE)
+  saveRDS(features_tsne, file.path(basedir, "shiny", "mouse", sprintf("tSNE_full_object_%s.rds", cell_line)))
+  
+  tsne_y[[cell_line]] = data.frame(features_tsne$Y)
+  tsne_y[[cell_line]]$DRUG = features[features$CELLLINE == cell_line, "DRUG"]
+  tsne_y[[cell_line]]$REPLICATE = features[features$CELLLINE == cell_line, "REPLICATE"]
+  tsne_y[[cell_line]]$CELLLINE = cell_line
+}
+
+tsne_y = do.call(rbind, tsne_y)
+saveRDS(tsne_y, file.path(basedir, "shiny", "mouse", "tSNE_shiny.rds"))
+```
+
+
+
+
+
+
+
+
+
+
+
+<!--
+```{r}
+# Loop through each cell line individually
+non_feature_cols = c("FIELD", "WELL", "CELLLINE", "LAYOUT", "REPLICATE", "ID")
+cell_line = "W"
+
+cl_features = features[
+  features$CELLLINE == cell_line, 
+  !colnames(features) %in% non_feature_cols]
+cl_drugs = cl_features$DRUG
+cl_features$DRUG = NULL
+
+# Dimensionality reduction via PCA
+cl_features_pca = prcomp()
+
+
+
+
+
+
+fit = lda(formula = DRUG ~ ., data = cl_features)
+
+
+# Load the DMSO features
+features_DMSO = features[features$DRUG == "DMSO",]
+
+# For each cell line, determine the separability of each drug
+non_feature_cols = c("FIELD", "WELL", "CELLLINE", "LAYOUT", "REPLICATE", "ID")
+cell_line = "W"
+drug = features$DRUG[1]
+cl_features = features[features$CELLLINE == cell_line & features$DRUG == drug,]
+
+
+cl_features_DMSO = features_DMSO[
+  features_DMSO$CELLLINE == cell_line, 
+  !colnames(features_DMSO) %in% non_feature_cols]
+
+glm_df = rbind.data.frame(cl_features_stripped, cl_features_DMSO)
+glm_df$DRUG = as.numeric(glm_df$DRUG != "DMSO")
+
+fit = glm(formula = DRUG ~ ., family = binomial(link = "logit"), data = glm_df)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+<!--
+# Haralick Features
+
+First I look at the correlation of the haralick features between replicates to compare them to the results of the human data. Load the data and average the values over the individual fields of each well.
+```{r}
+features = setNames(
+  object = vector(mode = "list", length = length(filtered_plates)),
+  nm = filtered_plates)
+for(plate in filtered_plates) {
+  features[[plate]] = loadFeatures(
+    platename = plate, configdir = configdir, 
+    feature_type = "foreground")
+  features[[plate]]$CELLLINE = substr(plate, 5, 5)
+  features[[plate]]$LAYOUT = substr(plate, 13, 14)
+  features[[plate]]$REPLICATE = replicate[plate]
+  features[[plate]]$ID = paste0(
+    substr(plate, 5, 5), "_", substr(plate, 13, 14), "_", features[[plate]]$WELL)
+}
+features = rbindlist(l = features, use.names = TRUE, fill = FALSE)
+```
+
+Calculate the correlation between replicates for each cell line
+
+```{r}
+cls = c("W", "A", "K", "B")
+feature_names = colnames(features)[
+  !colnames(features) 
+  %in% c("FIELD", "WELL", "CELLLINE", 
+         "LAYOUT", "REPLICATE", "ID")]
+
+cl_correlations = setNames(object = vector(mode = "list", length = 4), nm = cls)
+
+for(cl in cls) {
+  cl_features = features[features$CELLLINE == cl,]
+  cl_features_rep1 = cl_features[cl_features$REPLICATE == 1,]
+  cl_features_rep1 = cl_features_rep1[order(cl_features_rep1$ID),]
+  cl_features_rep2 = cl_features[cl_features$REPLICATE == 2,]
+  cl_features_rep2 = cl_features_rep2[order(cl_features_rep2$ID),]
+  if(!identical(cl_features_rep1$ID, cl_features_rep2$ID)) {
+    warning(paste0("Features are not in the same order for cell line", cl))
+  }
+  
+  correlations = setNames(
+      vector(mode = "numeric", length = length(feature_names)), feature_names)
+  for(feature_name in feature_names) {
+    vals_rep1 = cl_features_rep1[[feature_name]]
+    vals_rep2 = cl_features_rep2[[feature_name]]
+    correlations[[feature_name]] = cor(vals_rep1, vals_rep2)
+  }
+  correlations = sort(correlations, decreasing = TRUE)
+  cl_correlations[[cl]] = correlations
+}
+
+cl_id = rep(cls, each=length(feature_names))
+cl_correlations = data.frame(
+  "Features" = rep(seq_along(feature_names), 4),
+  "Correlation" = do.call(what = c, cl_correlations),
+  "Cell.Line" = cl_id)
+
+ggplot(data = cl_correlations) + 
+  geom_line(aes(x = Features, y = Correlation, color=Cell.Line)) + 
+  ggtitle(sprintf("Correlation of features between replicates"))
+```
+
+The pure texture features are clearly not sufficiently correlated between replicates
+
+# Full texture set
+
+Now I look at the full texture set for each individual organoid clump. An "organoid clump" is defined as a contiguous region of foreground pixels. They are defined this way because it might be of interest to use the size distribution of "organoid clumps" as an additional feature.
+
+```{r}
+
+```
+-->

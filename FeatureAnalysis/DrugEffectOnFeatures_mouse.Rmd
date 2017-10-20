@@ -28,7 +28,7 @@ blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/b
 
 # Parameters
 feature_type = "organoids"
-hdf5_dataset = "features_tm05_zscore"
+hdf5_dataset = "features_tm05_zscore_rep"
 ```
 
 # Data preprocessing
