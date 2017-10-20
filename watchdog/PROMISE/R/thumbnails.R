@@ -29,6 +29,7 @@ thumbnailImages <- function(plateIndir, platename, row, col, configdir) {
 
   # Quantile-scale each channel separately
   for(c in seq_len(dim(Img)[3])) {
+    Img[,,c,] = pmax(Img[,,c,] - median(Img[,,c,]), 0)
     Img[,,c,] = Img[,,c,] / quantile(Img[,,c,], 0.999)
   }
   # Img = Img / quantile(Img, 0.999)

@@ -60,7 +60,7 @@ def create_patches(image_fn, patch_rad=40, num_patches=10000):
 
 def get_wells_from_layout(layout_file, treatments, concentrations=None):
     """
-    Load control plates from library file
+    Get the IDs of plates treated with a given drug
     :param layout_file:
     :param treatments:
     :param concentrations:
@@ -252,10 +252,11 @@ def apply_network(out_dir="."):
                  "Volasertib", "Methotrexate", "Staurosporine_500nM")
     pos_ctrl_wells = [
         p + "_" + w for p in l08_plates for w in
-        get_wells_from_layout(layout_fn, pos_ctrls)]
+        get_wells_from_layout(layout_fn, pos_ctrls, (0.2, 1))]
 
     features_pos = []
-    for pcw in pos_ctrl_wells[0:2]:
+    for pcw in pos_ctrl_wells:
+        print str(pos_ctrl_wells.index(pcw)+1) + " of " + str(len(pos_ctrl_wells))
         plate, well = pcw.split("_")
         image_fn = os.path.join(
             proj_dir, plate,
@@ -264,11 +265,14 @@ def apply_network(out_dir="."):
 
         patches = create_patches(image_fn, num_patches=100)
         features_pos.append(get_features([patches, 0])[0])
-    features_pos = np.concatenate(features_pos, axis=0)
-    np.save(os.path.join(out_dir, "Features_PosCtrl.npy"), features_pos)
+    with open(os.path.join(out_dir, "Features_PosCtrl.npy"), "wb") as f:
+        pickle.dump(features_pos, f, pickle.HIGHEST_PROTOCOL)
+    # features_pos = np.concatenate(features_pos, axis=0)
+    # np.save(os.path.join(out_dir, "Features_PosCtrl.npy"), features_pos)
 
     features_neg = []
     for ncw in neg_ctrl_wells:
+        print str(neg_ctrl_wells.index(ncw) + 1) + " of " + str(len(neg_ctrl_wells))
         plate, well = ncw.split("_")
         image_fn = os.path.join(
             proj_dir, plate,
@@ -276,6 +280,8 @@ def apply_network(out_dir="."):
             (plate, well[0], well[1:3]))
 
         patches = create_patches(image_fn, num_patches=100)
-        features_neg.append(get_features([patches, 0]))
-    features_neg = np.concatenate(features_neg, axis=0)
-    np.save(os.path.join(out_dir, "Features_NegCtrl.npy"), features_neg)
+        features_neg.append(get_features([patches, 0])[0])
+    with open(os.path.join(out_dir, "Features_NegCtrl.npy"), "wb") as f:
+            pickle.dump(features_neg, f, pickle.HIGHEST_PROTOCOL)
+    # features_neg = np.concatenate(features_neg, axis=0)
+    # np.save(os.path.join(out_dir, "Features_NegCtrl.npy"), features_neg)

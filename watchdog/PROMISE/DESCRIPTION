@@ -1,7 +1,7 @@
 Package: PROMISE
 Type: Package
 Title: What the package does (short line)
-Version: 0.1.21
+Version: 0.1.22
 Date: 2017-09-26
 Author: Jan Sauer, Bernd Fischer
 Maintainer: Jan Sauer <jan.sauer@dkfz-heidelberg.de>

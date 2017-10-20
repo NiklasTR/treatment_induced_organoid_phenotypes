@@ -28,7 +28,7 @@ FEATUREDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
 LAYOUTDIR = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
 SEGMENTATIONDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
 BLURRYWELLFN = os.path.join(BASEDIR, "blurry_wells_predicted.txt")
-FEATURETYPE = "organoids"
+FEATURETYPE = "clumps"
 
 
 def trim_func(a, func, percent, axis):
@@ -725,34 +725,56 @@ def cmd_run_cell_lines():
         cl_drugs = np.concatenate(cl_drugs, axis=0).astype(np.str)
         cl_concentrations = np.concatenate(cl_concentrations, axis=0)
 
-        # Calculate z score
-        cl_features_median_masked = np.ma.array(
-            cl_features_median, mask=np.isnan(cl_features_median))
-        cl_features_median_z = scipy.stats.mstats.zscore(
-            a=cl_features_median_masked, axis=1)
-        cl_features_tm05_masked = np.ma.array(
-            cl_features_tm05, mask=np.isnan(cl_features_tm05))
-        cl_features_tm05_z = scipy.stats.mstats.zscore(
-            a=cl_features_tm05_masked, axis=1)
-        cl_features_tm10_masked = np.ma.array(
-            cl_features_tm10, mask=np.isnan(cl_features_tm10))
-        cl_features_tm10_z = scipy.stats.mstats.zscore(
-            a=cl_features_tm10_masked, axis=1)
-        cl_features_tm15_masked = np.ma.array(
-            cl_features_tm15, mask=np.isnan(cl_features_tm15))
-        cl_features_tm15_z = scipy.stats.mstats.zscore(
-            a=cl_features_tm15_masked, axis=1)
+        # Calculate z score across cell line and per replicate
+        feature_sets = {
+            "cl_features_median": cl_features_median,
+            "cl_features_tm05": cl_features_tm05,
+            "cl_features_tm10": cl_features_tm10,
+            "cl_features_tm15": cl_features_tm15}
+        feature_sets_z = {}
+        feature_sets_z_rep = {}
+        for feature_set_key in feature_sets.keys():
+            feature_set = feature_sets[feature_set_key]
+            feature_set_masked = np.ma.array(
+                feature_set, mask=np.isnan(feature_set))
+            # Z score across entire cell line
+            feature_sets_z[feature_set_key] = scipy.stats.mstats.zscore(
+                a=feature_set_masked, axis=1)
+            # Z score across replicate
+            feature_set_z_rep = np.zeros(
+                shape=feature_set.shape)
+            feature_set_z_rep[..., cl_replicates == 1] = scipy.stats.mstats.zscore(
+                    a=feature_set_masked[..., cl_replicates == 1], axis=1)
+            feature_set_z_rep[..., cl_replicates == 2] = scipy.stats.mstats.zscore(
+                a=feature_set_masked[..., cl_replicates == 2], axis=1)
+            feature_sets_z_rep[feature_set_key] = feature_set_z_rep
 
         # Save data
         with h5py.File(cl_fn, "w-") as h5handle:
             h5handle.create_dataset(
-                name="features_median_zscore", data=cl_features_median_z)
+                name="features_median_zscore",
+                data=feature_sets_z["cl_features_median"])
             h5handle.create_dataset(
-                name="features_tm05_zscore", data=cl_features_tm05_z)
+                name="features_tm05_zscore",
+                data=feature_sets_z["cl_features_tm05"])
             h5handle.create_dataset(
-                name="features_tm10_zscore", data=cl_features_tm10_z)
+                name="features_tm10_zscore",
+                data=feature_sets_z["cl_features_tm10"])
             h5handle.create_dataset(
-                name="features_tm15_zscore", data=cl_features_tm15_z)
+                name="features_tm15_zscore",
+                data=feature_sets_z["cl_features_tm15"])
+            h5handle.create_dataset(
+                name="features_median_zscore_rep",
+                data=feature_sets_z_rep["cl_features_median"])
+            h5handle.create_dataset(
+                name="features_tm05_zscore_rep",
+                data=feature_sets_z_rep["cl_features_tm05"])
+            h5handle.create_dataset(
+                name="features_tm10_zscore_rep",
+                data=feature_sets_z_rep["cl_features_tm10"])
+            h5handle.create_dataset(
+                name="features_tm15_zscore_rep",
+                data=feature_sets_z_rep["cl_features_tm15"])
             h5handle.create_dataset(
                 name="features_median", data=cl_features_median)
             h5handle.create_dataset(

@@ -17,7 +17,6 @@ library(PROMISE)
 library(ggplot2)
 library(data.table)
 library(rhdf5)
-library(imageHTS)
 library(pander)
 
 # Directories and files
@@ -28,7 +27,7 @@ blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/b
 
 # Parameters
 feature_type = "organoids"
-hdf5_dataset = "features_tm05_zscore"
+hdf5_dataset = "features_tm05_zscore_rep"
 ```
 
 # Data preprocessing
@@ -269,11 +268,11 @@ organoids_zprime = setNames(
   nm = cell_lines)
 for(cell_line in cell_lines) {
   cl_simple_features = simple_features[simple_features$Cell.Line == cell_line, ]
-  organoids_zprime[[cell_line]] = zprime(
+  organoids_zprime[[cell_line]] = imageHTS::zprime(
     cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Num.Objects"], 
     cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Num.Objects"], 
     method = "robust")
-  biomass_zprime[[cell_line]] = zprime(
+  biomass_zprime[[cell_line]] = imageHTS::zprime(
     cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Total.Area"], 
     cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Total.Area"], 
     method = "robust")
@@ -328,7 +327,7 @@ feature_z_factors = matrix(
   dimnames = list(cell_lines, colnames(features_combined)))
 for(feature in colnames(features_combined)) {
   for(cell_line in cell_lines) {
-    feature_z_factors[cell_line, feature] = zprime(
+    feature_z_factors[cell_line, feature] = imageHTS::zprime(
       pos_ctrl[substr(rownames(pos_ctrl), 1, 7) == cell_line, feature],
       neg_ctrl[substr(rownames(neg_ctrl), 1, 7) == cell_line, feature],
       method = "robust")
@@ -450,88 +449,77 @@ ggplot(data = ggplotdf) + geom_line(aes(x = Features, y = Correlation)) +
   ggtitle("Correlations between Replicates across all Cell Lines")
 ```
 
-<!-- # Finding Characteristic Features -->
+# Stability Selection
 
-<!-- Relying on a single statistic for feature quality may introduce biases, such as ignoring features that may differentiate specific treatments but not the controls from each other. Instead, I directly perform a stepwise feature selection, as per Fischer et al. 2015 ("A Map of Directional Genetic Interactions in a Metazoan Cell") and Laufer et al. 2013 ("Mapping genetic interactions in human cancer cells"). Feature selection is performed on the combined feature set for all cell lines. This entails the following steps: -->
-<!-- 1. Choose an initial feature set. This will be the number of organoids and the total biomass, both of which suitably separated the positive from negative controls. -->
-<!-- 2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set. -->
-<!-- 3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information. -->
+Selecting features based on quality statistics, such as the z-factor, may introduce biases. For example, one might ignore features that differentiate specific treatments but not the controls from each other. Instead, I directly perform a stepwise feature selection over the entire screen, as per Fischer et al. 2015 ("A Map of Directional Genetic Interactions in a Metazoan Cell") and Laufer et al. 2013 ("Mapping genetic interactions in human cancer cells"). This entails the following steps:
+1. Choose an initial feature set. This will be the number of organoids and the total biomass, both of which suitably separated the positive from negative controls. This feature set is chosen for its biological iterpretability.
+2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
+3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
 
-<!-- To reduce the runtime of the feature selection, I begin with a preselection. I remove all features with no variation across the entire screen and then remove all features that strongly correlate with each other. -->
-<!-- ```{r} -->
-<!-- features_reduced = features -->
+To reduce the runtime of the feature selection, I remove strongly correlating features ($\rho$ >= +/-0.90).
+```{r}
+# Calculate correlations
+features_cor = cor(features, use = "pairwise.complete.obs")
+feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+features_reduced <- features[,!apply(features_cor,2,function(x) any(abs(x) > 0.90))]
+```
 
-<!-- # Remove constant features -->
-<!-- features_var = apply(features, 2, var) -->
-<!-- features_reduced = features_reduced[, names(which(features_var > 0))] -->
+```{r}
+# Set up initial features
+initial_set = c("organoids_num.of.objects", "Total.Biomass")
+selected_features = initial_set
+remaining_features = colnames(features_reduced)[
+  !colnames(features_reduced) %in% selected_features]
 
-<!-- # Calculate correlations -->
-<!-- features_cor = cor(features_reduced, use = "pairwise.complete.obs") -->
-<!-- feature_cor_vector = feature_cor[upper.tri(feature_cor, diag = FALSE)] -->
-<!-- feature_cor[upper.tri(feature_cor, diag = TRUE)] = 0 -->
-<!-- features_reduced <- features_reduced[,!apply(feature_cor,2,function(x) any(x > 0.90))] -->
-<!-- ``` -->
+# Remember statistics on the correlations
+all_correlations = list()
+ratio_positive = c()
 
+# Calculate the fit for each replicate and save the residuals
+# This increments any time the number of positively correlated residuals is 
+# greater than the number of negatively correlated residuals
+early_end = 0
+while(length(remaining_features) > 0) {
+  residuals = array(0, dim = c(nrow(features_reduced), 2, length(remaining_features)))
+  dimnames(residuals) = list(NULL, NULL, remaining_features)
+  for(feat in remaining_features) {
+    model1 = lm(
+      features_reduced[features_metadata$REPLICATE == 1, feat] ~
+        as.matrix(features_reduced[features_metadata$REPLICATE == 1, selected_features]))
+    model2 = lm(
+      features_reduced[features_metadata$REPLICATE == 2, feat] ~ 
+        as.matrix(features_reduced[features_metadata$REPLICATE == 2, selected_features]))
+    residuals[,1,feat] = model1$residuals
+    residuals[,2,feat] = model2$residuals
+  }
 
-<!-- To optimize the runtime of the feature selection, I begin by removing any features that strongly correlate with each other ($\rho$ >= 0.99) -->
-<!-- ```{r} -->
-<!-- features_stepwise = features -->
-<!-- other_features = colnames(features_stepwise)[ -->
-<!--   !colnames(features_stepwise) %in% c("Total.Biomass")] -->
-<!-- other_feature_cors = setNames( -->
-<!--   object = vector(mode = "numeric", length = length(other_features)),  -->
-<!--   nm = other_features) -->
-<!-- for(feature in other_features) { -->
-<!--   other_feature_cors = cor() -->
-<!-- } -->
+  # Calculate the correlation
+  correlations = apply(residuals, 3, function(x) {
+    x1 = x[,1]
+    x2 = x[,2]
+    I = which(is.finite(x1) & is.finite(x2))
+    cor(x1[I], x2[I])
+  })
 
-<!-- ``` -->
+  to_select = names(correlations)[which.max(correlations)]
+  selected_features = c(selected_features, to_select)
+  remaining_features = colnames(features_reduced)[
+    !colnames(features_reduced) %in% selected_features]
+  all_correlations = c(all_correlations, list(correlations))
+  feat_ratio_positive = mean(correlations > 0, na.rm = TRUE)
+  ratio_positive = c(ratio_positive, feat_ratio_positive)
+  if(feat_ratio_positive < 0.5) {
+    early_end = early_end + 1
+  } else {
+    early_end = 0
+  }
+  if(early_end >= 15) break
+}
 
-<!-- ```{r} -->
-<!-- # Choose the best three as a starting set -->
-<!-- initial_set = c("organoids_num.of.objects", "total.area.of.biomass") -->
-<!-- selected_features = initial_set -->
-<!-- remaining_features = colnames(features_combined)[ -->
-<!--   !colnames(features_combined) %in% selected_features] -->
-
-<!-- # Remember statistics on the correlations -->
-<!-- all_correlations = list() -->
-<!-- ratio_positive = c() -->
-
-<!-- # Calculate the fit for each replicate and save the residuals -->
-<!-- while(length(remaining_features) > 0) { -->
-<!--   residuals = array(0, dim = c(nrow(features_combined), 2, length(remaining_features))) -->
-<!--   dimnames(residuals) = list(NULL, NULL, remaining_features) -->
-<!--   for(feat in remaining_features) { -->
-<!--     model1 = lm( -->
-<!--     features_combined[features_metadata_combined$REPLICATE == 1, feat] ~ -->
-<!--       as.matrix(features_combined[features_metadata_combined$REPLICATE == 1, selected_features])) -->
-<!--     model2 = lm( -->
-<!--       features_combined[features_metadata_combined$REPLICATE == 2, feat] ~ -->
-<!--         as.matrix(features_combined[features_metadata_combined$REPLICATE == 2, selected_features])) -->
-<!--     residuals[,1,feat] = model1$residuals -->
-<!--     residuals[,2,feat] = model2$residuals -->
-<!--   } -->
-
-<!--   # Calculate the correlation -->
-<!--   correlations = apply(residuals, 3, function(x) { -->
-<!--     x1 = x[,1] -->
-<!--     x2 = x[,2] -->
-<!--     I = which(is.finite(x1) & is.finite(x2)) -->
-<!--     cor(x1[I], x2[I]) -->
-<!--   }) -->
-
-<!--   to_select = names(correlations)[which.max(correlations)] -->
-<!--   selected_features = c(selected_features, to_select) -->
-<!--   remaining_features = colnames(features_combined)[ -->
-<!--     !colnames(features_combined) %in% selected_features] -->
-<!--   all_correlations = c(all_correlations, list(correlations)) -->
-<!--   ratio_positive = c(ratio_positive, sum(correlations > 0, na.rm = TRUE) / length(correlations)) -->
-<!-- } -->
-
-<!-- # Keep only the selected features with a ratio > 0.5 of positively correlated residual matrices -->
-<!-- selected_features = selected_features[c(rep(TRUE, length(initial_set)), ratio_positive > 0.5)] -->
-<!-- ``` -->
+# Keep only the selected features with a ratio > 0.5 of positively correlated residual matrices
+selected_features = selected_features[c(rep(TRUE, length(initial_set)), ratio_positive > 0.5)]
+```
 
 
 
