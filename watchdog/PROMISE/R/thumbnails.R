@@ -27,7 +27,11 @@ thumbnailImages <- function(plateIndir, platename, row, col, configdir) {
       return(FALSE)
   }
 
-  Img = Img / quantile(Img, 0.999)
+  # Quantile-scale each channel separately
+  for(c in seq_len(dim(Img)[3])) {
+    Img[,,c,] = Img[,,c,] / quantile(Img[,,c,], 0.999)
+  }
+  # Img = Img / quantile(Img, 0.999)
   Img2 = resize(Img, w = 2048 / 8, h = 2048 / 8)
   Img3 = rgbImage(tile(Img2[,,1,as.integer(fields_layout)], nx = sqrt(length(fields))),
                   tile(Img2[,,2,as.integer(fields_layout)], nx = sqrt(length(fields))),
