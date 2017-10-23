@@ -405,8 +405,15 @@ ggplot(data = unique_vals_min_df) + geom_point(aes(x = Features, y = Ratio.Uniqu
           subtitle = "e.g. a 'minimum ratio' of 0.25 means all plates had a ratio of >= 25% of unique values for that feature") + 
   geom_hline(aes(yintercept = 0.25), color = "blue")
 
-features = features[,names(which(unique_vals_min >= 0.25))]
-features_combined = features_combined[,names(which(unique_vals_min >= 0.25))]
+features_to_keep = names(which(unique_vals_min >= 0.25))
+if(!"Total.Biomass" %in% features_to_keep)
+  features_to_keep = c(features_to_keep, "Total.Biomass")
+if(!"organoids_x.0.s.area_expected" %in% features_to_keep)
+  features_to_keep = c(features_to_keep, "organoids_x.0.s.area_expected")
+if(!"organoids_num.of.objects" %in% features_to_keep)
+  features_to_keep = c(features_to_keep, "organoids_num.of.objects")
+features = features[,features_to_keep]
+features_combined = features_combined[,features_to_keep]
 ```
 
 ## Correlation between replicates
@@ -481,8 +488,11 @@ cell_line_features = cl_correlations[cl_correlations$Correlations >= cor_thresh,
 cell_line_features = names(which(table(cell_line_features) == max(table(cell_line_features))))
 if(!"organoids_num.of.objects" %in% cell_line_features) 
   cell_line_features = c(cell_line_features, "organoids_num.of.objects")
+if(!"organoids_x.0.s.area_expected" %in% cell_line_features) 
+  cell_line_features = c(cell_line_features, "organoids_x.0.s.area_expected")
 if(!"Total.Biomass" %in% cell_line_features) 
   cell_line_features = c(cell_line_features, "Total.Biomass")
+
 features = features[,cell_line_features]
 features_metadata$CELL.LINE = substr(rownames(features_metadata), 1, 7)
 # saveRDS(object = features, file = "Features_Human_QC.rds")
@@ -508,7 +518,7 @@ features_reduced <- features[,!apply(features_cor,2,function(x) any(abs(x) > 0.9
 
 ```{r}
 # Set up initial features
-initial_set = c("organoids_num.of.objects", "Total.Biomass")
+initial_set = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected")
 selected_features = initial_set
 remaining_features = colnames(features_reduced)[
   !colnames(features_reduced) %in% selected_features]
