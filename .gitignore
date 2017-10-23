@@ -10,3 +10,5 @@ methods/coculture
 **/*.idea
 **/*.h5
 **/*.pkl
+**/*.rds
+**/*.rda

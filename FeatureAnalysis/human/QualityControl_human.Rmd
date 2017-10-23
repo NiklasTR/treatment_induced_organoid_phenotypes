@@ -1,0 +1,580 @@
+---
+title: "Screen Quality Control (Human)"
+author: "Jan Sauer"
+date: "22.10.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+This vignette performs quality control of the human screen of the L02, L03, and L08 plates.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Install and load libraries
+library(PROMISE)
+library(ggplot2)
+library(data.table)
+library(rhdf5)
+library(pander)
+
+# Directories and files
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+feature_dir = "/collab-ag-fischer/FeatureAnalysis/features"
+source(file.path(config_dir, "watchdogConfig.R"))
+
+# Parameters
+feature_type = "organoids"
+hdf5_dataset = "features_tm05_zscore_rep"
+```
+
+# Data preprocessing
+
+The data preprocessing consists of the following steps:
+
+* Separate objects into "organoids" (area >= 2500 pixels) and "shrapnel" (area <= 2500 pixels).
+* Calculate the summary features for each of these categories of objects within a well (median / mad).
+  * I decided for this summary statistic as some features may only have features within a certain range, e.g. [0, 1] for the asphericity. Even under the assumption of normally distributed variation within a well, this limitation would cause the mean to skew the summary statistic towards the middle of the interval.
+* Apply glog transformation
+* Subtract the median of the DMSO wells from each feature on each plate to eliminate batch effects.
+* Combine plates belonging to a single cell line and calculate the z-score for each feature.
+
+This is done in an external python script. The data and all intermediate steps are stored in the corresponding hdf5 files in the PROMISE features directory.
+
+```{r load_data}
+cell_lines = unique(substr(list.files(feature_dir, pattern = "D0"), 1, 7))
+features = setNames(
+  object = vector(mode="list", length=length(cell_lines)), 
+  nm = cell_lines)
+features_metadata = setNames(
+  object = vector(mode="list", length=length(cell_lines)), 
+  nm = cell_lines)
+for(cell_line in cell_lines) {
+  cl_feature_fn = file.path(feature_dir, sprintf("%s_averaged_features_%s.h5", cell_line, feature_type))
+  features[[cell_line]] = data.frame(h5read(cl_feature_fn, hdf5_dataset))
+  colnames(features[[cell_line]]) = h5read(cl_feature_fn, "feature_names")
+  rownames(features[[cell_line]]) = h5read(cl_feature_fn, "well_names")
+  
+  features_metadata[[cell_line]] = data.frame(
+    "REPLICATE" = h5read(cl_feature_fn, "replicates"),
+    "CONCENTRATION" = h5read(cl_feature_fn, "concentrations"),
+    "DRUG" = h5read(cl_feature_fn, "drugs"), 
+    row.names = rownames(features[[cell_line]]))
+}
+features = do.call(rbind, features)
+rownames(features) = sapply(strsplit(rownames(features), ".", fixed = TRUE), "[[", 2)
+features_metadata = do.call(rbind, features_metadata)
+rownames(features_metadata) = sapply(strsplit(rownames(features_metadata), ".", fixed = TRUE), "[[", 2)
+```
+
+For any number of reasons, some wells may not have usable features. Remove any wells with NAs in their features and their replicate counterparts
+```{r}
+na_rows = which(!is.finite(as.matrix(features)), arr.ind = TRUE)
+na_rows = rownames(features)[unique(na_rows[,"row"])]
+na_rows_repid = paste0(substr(na_rows, 1, 7), "_", substr(na_rows, 12, 19))
+all_wells_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+features = features[-which(all_wells_repid %in% na_rows_repid), ]
+features_metadata = features_metadata[-which(all_wells_repid %in% na_rows_repid), ]
+```
+
+# Quality Control
+## Comparing Positive controls
+
+The drugs Bortezomib, Irinotecan / SN-38, Staurosporine, Volasertib, and Methotrexate are all potential positive controls. To see how suitable they are for this, I look at how they compare to DMSO, the negative control. To compare treatments, I look at the number of organoids as a proxy for organoid survival.
+```{r}
+sf_drug = features_metadata[,"DRUG"]
+sf_conc = features_metadata[,"CONCENTRATION"]
+sf_drug_conc = ifelse(
+  test = sf_drug %in% c("DMSO", "Staurosporine_500nM"), 
+  yes = sf_drug, no = paste0(sf_drug, " @ ", sf_conc))
+sf_num_organoids = features[,"organoids_num.of.objects"]
+sf_avg_org_size = features[,"organoids_x.0.s.area_expected"]
+sf_total_area = features[,"Total.Biomass"]
+
+simple_features = data.frame(
+  "Num.Objects" = sf_num_organoids,
+  "Avg.Org.Size" = sf_avg_org_size,
+  "Total.Area" = sf_total_area,
+  "Drug" = sf_drug,
+  "Concentration" = sf_conc,
+  "Drug_Conc" = sf_drug_conc,
+  "Cell.Line" = substr(rownames(features), 1, 7)
+)
+```
+
+### Staurosporine_500nM
+
+Staurosporine and DMSO were only applied at one concentration.
+
+```{r, fig.width=12, fig.height=6}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Staurosporine_500nM"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Staurosporine_500nM)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Staurosporine_500nM)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Staurosporine_500nM)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
+```
+
+### Bortezomib
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Bortezomib"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Bortezomib)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Bortezomib)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Bortezomib)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
+```
+
+### Irinotecan / SN-38
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Irinotecan / SN-38"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Irinotecan / SN-38)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Irinotecan / SN-38)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Irinotecan / SN-38)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
+```
+
+### Volasertib
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Volasertib"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Volasertib)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Volasertib)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Volasertib)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
+```
+
+### Methotrexate
+
+```{r, fig.width=12}
+ggplotdf = simple_features[simple_features$Drug %in% c("DMSO", "Methotrexate"),]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug_Conc)) + 
+  ggtitle(label = "Number of Organoids per Well (Methotrexate)") + xlab("Cell Line") + 
+  ylab("Number of Organoids")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug_Conc)) + 
+  ggtitle(label = "Average Are of Organoids (Methotrexate)") + 
+  xlab("Cell Line") + ylab("Average Area")
+```
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug_Conc)) + 
+  ggtitle(label = "Total Biomass per Well (Methotrexate)") + 
+  xlab("Cell Line") + ylab("Total Biomass Area")
+```
+
+## Combining Positive Controls
+
+A visual inspection of the wells has shown that of the proposed negative controls, only Bortezomib and Irinotecan / SN-38 in concentrations of 0.2 and 1 are suitable positive controls.
+
+<!-- With a few exceptions in individual cell lines, the highest concentrations of positive controls ("0.2" and "1") seem to be well differentiable from the negative controls with regards to the number of organoids in each well. Grouping the positive controls leads to a larger within-group variance but still leaves them clearly differentiable from the negative controls. -->
+
+```{r}
+# non_stauro_pos_ctrls = c("Bortezomib", "Irinotecan / SN-38", "Volasertib", "Methotrexate")
+# valid_entries = features_metadata$DRUG %in% c("DMSO", "Staurosporine_500nM") | 
+#   (features_metadata$DRUG %in% non_stauro_pos_ctrls & features_metadata$CONCENTRATION %in% c("0.2", "1"))
+non_stauro_pos_ctrls = c("Bortezomib", "Irinotecan / SN-38")
+valid_entries = features_metadata$DRUG %in% c("DMSO") | 
+  (features_metadata$DRUG %in% non_stauro_pos_ctrls & features_metadata$CONCENTRATION %in% c("0.2", "1"))
+features_combined = features[valid_entries,]
+features_metadata_combined = features_metadata[valid_entries,]
+features_metadata_combined$DRUG = ifelse(
+  test = features_metadata_combined$DRUG == "DMSO",
+  yes = "NEG_CTRL", no = "POS_CTRL")
+```
+
+```{r, fig.width=12, fig.height=6}
+simple_features = data.frame(
+  "Num.Objects" = features_combined[,"organoids_num.of.objects"],
+  "Avg.Org.Size" = features_combined[,"organoids_x.0.s.area_expected"],
+  "Total.Area" = features_combined[,"Total.Biomass"],
+  "Drug" = features_metadata_combined[,"DRUG"],
+  "Cell.Line" = substr(rownames(features_combined), 1, 7)
+)
+```
+
+```{r}
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Num.Objects, fill = Drug)) +
+  ggtitle(label = "Number of Organoids per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Number of Organoids")
+```
+
+```{r}
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Avg.Org.Size, fill = Drug)) +
+  ggtitle(label = "Average Area of Organoids per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Average Area of of Organoids")
+```
+
+```{r}
+ggplot(data = simple_features) + geom_boxplot(aes(x = Cell.Line, y = Total.Area, fill = Drug)) +
+  ggtitle(label = "Total Area of Biomass per Well",
+          subtitle = "Grouped positive controls at concentrations of 1 and 0.2") + xlab("Cell Line") +
+  ylab("Total Area of Biomass")
+```
+
+## Cell Line Quality
+The average number of organoids as well as the total biomass are features that should vary strongly between the two controls. Consequently, I will exclude any cell lines for which the two controls cannot be properly separated. For this, I determine the z-factor for both the biomass and the number of organoids:
+
+$$ Z^\prime = 1 - \frac{3 \cdot (\sigma_p + \sigma_n)}{|\mu_p - \mu_n|}$$
+
+```{r}
+biomass_zprime = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+organoids_zprime = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+avgarea_zprime = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+for(cell_line in cell_lines) {
+  cl_simple_features = simple_features[simple_features$Cell.Line == cell_line, ]
+  organoids_zprime[[cell_line]] = imageHTS::zprime(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Num.Objects"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Num.Objects"], 
+    method = "robust")
+  biomass_zprime[[cell_line]] = imageHTS::zprime(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Total.Area"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Total.Area"], 
+    method = "robust")
+  avgarea_zprime[[cell_line]] = imageHTS::zprime(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Avg.Org.Size"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Avg.Org.Size"], 
+    method = "robust")
+}
+ggplotdf = data.frame(
+  "Cell.Line" = substr(names(organoids_zprime), 1, 4), 
+  "Total.Biomass" = biomass_zprime, 
+  "Num.Organoids" = organoids_zprime, 
+  "Avg.Organoid.Size" = avgarea_zprime)
+ggplotdf = melt(ggplotdf, id.vars = "Cell.Line")
+ggplot(data = ggplotdf) + 
+  geom_col(aes(x = Cell.Line, y = value, fill = variable), 
+           position = position_dodge())
+```
+
+Usually, a value of Z' $\approx$ 0.5 indicates a good assay and a value of Z <= 0 indicates a bad assay. However, the two control populations are clearly separable, as shown by the wilcoxon test (a non-parametric test for determining if two samples come from different populations) for the number of organoids and total biomass.
+```{r}
+wilcox_organoids_p = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+wilcox_biomass_p = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+wilcox_avgarea_p = setNames(
+  object = vector(mode="numeric", length=length(cell_lines)), 
+  nm = cell_lines)
+for(cell_line in cell_lines) {
+  cl_simple_features = simple_features[simple_features$Cell.Line == cell_line, ]
+  wilcox_organoids_p[[cell_line]] = wilcox.test(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Num.Objects"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Num.Objects"], 
+    conf.int = TRUE)$p.value
+  wilcox_biomass_p[[cell_line]] = wilcox.test(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Total.Area"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Total.Area"], 
+    conf.int = TRUE)$p.value
+  wilcox_avgarea_p[[cell_line]] = wilcox.test(
+    cl_simple_features[cl_simple_features$Drug == "NEG_CTRL", "Avg.Org.Size"], 
+    cl_simple_features[cl_simple_features$Drug == "POS_CTRL", "Avg.Org.Size"], 
+    conf.int = TRUE)$p.value
+}
+
+panderdf = data.frame(
+  "Total.Biomass" = wilcox_biomass_p, 
+  "Num.Objects" = wilcox_organoids_p, 
+  "Avg.Organoid.Size" = wilcox_avgarea_p)
+pandoc.table(
+  panderdf, emphasize.strong.cells = which(panderdf > 0.05, arr.ind = TRUE), 
+  caption = "Probabilities that the feature values for the positive and negative controls come from the same distribution (p-values of Wilcoxon test)")
+```
+
+With the exception of D015T01, all cell lines show a significant separation between the positive and negative control samples with regards to the total biomass feature. The z-factor is apparently too strict for a high-throughput assay. In fact, the z factor for nearly all features seems to indicate a bad assay quality by the conventional thresholds:
+```{r}
+# Calculate z factors for each cell line / feature combination
+pos_ctrl = features_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+pos_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "POS_CTRL",]
+neg_ctrl = features_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+neg_ctrl_metadata = features_metadata_combined[features_metadata_combined$DRUG == "NEG_CTRL",]
+feature_z_factors = matrix(
+  NA_real_, nrow = length(cell_lines), ncol = ncol(features_combined),
+  dimnames = list(cell_lines, colnames(features_combined)))
+for(feature in colnames(features_combined)) {
+  for(cell_line in cell_lines) {
+    feature_z_factors[cell_line, feature] = imageHTS::zprime(
+      pos_ctrl[substr(rownames(pos_ctrl), 1, 7) == cell_line, feature],
+      neg_ctrl[substr(rownames(neg_ctrl), 1, 7) == cell_line, feature],
+      method = "robust")
+  }
+}
+
+feature_z_factors_df = apply(feature_z_factors, 1, sort)
+feature_z_factors_df = do.call(what = c, args = feature_z_factors_df)
+feature_z_factors_df = data.frame(
+  "Cell.Line" = sapply(strsplit(names(feature_z_factors_df), ".", fixed = TRUE), "[[", 1), 
+  "ZFactor" = feature_z_factors_df)
+feature_z_factors_df = feature_z_factors_df[is.finite(feature_z_factors_df$ZFactor),]
+feature_z_factors_df$Features = NA_real_
+for(cell_line in cell_lines) {
+  feature_z_factors_df[
+    feature_z_factors_df$Cell.Line == cell_line, 
+    "Features"] = seq_len(table(
+      feature_z_factors_df$Cell.Line)[cell_line])
+}
+
+ggplot(data = feature_z_factors_df) + geom_line(aes(x = Features, y = ZFactor, color = Cell.Line)) + 
+  coord_cartesian(ylim = c(-1, 1)) + ggtitle(label = "Z-Factor for the features of each cell line")
+```
+
+The assay quality is ensured by the statistically significant separation of positive and negative controls with regard to the number of organoids and the total biomass for all cell lines except D015T01. I exclude this cell line from all further analyses. D021T01, strictly speaking, has a non-significant separation of the average organoid size. However, the other two features are clearly separated so that I retain this cell line in the data set. 
+
+```{r}
+cell_lines = cell_lines[cell_lines != "D015T01"]
+features = features[substr(rownames(features), 1, 7) != "D015T01", ]
+features_combined = features_combined[substr(rownames(features_combined), 1, 7) != "D015T01", ]
+features_metadata = features_metadata[substr(rownames(features_metadata), 1, 7) != "D015T01", ]
+features_metadata_combined = features_metadata_combined[substr(rownames(features_metadata_combined), 1, 7) != "D015T01", ]
+```
+
+## Pruning Features
+
+Features only make sense if they are sufficiently continuous. I want to discard features that are constant across the negative (DMSO) controls of a plate. A look at the 'minimum ratio' of unique values for each feature across plates shows that features are either continuous or constant across a plate. There is a reasonably steep transition between the two states so that the actual threshold chosen is not so important. I keep only features with more than 25% unique values across all plates.
+```{r}
+neg_ctrl = features_combined[features_metadata_combined$DRUG == "NEG_CTRL", ]
+# This rounding ensures that there are no floating point arithmetic errors that are mistaken as unique values
+neg_ctrl = round(neg_ctrl, 8)
+neg_ctrl_cl = substr(rownames(neg_ctrl), 1, 14)
+unique_vals = aggregate(neg_ctrl, list(neg_ctrl_cl), function(x) length(unique(x)) / length(x))
+rownames(unique_vals) = unique_vals$Group.1
+unique_vals$Group.1 = NULL
+unique_vals_min = apply(unique_vals, 2, min)
+unique_vals_min_df = data.frame(
+  "Ratio.Unique.Vals" = sort(unique_vals_min, decreasing = TRUE), 
+  "Features" = seq_along(unique_vals_min))
+ggplot(data = unique_vals_min_df) + geom_point(aes(x = Features, y = Ratio.Unique.Vals)) + 
+  ggtitle("Minimum Ratio of Unique Values for each Feature", 
+          subtitle = "e.g. a 'minimum ratio' of 0.25 means all plates had a ratio of >= 25% of unique values for that feature") + 
+  geom_hline(aes(yintercept = 0.25), color = "blue")
+
+features = features[,names(which(unique_vals_min >= 0.25))]
+features_combined = features_combined[,names(which(unique_vals_min >= 0.25))]
+```
+
+## Correlation between replicates
+### Cell line specfific
+I look at all features now to see how well they correlate between replicates of the screen for each cell line individually
+
+```{r}
+cl_correlations = setNames(
+  object = vector(mode = "list", length = length(cell_lines)), 
+  nm = cell_lines
+)
+for(cell_line in cell_lines) {
+  cl_features = features[substr(rownames(features), 1, 7) == cell_line, ]
+  cl_features_metadata = features_metadata[substr(rownames(features_metadata), 1, 7) == cell_line, ]
+  rep1 = cl_features[cl_features_metadata$REPLICATE == 1, ]
+  rep2 = cl_features[cl_features_metadata$REPLICATE == 2, ]
+  if(!identical(paste0(substr(rownames(rep1), 1, 7), "_", substr(rownames(rep1), 12, 19)), 
+                paste0(substr(rownames(rep2), 1, 7), "_", substr(rownames(rep2), 12, 19)))) {
+    warning(sprintf("Replicates for '%s' are not in the same order!", cell_line))
+  }
+  rep_correlations = setNames(
+    object = vector(mode = "numeric", length = ncol(cl_features)), 
+    nm = colnames(cl_features))
+  for(feature in colnames(cl_features)) {
+    rep_correlations[[feature]] = cor(
+      rep1[[feature]], rep2[[feature]], 
+      use = "pairwise.complete.obs")
+  }
+  rep_correlations = sort(rep_correlations, decreasing = TRUE)
+  cl_correlations[[cell_line]] = data.frame(
+    "Features" = seq_along(rep_correlations),
+    "Feature.Name" = names(rep_correlations),
+    "Correlations" = rep_correlations, 
+    "Cell.Line" = cell_line
+  )
+}
+
+cl_correlations = do.call(rbind, cl_correlations)
+ggplot(data = cl_correlations) + geom_line(aes(x = Features, y = Correlations, color = Cell.Line)) + 
+  ggtitle("Correlations between Replicates for each Individual Cell Line")
+```
+
+### Screen-wide
+```{r, warning=FALSE}
+rep1 = features[features_metadata$REPLICATE == 1, ]
+rep2 = features[features_metadata$REPLICATE == 2, ]
+if(!identical(paste0(substr(rownames(rep1), 1, 7), "_", substr(rownames(rep1), 12, 19)), 
+              paste0(substr(rownames(rep2), 1, 7), "_", substr(rownames(rep2), 12, 19)))) {
+  warning("Replicates are not in the same order!")
+}
+
+screen_correlations = setNames(
+  object = vector(mode = "numeric", length = ncol(features)), 
+  nm = colnames(features))
+for(feature in colnames(features)) {
+  screen_correlations[[feature]] = cor(
+    rep1[[feature]], rep2[[feature]], 
+    use = "pairwise.complete.obs")
+}
+
+ggplotdf = data.frame(
+  "Features" = seq_along(sort(screen_correlations)),
+  "Correlation" = sort(screen_correlations, decreasing = TRUE))
+ggplot(data = ggplotdf) + geom_line(aes(x = Features, y = Correlation)) + 
+  ggtitle("Correlations between Replicates across all Cell Lines")
+```
+
+Keep features that correlate between replicates within each cell line with $\rho >= 0.3$. I also ensure that the number of organoids and the total biomass are guaranteed to be in the dataset (regardless of their correlation).
+```{r}
+cor_thresh = 0.3
+cell_line_features = cl_correlations[cl_correlations$Correlations >= cor_thresh, "Feature.Name"]
+cell_line_features = names(which(table(cell_line_features) == max(table(cell_line_features))))
+if(!"organoids_num.of.objects" %in% cell_line_features) 
+  cell_line_features = c(cell_line_features, "organoids_num.of.objects")
+if(!"Total.Biomass" %in% cell_line_features) 
+  cell_line_features = c(cell_line_features, "Total.Biomass")
+features = features[,cell_line_features]
+features_metadata$CELL.LINE = substr(rownames(features_metadata), 1, 7)
+# saveRDS(object = features, file = "Features_Human_QC.rds")
+# saveRDS(object = features_metadata, file = "FeaturesMetadata_Human_QC.rds")
+```
+
+# Stability Selection
+
+The features selected via between-replicate correlation may still be highly redundant and unnecessary. To further reduce the number of necessary features, I perform a stepwise feature selection over the entire screen, as per Fischer et al. 2015 ("A Map of Directional Genetic Interactions in a Metazoan Cell") and Laufer et al. 2013 ("Mapping genetic interactions in human cancer cells"). This entails the following steps:
+1. Choose an initial feature set. This will be the number of organoids and the total biomass, both of which suitably separated the positive from negative controls. This feature set is chosen for its biological iterpretability.
+2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
+3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
+
+To reduce the runtime of the feature selection, I remove strongly correlating features ($\rho$ >= $\pm$0.9).
+
+```{r}
+# Calculate correlations
+features_cor = cor(features, use = "pairwise.complete.obs")
+feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+features_reduced <- features[,!apply(features_cor,2,function(x) any(abs(x) > 0.95))]
+```
+
+```{r}
+# Set up initial features
+initial_set = c("organoids_num.of.objects", "Total.Biomass")
+selected_features = initial_set
+remaining_features = colnames(features_reduced)[
+  !colnames(features_reduced) %in% selected_features]
+
+# Remember statistics on the correlations
+all_correlations = list()
+ratio_positive = c()
+
+# Calculate the fit for each replicate and save the residuals
+# This increments any time the number of positively correlated residuals is 
+# greater than the number of negatively correlated residuals
+early_end = ncol(features_reduced)
+while(length(remaining_features) > 0) {
+  residuals = array(0, dim = c(nrow(features_reduced), 2, length(remaining_features)))
+  dimnames(residuals) = list(NULL, NULL, remaining_features)
+  for(feat in remaining_features) {
+    model1 = lm(
+      features_reduced[features_metadata$REPLICATE == 1, feat] ~
+        as.matrix(features_reduced[features_metadata$REPLICATE == 1, selected_features]) - 1)
+    model2 = lm(
+      features_reduced[features_metadata$REPLICATE == 2, feat] ~ 
+        as.matrix(features_reduced[features_metadata$REPLICATE == 2, selected_features]) - 1)
+    residuals[,1,feat] = model1$residuals
+    residuals[,2,feat] = model2$residuals
+  }
+
+  # Calculate the correlation
+  correlations = apply(residuals, 3, function(x) {
+    x1 = x[,1]
+    x2 = x[,2]
+    I = which(is.finite(x1) & is.finite(x2))
+    cor(x1[I], x2[I])
+  })
+
+  to_select = names(correlations)[which.max(correlations)]
+  selected_features = c(selected_features, to_select)
+  remaining_features = colnames(features_reduced)[
+    !colnames(features_reduced) %in% selected_features]
+  all_correlations = c(all_correlations, list(correlations))
+  feat_ratio_positive = mean(correlations > 0, na.rm = TRUE)
+  ratio_positive = c(ratio_positive, feat_ratio_positive)
+  if(feat_ratio_positive < 0.5) {
+    early_end = early_end + 1
+  } else {
+    early_end = 0
+  }
+  if(early_end >= 25) break
+}
+
+ratio_color = ifelse(ratio_positive >= 0.5, "1", "2")
+ggplot(data = data.frame(
+  "Iteration" = seq_along(ratio_positive),
+  "Ratio" = ratio_positive-0.5)) +
+  geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") +
+  ggtitle("Ratio of features with positive correlation after each iteration") +
+  theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5)
+
+# Keep only the selected features until the ratio drops to 0.5
+selected_features = selected_features[seq_len(which(ratio_positive <= 0.5)[1] + length(initial_set))]
+
+saveRDS(object = all_correlations,
+        file = "QC_human__stability_selection__all_correlations.rds")
+saveRDS(object = ratio_positive,
+        file = "QC_human__stability_selection__ratio_positive.rds")
+saveRDS(object = features[,selected_features],
+        file = "QC_human__stability_selection__features.rds")
+saveRDS(object = features_metadata,
+        file = "QC_human__stability_selection__features_metadata.rds")
+```

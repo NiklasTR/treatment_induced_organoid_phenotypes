@@ -656,6 +656,9 @@ def cmd_run_cell_lines():
             cl_plates[i] for i in
             range(len(cl_plates)) if use_plate[i]]
 
+        # Sort the plates
+        cl_plates = sorted(cl_plates, key=lambda x: x[9:14])
+
         # Set replicates
         plate_ids = [s[12:14] for s in cl_plates]
         replicates = {k: 0 for k in cl_plates}
