@@ -28,7 +28,8 @@ FEATUREDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
 LAYOUTDIR = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
 SEGMENTATIONDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
 BLURRYWELLFN = os.path.join(BASEDIR, "blurry_wells_predicted.txt")
-FEATURETYPE = "clumps"
+FEATURETYPE = "organoids"
+SIZETHRESHOLD = 2500
 
 
 def trim_func(a, func, percent, axis):
@@ -171,7 +172,7 @@ def calc_well_average(
         summary_func_middle, summary_func_var, kwargs_middle,
         kwargs_var):
     """
-    Calculate the well summaries.
+    Calculate the summaries over features.
 
     'blurry_well_clf' should be the dictionary object returned by the
     function 'learn_blurry_organoids()'
@@ -203,11 +204,10 @@ def calc_well_average(
     is_focused = blurry_organoid_clf["clf"].predict(features_clf)
     features = features[..., [s == 1 for s in is_focused]]
 
-    # Separate into organoids and shrapnel.
-    size_threshold = 2500
+    # Separate into organoids and shrapnel
     f_size = features[np.where(feature_names == "x.0.s.area")[0][0]]
-    features_shrapnel = features[:, f_size < size_threshold]
-    features_organoids = features[:, f_size >= size_threshold]
+    features_shrapnel = features[:, f_size < SIZETHRESHOLD]
+    features_organoids = features[:, f_size >= SIZETHRESHOLD]
 
     # Calculate feature summaries (median)
     if features_shrapnel.shape[1] == 0:
@@ -367,6 +367,285 @@ def calc_plate_median(plate, blurry_organoid_clf):
         "features_trimmed_mean_15": trimmed_features_15,
         "feature_names": plate_feature_names,
         "well_names": well_names}
+
+
+def calc_dmso_avg_of_plate(plate, blurry_organoid_clf):
+    """
+    Calculate the DMSO average (median) of a plate
+    :param plate:
+    :param blurry_organoid_clf:
+    :return:
+    """
+    out_fn = os.path.join(
+        FEATUREDIR, plate,
+        "%s_dmso_summaries_organoids.h5" % plate)
+    if os.path.isfile(out_fn):
+        return False
+
+    # Load the library of the plate and extract the DMSO wells names
+    layout_id = plate[11:14]
+    layout = pd.read_excel(
+        io=os.path.join(LAYOUTDIR, "%s.xlsx" % layout_id))
+    dmso_wells = layout.loc[
+        layout["Product.Name"] == "DMSO",
+        "Well_ID_384"].values
+
+    # Load the individual organoid features of the wells
+    dmso_features = []
+    dmso_feature_names = []
+    num_organoids = []
+    num_shrapnel = []
+    for dmso_well in dmso_wells:
+        well_fn = os.path.join(
+            FEATUREDIR, plate, "wells",
+            "%s_%s_%s_features.h5" %
+            (plate, dmso_well[0], dmso_well[1:3]))
+        try:
+            with h5py.File(well_fn, "r") as h5handle:
+                well_features = h5handle["features_%s" % FEATURETYPE][()]
+                well_feature_names = h5handle["feature_names_%s" % FEATURETYPE][()]
+                well_f_size = well_features[np.where(
+                    well_feature_names == "x.0.s.area")[0][0]]
+                num_organoids.append(np.sum(well_f_size >= SIZETHRESHOLD))
+                num_shrapnel.append(np.sum(well_f_size < SIZETHRESHOLD))
+                dmso_features.append(well_features)
+                dmso_feature_names.append(well_feature_names)
+        except KeyError:
+            pass
+    dmso_features = np.concatenate(dmso_features, axis=1)
+    fname_iter = iter(dmso_feature_names)
+    if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
+        raise Warning("Not all feature names were identical between files")
+    dmso_feature_names = dmso_feature_names[0]
+
+    # Calculate the summaries over the features
+    median = calc_well_average(
+        features=dmso_features, feature_names=dmso_feature_names,
+        blurry_organoid_clf=blurry_organoid_clf,
+        summary_func_middle=np.nanmedian,
+        summary_func_var=statsmodels.robust.mad,
+        kwargs_middle=dict(), kwargs_var={"center": np.nanmedian})
+    trimmed_05 = calc_well_average(
+        features=dmso_features, feature_names=dmso_feature_names,
+        blurry_organoid_clf=blurry_organoid_clf,
+        summary_func_middle=trim_func,
+        summary_func_var=trim_func,
+        kwargs_middle={"func": np.mean, "percent": 0.05},
+        kwargs_var={"func": np.std, "percent": 0.05})
+    trimmed_10 = calc_well_average(
+        features=dmso_features, feature_names=dmso_feature_names,
+        blurry_organoid_clf=blurry_organoid_clf,
+        summary_func_middle=trim_func,
+        summary_func_var=trim_func,
+        kwargs_middle={"func": np.mean, "percent": 0.10},
+        kwargs_var={"func": np.std, "percent": 0.10})
+    trimmed_15 = calc_well_average(
+        features=dmso_features, feature_names=dmso_feature_names,
+        blurry_organoid_clf=blurry_organoid_clf,
+        summary_func_middle=trim_func,
+        summary_func_var=trim_func,
+        kwargs_middle={"func": np.mean, "percent": 0.15},
+        kwargs_var={"func": np.std, "percent": 0.15})
+    if not np.all(median[1] == trimmed_05[1]):
+        raise Exception("Feature names not identical")
+    if not np.all(median[1] == trimmed_10[1]):
+        raise Exception("Feature names not identical")
+    if not np.all(median[1] == trimmed_15[1]):
+        raise Exception("Feature names not identical")
+
+    # I'm "misusing" the function calc_well_average. I need to separate the
+    # expected and deviation values for each entry as well as calculate the
+    # proper expected value and variation for the number of objects
+    def separate_featset(fs, summary_type):
+        summary_dict = {
+            "median": (np.nanmedian, statsmodels.robust.mad,
+                       dict(), {"center": np.nanmedian}),
+            "trimmed_05": (trim_func, trim_func,
+                           {"func": np.mean, "percent": 0.05},
+                           {"func": np.std, "percent": 0.05}),
+            "trimmed_10": (trim_func, trim_func,
+                           {"func": np.mean, "percent": 0.10},
+                           {"func": np.std, "percent": 0.10}),
+            "trimmed_15": (trim_func, trim_func,
+                           {"func": np.mean, "percent": 0.15},
+                           {"func": np.std, "percent": 0.15})}
+        summary_func = summary_dict[summary_type]
+        num_organoids_np = np.expand_dims(num_organoids, axis=0)
+        num_shrapnel_np = np.expand_dims(num_shrapnel, axis=0)
+
+        fs_org_exp_index = np.array([
+            re.match(pattern="^organoids_.*_expected$", string=featname)
+            is not None for featname in fs[1]])
+        org_exp_feat = fs[0][fs_org_exp_index]
+        org_exp_feat_name = fs[1][fs_org_exp_index]
+        num_organoids_expected = summary_func[0](
+            num_organoids_np, axis=1, **summary_func[2])
+        org_exp_feat = np.concatenate((org_exp_feat, num_organoids_expected))
+        org_exp_feat_name = np.append(
+            org_exp_feat_name, "organoids_num.of.objects_expected")
+
+        fs_org_dev_index = np.array([
+            re.match(pattern="^organoids_.*_variation$", string=featname)
+            is not None for featname in fs[1]])
+        org_dev_feat = fs[0][fs_org_dev_index]
+        org_dev_feat_name = fs[1][fs_org_dev_index]
+        num_organoids_dev = summary_func[1](
+            num_organoids_np, axis=1, **summary_func[3])
+        org_dev_feat = np.concatenate((org_dev_feat, num_organoids_dev))
+        org_dev_feat_name = np.append(
+            org_dev_feat_name, "organoids_num.of.objects_variation")
+
+        fs_shr_exp_index = np.array([
+            re.match(pattern="^shrapnel_.*_expected$", string=featname)
+            is not None for featname in fs[1]])
+        shr_exp_feat = fs[0][fs_shr_exp_index]
+        shr_exp_feat_name = fs[1][fs_shr_exp_index]
+        num_shrapnel_expected = summary_func[0](
+            num_shrapnel_np, axis=1, **summary_func[2])
+        shr_exp_feat = np.concatenate((shr_exp_feat, num_shrapnel_expected))
+        shr_exp_feat_name = np.append(
+            shr_exp_feat_name, "shrapnel_num.of.objects_expected")
+
+        fs_shr_dev_index = np.array([
+            re.match(pattern="^shrapnel_.*_variation$", string=featname)
+            is not None for featname in fs[1]])
+        shr_dev_feat = fs[0][fs_shr_dev_index]
+        shr_dev_feat_name = fs[1][fs_shr_dev_index]
+        num_shrapnel_dev = summary_func[1](
+            num_shrapnel_np, axis=1, **summary_func[3])
+        shr_dev_feat = np.concatenate((shr_dev_feat, num_shrapnel_dev))
+        shr_dev_feat_name = np.append(
+            shr_dev_feat_name, "shrapnel_num.of.objects_variation")
+
+        return {"organoids_expected": (org_exp_feat, org_exp_feat_name),
+                "organoids_variation": (org_dev_feat, org_dev_feat_name),
+                "shrapnel_expected": (shr_exp_feat, shr_exp_feat_name),
+                "shrapnel_variation": (shr_dev_feat, shr_dev_feat_name)}
+
+    median = separate_featset(median, "median")
+    trimmed_05 = separate_featset(trimmed_05, "trimmed_05")
+    trimmed_10 = separate_featset(trimmed_10, "trimmed_10")
+    trimmed_15 = separate_featset(trimmed_15, "trimmed_15")
+
+    with h5py.File(out_fn, "w") as h5handle:
+        h5handle.create_dataset(
+            name="dmso_median_organoids",
+            data=median["organoids_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_median_organoids_names",
+            data=median["organoids_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_median_shrapnel",
+            data=median["shrapnel_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_median_shrapnel_names",
+            data=median["shrapnel_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_mad_organoids",
+            data=median["organoids_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_mad_organoids_names",
+            data=median["organoids_variation"][1])
+        h5handle.create_dataset(
+            name="dmso_mad_shrapnel",
+            data=median["shrapnel_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_mad_shrapnel_names",
+            data=median["shrapnel_variation"][1])
+
+        h5handle.create_dataset(
+            name="dmso_tm05_mean_organoids",
+            data=trimmed_05["organoids_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm05_mean_organoids_names",
+            data=trimmed_05["organoids_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm05_mean_shrapnel",
+            data=trimmed_05["shrapnel_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm05_mean_shrapnel_names",
+            data=trimmed_05["shrapnel_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm05_std_organoids",
+            data=trimmed_05["organoids_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm05_std_organoids_names",
+            data=trimmed_05["organoids_variation"][1])
+        h5handle.create_dataset(
+            name="dmso_tm05_std_shrapnel",
+            data=trimmed_05["shrapnel_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm05_std_shrapnel_names",
+            data=trimmed_05["shrapnel_variation"][1])
+
+        h5handle.create_dataset(
+            name="dmso_tm10_mean_organoids",
+            data=trimmed_10["organoids_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm10_mean_organoids_names",
+            data=trimmed_10["organoids_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm10_mean_shrapnel",
+            data=trimmed_10["shrapnel_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm10_mean_shrapnel_names",
+            data=trimmed_10["shrapnel_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm10_std_organoids",
+            data=trimmed_10["organoids_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm10_std_organoids_names",
+            data=trimmed_10["organoids_variation"][1])
+        h5handle.create_dataset(
+            name="dmso_tm10_std_shrapnel",
+            data=trimmed_10["shrapnel_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm10_std_shrapnel_names",
+            data=trimmed_10["shrapnel_variation"][1])
+
+        h5handle.create_dataset(
+            name="dmso_tm15_mean_organoids",
+            data=trimmed_15["organoids_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm15_mean_organoids_names",
+            data=trimmed_15["organoids_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm15_mean_shrapnel",
+            data=trimmed_15["shrapnel_expected"][0])
+        h5handle.create_dataset(
+            name="dmso_tm15_mean_shrapnel_names",
+            data=trimmed_15["shrapnel_expected"][1])
+        h5handle.create_dataset(
+            name="dmso_tm15_std_organoids",
+            data=trimmed_15["organoids_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm15_std_organoids_names",
+            data=trimmed_15["organoids_variation"][1])
+        h5handle.create_dataset(
+            name="dmso_tm15_std_shrapnel",
+            data=trimmed_15["shrapnel_variation"][0])
+        h5handle.create_dataset(
+            name="dmso_tm15_std_shrapnel_names",
+            data=trimmed_15["shrapnel_variation"][1])
+
+    return True
+
+
+def normalize_organoids_in_well(well, blurry_organoid_clf):
+    """
+    Normalize all the individual organoid features in a well.
+    This includes the same steps as for the well-averaged features
+    but without the initial averaging step:
+
+    - Filter out blurry organoids
+    - glog transform features
+    - Normalize by DMSO values (f = (f - dmso_expected) / dmso_var)
+
+    :param well:
+    :param blurry_organoid_clf:
+    :return:
+    """
+    return None
 
 
 def cmd_learn_blurry_organoids():
@@ -530,6 +809,7 @@ def cmd_run_plate(plate, blurry_organoid_clf, steps_to_calc):
                 name="features_trimmed_mean_15_glog",
                 data=features_trimmed_15)
 
+    # Perform DMSO normalization
     if "dmso_normalization" in steps_to_calc:
         print("Calculate DMSO median normalization for plate '%s' ..." % plate)
         with h5py.File(out_fn, "r") as h5handle:

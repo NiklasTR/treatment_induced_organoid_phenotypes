@@ -1,0 +1,160 @@
+---
+title: "Organoid Size in MEK Inhibitors (Human)"
+author: "Jan Sauer"
+date: "24.10.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+In this vignette, I look at the differences between DMSO control wells and MEK-inhibitors. In particular Trametinib is expected to exhibit larger organoid sizes.
+
+```{r, message=FALSE}
+library(PROMISE)
+library(ggplot2)
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+source(file.path(config_dir, "watchdogConfig.R"))
+
+setwd("/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/human/")
+features = readRDS("QC_human__stability_selection__features.rds")
+features_metadata = readRDS("QC_human__stability_selection__features_metadata.rds")
+```
+
+Load all layouts and find all drugs with MEK as a target
+```{r}
+all_layouts = unique(substr(rownames(features), 12, 14))
+libs = setNames(
+  object = vector(mode = "list", length = length(all_layouts)), 
+  nm = all_layouts)
+for(layout in all_layouts) {
+  libs[[layout]] = loadLibrary(layout, config_dir, c("Product.Name", "Target", "concentration"))
+  libs[[layout]]$Product.Name = as.character(libs[[layout]]$Product.Name)
+  libs[[layout]]$Target = as.character(libs[[layout]]$Target)
+  if(!"concentration" %in% colnames(libs[[layout]])) 
+    libs[[layout]]$concentration = NA_real_
+}
+libs = do.call(rbind, libs)
+
+mek_targets = libs[grep(pattern = "mek|map2k1|mapkk", x = libs$Target, ignore.case = TRUE), ]
+```
+
+# Effect of Concentrations on L08 
+
+First, since L02/L03 and L08 use different concentrations, I want to know what, if any, impact they have on organoid size. L08 contains both Trametinib and Binimetinib as MEK-Inhibitors, so I look at the effects of both of these on the other plates (insofar as they are present on them).
+```{r}
+dmso_controls = features[features_metadata$DRUG == "DMSO", "organoids_num.of.objects"]
+mek_targets_L08 = unique(mek_targets[substr(rownames(mek_targets), 1, 3) == "L08", "Product.Name"])
+mek_indices_L08 = substr(rownames(features), 12, 14) == "L08" & features_metadata$DRUG %in% c("DMSO", mek_targets_L08)
+features_L08 = features[mek_indices_L08, ]
+metadata_L08 = features_metadata[mek_indices_L08, ]
+simple_features_L08 = data.frame(
+  "Avg.Organoid.Size" = features_L08$organoids_x.0.s.area_expected,
+  "Num.Organoids" = features_L08$organoids_num.of.objects, 
+  "Total.Biomass" = features_L08$Total.Biomass,
+  "Drug" = metadata_L08$DRUG,
+  "Drug_Concentration" = ifelse(
+    test = metadata_L08$DRUG == "DMSO", yes = metadata_L08$DRUG, 
+    no = paste0(metadata_L08$DRUG, " @ ", metadata_L08$CONCENTRATION)),
+  "Cell.Line" = metadata_L08$CELL.LINE
+)
+```
+
+```{r}
+features_L02L03 = features[substr(rownames(features), 12, 14) %in% c("L02", "L03"), ]
+metadata_L02L03 = features_metadata[substr(rownames(features), 12, 14) %in% c("L02", "L03"), ]
+mek_targets_L02L03 = unique(grep(
+  pattern = paste0(mek_targets_L08, collapse = "|"), 
+  x = metadata_L02L03$DRUG, value = TRUE))
+features_L02L03 = features_L02L03[metadata_L02L03$DRUG %in% c("DMSO", mek_targets_L02L03), ]
+metadata_L02L03 = metadata_L02L03[metadata_L02L03$DRUG %in% c("DMSO", mek_targets_L02L03), ]
+
+simple_features_L02L03 = data.frame(
+  "Avg.Organoid.Size" = features_L02L03$organoids_x.0.s.area_expected,
+  "Num.Organoids" = features_L02L03$organoids_num.of.objects, 
+  "Total.Biomass" = features_L02L03$Total.Biomass,
+  "Drug" = metadata_L02L03$DRUG,
+  "Cell.Line" = metadata_L02L03$CELL.LINE
+)
+```
+
+## Trametinib (GSK1120212) on L02/L03
+
+Note that there are only 2 replicates for each cell line so that the statistics are weak, at best.
+
+```{r, fig.width=12, fig.height=6}
+ggplot(data = simple_features_L02L03) + 
+  geom_boxplot(aes(x = Cell.Line, y = Avg.Organoid.Size, fill = Drug)) + 
+  ggtitle(label = "Average Organoid Size (Trametinib)") + xlab("Cell Line") + 
+  ylab("Average Organoid Size")
+```
+
+## Trametinib on L08
+
+It seems that the concentrations 0.2 and 1 have similar effects and can be grouped together
+```{r, fig.width=12, fig.height=6}
+ggplotdf = simple_features_L08[simple_features_L08$Drug %in% c("Trametinib", "DMSO"), ]
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Cell.Line, y = Avg.Organoid.Size, fill = Drug_Concentration)) + 
+  ggtitle(label = "Average Organoid Size (Trametinib)") + xlab("Cell Line") + 
+  ylab("Average Organoid Size")
+```
+
+# Combining Trametinib wells
+I combine all Trametinib wells from plates L02/L03 and those with concentrations 0.2 or 1.0 from plate L08 to improve the statistics
+
+```{r}
+valid_indices_L08 = metadata_L08$DRUG == "DMSO" | (
+  metadata_L08$DRUG == "Trametinib" & metadata_L08$CONCENTRATION %in% c(0.2, 1.0))
+features_L08 = features_L08[valid_indices_L08, ]
+metadata_L08 = metadata_L08[valid_indices_L08, ]
+features_combined = rbind(features_L02L03, features_L08)
+metadata_combined = rbind(metadata_L02L03, metadata_L08)
+metadata_combined$DRUG[metadata_combined$DRUG == "Trametinib (GSK1120212)"] = "Trametinib"
+simple_features_combined = data.frame(
+  "Avg.Organoid.Size" = features_combined$organoids_x.0.s.area_expected,
+  "Num.Organoids" = features_combined$organoids_num.of.objects, 
+  "Total.Biomass" = features_combined$Total.Biomass,
+  "Drug" = metadata_combined$DRUG,
+  "Cell.Line" = substr(metadata_combined$CELL.LINE, 1, 4)
+)
+ggplot(data = simple_features_combined) + 
+  geom_boxplot(aes(x = Cell.Line, y = Avg.Organoid.Size, fill = Drug)) + 
+  ggtitle(label = "Average Organoid Size (Trametinib)") + xlab("Cell Line") + 
+  ylab("Average Organoid Size")
+```
+
+# All MEK-Inhibitors
+I want to expand this analysis to include all MEK-Inhibitors, i.e. all drugs that target MEK1/MAP2K1. As before, I limit myself to drugs with a concentration of 0.2 and 1 for the L08 treatments.
+```{r}
+
+mek_inhibitors = mek_targets[
+  is.na(mek_targets$concentration) | 
+    mek_targets$concentration %in% c(0.2, 1.0), ]
+
+rowname_ids = paste0(
+  substr(rownames(features), 12, 14), ".", 
+  substr(rownames(features), 16, 16), substr(rownames(features), 18, 19))
+features_mek = rbind.data.frame(
+  features[rowname_ids %in% rownames(mek_inhibitors), ], 
+  features[features_metadata$DRUG == "DMSO", ])
+metadata_mek = rbind.data.frame(
+  features_metadata[rowname_ids %in% rownames(mek_inhibitors), ], 
+  features_metadata[features_metadata$DRUG == "DMSO", ])
+metadata_mek$DRUG[metadata_mek$DRUG != "DMSO"] = "MEK-Inhibitor"
+```
+
+```{r}
+simple_features_mek = data.frame(
+  "Avg.Organoid.Size" = features_mek$organoids_x.0.s.area_expected,
+  "Num.Organoids" = features_mek$organoids_num.of.objects, 
+  "Total.Biomass" = features_mek$Total.Biomass,
+  "Drug" = metadata_mek$DRUG,
+  "Cell.Line" = substr(metadata_mek$CELL.LINE, 1, 4)
+)
+
+ggplot(data = simple_features_mek) + 
+  geom_boxplot(aes(x = Cell.Line, y = Avg.Organoid.Size, fill = Drug)) + 
+  ggtitle(label = "Average Organoid Size (all MEK Inhibitors)") + xlab("Cell Line") + 
+  ylab("Average Organoid Size")
+```
