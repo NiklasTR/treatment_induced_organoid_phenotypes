@@ -378,7 +378,7 @@ def calc_dmso_avg_of_plate(plate, blurry_organoid_clf):
     """
     out_fn = os.path.join(
         FEATUREDIR, plate,
-        "%s_dmso_summaries_organoids.h5" % plate)
+        "%s_dmso_summaries_%s.h5" % (plate, FEATURETYPE))
     if os.path.isfile(out_fn):
         return False
 
@@ -631,21 +631,117 @@ def calc_dmso_avg_of_plate(plate, blurry_organoid_clf):
     return True
 
 
-def normalize_organoids_in_well(well, blurry_organoid_clf):
+def normalize_organoids_in_well(well_id, blurry_organoid_clf):
     """
     Normalize all the individual organoid features in a well.
     This includes the same steps as for the well-averaged features
     but without the initial averaging step:
 
     - Filter out blurry organoids
+    - Split into organoids and shrapnel
     - glog transform features
     - Normalize by DMSO values (f = (f - dmso_expected) / dmso_var)
 
-    :param well:
+    :param well_id:
     :param blurry_organoid_clf:
     :return:
     """
-    return None
+    plate, row, col = well_id.split("_")
+    in_fn = os.path.join(
+        FEATUREDIR, plate, "wells",
+        "%s_%s_%s_features.h5" % (plate, row, col))
+    out_fn = os.path.join(
+        FEATUREDIR, plate, "wells_normalized"
+        "%s_%s_%s_features_normalized.h5" % (plate, row, col))
+    if not os.path.isdir(os.path.join(FEATUREDIR, plate, "wells_normalized")):
+        os.makedirs(os.path.join(FEATUREDIR, plate, "wells_normalized"))
+    if os.path.isfile(out_fn):
+        return False
+
+    # Load features for organoids and clumps
+    features_dict = dict()
+    feature_names_dict = dict()
+    try:
+        with h5py.File(in_fn, "r") as h5handle:
+            features_dict["organoids"] = h5handle["features_organoids"][()]
+            feature_names_dict["organoids"] = h5handle[
+                "feature_names_organoids"][()]
+            features_dict["clumps"] = h5handle["features_clumps"][()]
+            feature_names_dict["clumps"] = h5handle[
+                "feature_names_clumps"][()]
+    except KeyError:
+        return False
+
+    # Loop the entire workflow over both keywords
+    for featuretype in features_dict.keys():
+        features = features_dict[featuretype]
+        feature_names = feature_names_dict[featuretype]
+
+        # Remove FIELD info
+        features = np.delete(
+            features, np.where(feature_names == "FIELD")[0], axis=0)
+        feature_names = np.delete(
+            feature_names, np.where(feature_names == "FIELD")[0])
+
+        # Filter out blurry organoids
+        features_clf = np.array(features).transpose()
+        features_clf = features_clf[
+            ..., [f in blurry_organoid_clf["feature_names"]
+                  for f in feature_names]]
+
+        is_focused = blurry_organoid_clf["clf"].predict(features_clf)
+        features = features[..., [s == 1 for s in is_focused]]
+
+        # Separate into organoids and shrapnel
+        f_size = features[np.where(
+            feature_names == "x.0.s.area")[0][0]]
+        features_shrapnel = features[:, f_size < SIZETHRESHOLD]
+        features_organoids = features[:, f_size >= SIZETHRESHOLD]
+
+        # Glog transform
+        features_organoids = transform_features(
+            features=features_organoids, transform_type="glog", c=0.05)
+        features_shrapnel = transform_features(
+            features=features_shrapnel, transform_type="glog", c=0.05)
+
+        # Load DMSO averages for the well
+        # Immediately transform them as above
+        dmso_avg_fn = os.path.join(
+            FEATUREDIR, plate,
+            "%s_dmso_summaries_%s.h5" % (plate, featuretype))
+        if not os.path.isfile(dmso_avg_fn):
+            calc_dmso_avg_of_plate(
+                plate=plate,
+                blurry_organoid_clf=blurry_organoid_clf)
+
+        with h5py.File(dmso_avg_fn, "r") as h5handle:
+            dmso_avg = transform_features(
+                features=h5handle["dmso_tm05_mean_%s" % featuretype][()],
+                transform_type="glog", c=0.05)
+            dmso_avg_names = h5handle[
+                "dmso_tm05_mean_%s_names" % featuretype][()]
+            dmso_dev = transform_features(
+                features=h5handle["dmso_tm05_std_%s" % featuretype][()],
+                transform_type="glog", c=0.05)
+            dmso_dev_names = h5handle[
+                "dmso_tm05_std_%s_names" % featuretype][()]
+
+        # Remove the number of objects entries
+        dmso_avg = dmso_avg[:-1]
+        dmso_dev = dmso_dev[:-1]
+        dmso_avg_names = dmso_avg_names[:-1]
+        dmso_dev_names = dmso_dev_names[:-1]
+
+        features_organoids_norm = np.transpose(
+            (features_organoids.transpose() - dmso_avg) /
+            dmso_dev)
+        features_shrapnel_norm = np.transpose(
+            (features_shrapnel.transpose() - dmso_avg) /
+            dmso_dev)
+
+
+
+    return True
 
 
 def cmd_learn_blurry_organoids():
