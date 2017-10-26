@@ -307,10 +307,14 @@ def apply_to_plate(plate):
         # Reduce features to required set
         features = features[:, np.in1d(feature_names, clf[2])]
 
-        # Remove any bad wells with any NA values
-        # TODO: If necessary, imputation might be better
-        bad_wells = np.sum(~np.isfinite(features), axis=1)
-        features = features[bad_wells == 0, :]
+        # Remove bad organoids
+        bad_organoids = np.sum(np.isfinite(features), axis=1)
+        features = features[bad_organoids != 0, :]
+
+        # Impute missing values
+        col_medians = np.nanmedian(features, axis=0)
+        col_medians = np.stack([col_medians] * features.shape[0])
+        features[~np.isfinite(features)] = col_medians[~np.isfinite(features)]
 
         # Apply classifier to wells
         prediction = clf[0].predict(features)
