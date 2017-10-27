@@ -1,5 +1,5 @@
 ---
-title: "Screen Quality Control (Human)"
+title: "Screen Quality Control (Mouse)"
 author: "Jan Sauer"
 date: "22.10.2017"
 output: 
@@ -88,6 +88,16 @@ The features should now all be finite
 cat("Number of NaN features:", sum(!is.finite(as.matrix(features))))
 ```
 
+Lastly, some of the wells were found to be entirely blurry and are effectively unusable. These have been previously classified with a random forest classifier. The blurry wells and their replicates are filtered out.
+```{r}
+blurry_wells = read.table("blurry_wells_mouse.txt", stringsAsFactors = FALSE)
+blurry_wells_repid = paste0(substr(blurry_wells$V1, 1, 7), "_", substr(blurry_wells$V1, 12, 19))
+all_wells_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+wells_to_keep = !all_wells_repid %in% blurry_wells_repid
+features = features[wells_to_keep,]
+features_metadata = features_metadata[wells_to_keep,]
+```
+
 # Quality Control
 ## Cell Line Quality
 Normally, one would look at the z-factor, a degree of separation between positive and negative controls, for each feature to determine the assay quality. As there are no known positive controls for the mouse screen, I instead look at the z-factor for all treatments compared to the negative controls (DMSO) for a few characteristic features, the number of organoids, the total biomass, and the average organoid size. I expect that at least some of the treatments should show considerable differences to the DMSO controls in these features.
@@ -113,10 +123,18 @@ for(cell_line in cell_lines) {
   orgnum_zprime = setNames(
     object = vector(mode="numeric", length=length(treatments)), 
     nm = treatments)
-  dmso_treatment_feat = features[
+  dmso_treatment_biomass = features[
       features_metadata$DRUG == "DMSO" & 
-        substr(rownames(features), 1, 7) == cell_line, 
+        substr(rownames(features), 1, 7) == cell_line,
       "Total.Biomass"]
+  dmso_treatment_orgsize = features[
+      features_metadata$DRUG == "DMSO" & 
+        substr(rownames(features), 1, 7) == cell_line,
+      "organoids_x.0.s.area_expected"]
+  dmso_treatment_orgnum = features[
+      features_metadata$DRUG == "DMSO" & 
+        substr(rownames(features), 1, 7) == cell_line,
+      "organoids_num.of.objects"]
   for(treatment in treatments) {
     biomass_treatment_feat = features[
       features_metadata$DRUG == treatment & 
@@ -132,11 +150,11 @@ for(cell_line in cell_lines) {
       "organoids_num.of.objects"]
     
     biomass_zprime[[treatment]] = imageHTS::zprime(
-      dmso_treatment_feat,  biomass_treatment_feat, method = "robust")
+      dmso_treatment_biomass,  biomass_treatment_feat, method = "robust")
     orgsize_zprime[[treatment]] = imageHTS::zprime(
-      dmso_treatment_feat,  orgsize_treatment_feat, method = "robust")
+      dmso_treatment_orgsize,  orgsize_treatment_feat, method = "robust")
     orgnum_zprime[[treatment]] = imageHTS::zprime(
-      dmso_treatment_feat,  orgnum_treatment_feat, method = "robust")
+      dmso_treatment_orgnum,  orgnum_treatment_feat, method = "robust")
   }
   
   all_biomass_zprime[[cell_line]] = biomass_zprime
@@ -145,12 +163,18 @@ for(cell_line in cell_lines) {
 }
 
 all_biomass_zprime_df = do.call(cbind, all_biomass_zprime)
+all_biomass_zprime_df = all_biomass_zprime_df[
+  rowSums(!is.finite(as.matrix(all_biomass_zprime_df))) ==  0,]
 all_biomass_zprime_df = apply(all_biomass_zprime_df, 2, sort)
 all_biomass_zprime_df = melt(all_biomass_zprime_df)
 all_orgsize_zprime_df = do.call(cbind, all_orgsize_zprime)
+all_orgsize_zprime_df = all_orgsize_zprime_df[
+  rowSums(!is.finite(as.matrix(all_orgsize_zprime_df))) ==  0,]
 all_orgsize_zprime_df = apply(all_orgsize_zprime_df, 2, sort)
 all_orgsize_zprime_df = melt(all_orgsize_zprime_df)
 all_orgnum_zprime_df = do.call(cbind, all_orgnum_zprime)
+all_orgnum_zprime_df = all_orgnum_zprime_df[
+  rowSums(!is.finite(as.matrix(all_orgnum_zprime_df))) ==  0,]
 all_orgnum_zprime_df = apply(all_orgnum_zprime_df, 2, sort)
 all_orgnum_zprime_df = melt(all_orgnum_zprime_df)
 
@@ -173,25 +197,25 @@ for(cell_line in cell_lines) {
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Total.Biomass, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1250, 1700)) + 
+  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
   ggtitle(label = "Z-Factor of the Total Biomass for the Treatments of each Cell Line")
 ```
 
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Num.Organoids, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1250, 1700)) + 
+  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
   ggtitle(label = "Z-Factor of the Number of Organoids for the Treatments of each Cell Line")
 ```
 
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Avg.Organoid.Size, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1250, 1700)) + 
+  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
   ggtitle(label = "Z-Factor of the Average Organoid Size for the Treatments of each Cell Line")
 ```
 
-This shows that a few treatments do indeed lead to a significant separation from the negative control with regard to these features for each cell line, indicating an acceptable assay quality.
+While the quality of the screen is far from ideal, only cell line M001W01 gives reason for concern.
 
 ## Pruning Features
 
@@ -263,6 +287,8 @@ ggplot(data = cl_correlations) + geom_line(aes(x = Features, y = Correlations, c
   ggtitle("Correlations between Replicates for each Individual Cell Line")
 ```
 
+Cell lines M001W01 and M001A03 both show inadequate correlations. This will become a problem during the feature selection, which requires that features correlate significantly between replicates.
+
 ### Screen-wide
 ```{r, warning=FALSE}
 rep1 = features[features_metadata$REPLICATE == 1, ]
@@ -288,22 +314,27 @@ ggplot(data = ggplotdf) + geom_line(aes(x = Features, y = Correlation)) +
   ggtitle("Correlations between Replicates across all Cell Lines")
 ```
 
-Keep features that correlate between replicates within each cell line with $\rho >= 0.3$. I also ensure that the number of organoids and the total biomass are guaranteed to be in the dataset (regardless of their correlation).
+Keep features that correlate between replicates within cell lines M001K02 and M001B03 (the other two exhibit insufficient correlation between replicates) with $\rho >= 0.6$. I also ensure that the number of organoids and the total biomass are guaranteed to be in the dataset (regardless of their correlation).
 ```{r}
-cor_thresh = 0.3
-cell_line_features = cl_correlations[cl_correlations$Correlations >= cor_thresh, "Feature.Name"]
+cor_thresh = 0.6
+cell_line_features = cl_correlations[
+  cl_correlations$Correlations >= cor_thresh & 
+  cl_correlations$Cell.Line %in% c("M001K02", "M001B03"), 
+  "Feature.Name"]
 cell_line_features = names(which(table(cell_line_features) == max(table(cell_line_features))))
-if(!"organoids_num.of.objects" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "organoids_num.of.objects")
-if(!"organoids_x.0.s.area_expected" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "organoids_x.0.s.area_expected")
-if(!"Total.Biomass" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "Total.Biomass")
+features_to_keep = cell_line_features
+# screen_features = names(screen_correlations[screen_correlations >= cor_thresh])
+# features_to_keep = intersect(screen_features, cell_line_features)
 
-features = features[,cell_line_features]
+if(!"organoids_num.of.objects" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "organoids_num.of.objects")
+if(!"organoids_x.0.s.area_expected" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "organoids_x.0.s.area_expected")
+if(!"Total.Biomass" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "Total.Biomass")
+
+features = features[,features_to_keep]
 features_metadata$CELL.LINE = substr(rownames(features_metadata), 1, 7)
-# saveRDS(object = features, file = "Features_Human_QC.rds")
-# saveRDS(object = features_metadata, file = "FeaturesMetadata_Human_QC.rds")
 ```
 
 # Stability Selection
@@ -313,75 +344,118 @@ The features selected via between-replicate correlation may still be highly redu
 2. Model each replicate of the remaining features as a function of the already chosen feature set. Since I am interested in extracting features with the highest signal-to-noise ratio, the feature with the highest correlation between replicate residuals is added to the feature set.
 3. Repeat step 2 with the new feature set until the distribution of the correlation of all remaining residuals is centered around 0, i.e. none of the remaining features add any information.
 
+## Over Entire Screen
+
 ```{r}
-# Set up initial features
-initial_set = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected")
-selected_features = initial_set
-remaining_features = colnames(features)[
-  !colnames(features) %in% selected_features]
-
-# Remember statistics on the correlations
-all_correlations = list()
-ratio_positive = c()
-
-# Calculate the fit for each replicate and save the residuals
-# This increments any time the number of positively correlated residuals is 
-# greater than the number of negatively correlated residuals
-early_end = ncol(features)
-while(length(remaining_features) > 0) {
-  residuals = array(0, dim = c(nrow(features), 2, length(remaining_features)))
-  dimnames(residuals) = list(NULL, NULL, remaining_features)
-  for(feat in remaining_features) {
-    model1 = lm(
-      features[features_metadata$REPLICATE == 1, feat] ~
-        as.matrix(features[features_metadata$REPLICATE == 1, selected_features]) - 1)
-    model2 = lm(
-      features[features_metadata$REPLICATE == 2, feat] ~ 
-        as.matrix(features[features_metadata$REPLICATE == 2, selected_features]) - 1)
-    residuals[,1,feat] = model1$residuals
-    residuals[,2,feat] = model2$residuals
-  }
-
-  # Calculate the correlation
-  correlations = apply(residuals, 3, function(x) {
-    x1 = x[,1]
-    x2 = x[,2]
-    I = which(is.finite(x1) & is.finite(x2))
-    cor(x1[I], x2[I])
-  })
-
-  to_select = names(correlations)[which.max(correlations)]
-  selected_features = c(selected_features, to_select)
-  remaining_features = colnames(features)[
-    !colnames(features) %in% selected_features]
-  all_correlations = c(all_correlations, list(correlations))
-  feat_ratio_positive = mean(correlations > 0, na.rm = TRUE)
-  ratio_positive = c(ratio_positive, feat_ratio_positive)
-  if(feat_ratio_positive < 0.5) {
-    early_end = early_end + 1
-  } else {
-    early_end = 0
-  }
-  if(early_end >= 25) break
+# If data already exists, skip this part.
+if(!file.exists("QC_mouse__stability_selection__features.rds")){
+  source("../functions/StabilitySelection.R")
+  
+  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.99).
+  features_cor = cor(features, use = "pairwise.complete.obs")
+  feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+  features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99))))
+  if(!"organoids_num.of.objects" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "organoids_num.of.objects")
+  if(!"Total.Biomass" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "Total.Biomass")
+  if(!"organoids_x.0.s.area_expected" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "organoids_x.0.s.area_expected")
+  features_reduced <- features[,features_to_keep]
+  
+  selection = selectByStability(
+    features = features_reduced, metadata = features_metadata, 
+    preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
+    Rdim = ncol(features_reduced)-3, verbose = FALSE)
+  
+  # Keep only the selected features until the ratio drops to 0.5
+  selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
+  
+  saveRDS(object = selection, 
+          file = "QC_mouse__stability_selection__results.rds")
+  saveRDS(object = features[,selected_features],
+          file = "QC_mouse__stability_selection__features.rds")
+  saveRDS(object = features_metadata,
+          file = "QC_mouse__stability_selection__features_metadata.rds")
 }
 
+ratio_positive = na.omit(readRDS("QC_mouse__stability_selection__results.rds")$ratioPositive)
 ratio_color = ifelse(ratio_positive >= 0.5, "1", "2")
-ggplot(data = data.frame(
+plot(ggplot(data = data.frame(
   "Iteration" = seq_along(ratio_positive),
   "Ratio" = ratio_positive-0.5)) +
   geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") +
-  ggtitle("Ratio of features with positive correlation after each iteration") +
-  theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5)
+  ggtitle(label = "Ratio of features with positive correlation after each iteration") + 
+  theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5))
+```
 
-# Keep only the selected features until the ratio drops to 0.5
-selected_features = selected_features[seq_len(which(ratio_positive <= 0.5)[1] + length(initial_set))]
+## Individually for each Cell Line
+```{r}
+source("../functions/StabilitySelection.R")
+for(cell_line in cell_lines) {
+  # only run this if the data doesn't exist yet
+  if(file.exists(sprintf("QC_mouse__stability_selection__features_%s.rds", cell_line))) next
+  
+  features_reduced = features[features_metadata$CELL.LINE == cell_line,]
+  metadata_reduced = features_metadata[features_metadata$CELL.LINE == cell_line,]
+  
+  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.95).
+  features_cor = cor(features_reduced, use = "pairwise.complete.obs")
+  feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+  features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99))))
+  if(!"organoids_num.of.objects" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "organoids_num.of.objects")
+  if(!"Total.Biomass" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "Total.Biomass")
+  if(!"organoids_x.0.s.area_expected" %in% features_to_keep)
+    features_to_keep = c(features_to_keep, "organoids_x.0.s.area_expected")
+  features_reduced <- features_reduced[,features_to_keep]
 
-saveRDS(object = all_correlations,
-        file = "QC_human__stability_selection__all_correlations.rds")
-saveRDS(object = ratio_positive,
-        file = "QC_human__stability_selection__ratio_positive.rds")
-saveRDS(object = features[,selected_features],
-        file = "QC_human__stability_selection__features.rds")
-saveRDS(object = features_metadata,
-        file = "QC_human__stability_selection__features_metadata.rds")
+  selection = selectByStability(
+    features_reduced, metadata_reduced, 
+    preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
+    Rdim = ncol(features_reduced)-3, verbose = FALSE)
+  
+  # Keep only the selected features until the ratio drops to 0.5
+  selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
+  
+  saveRDS(object = selection, 
+          file = sprintf("QC_mouse__stability_selection__results_%s.rds", cell_line))
+  saveRDS(object = features[,selected_features],
+          file = sprintf("QC_mouse__stability_selection__features_%s.rds", cell_line))
+  saveRDS(object = features_metadata,
+          file = sprintf("QC_mouse__stability_selection__features_metadata_%s.rds", cell_line))
+}
+```
+
+```{r}
+for(cell_line in cell_lines) {
+  ratio_positive = na.omit(readRDS(sprintf("QC_mouse__stability_selection__results_%s.rds", cell_line))$ratioPositive)
+  ratio_color = ifelse(ratio_positive >= 0.5, "1", "2")
+  plot(ggplot(data = data.frame(
+    "Iteration" = seq_along(ratio_positive),
+    "Ratio" = ratio_positive-0.5)) +
+    geom_bar(aes(x = Iteration, y = Ratio, fill = ratio_color), stat = "identity") +
+    ggtitle(
+      label = "Ratio of features with positive correlation after each iteration",
+      subtitle = cell_line) +
+    theme(legend.position = "none") + scale_y_continuous(labels = function(x) x+0.5))
+}
+```
+
+The overlap of selected features is
+```{r}
+selected_features = list()
+for(cell_line in cell_lines) {
+  selected_features[[cell_line]] = colnames(readRDS(
+    sprintf("QC_mouse__stability_selection__features_%s.rds", cell_line)))
+}
+selected_features_freq = as.numeric(sort(table(unlist(selected_features)), decreasing = TRUE))
+selected_features_freq = data.frame(
+  "Features" = seq_along(selected_features_freq), 
+  "Frequency" = selected_features_freq)
+ggplot(data = selected_features_freq) + geom_point(aes(x = Features, y = Frequency)) + 
+  ggtitle("Frequency of Selected Features Across Cell Lines")
 ```

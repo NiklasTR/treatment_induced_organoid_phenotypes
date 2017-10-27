@@ -312,7 +312,9 @@ def apply_to_plate(plate):
         features = features[bad_organoids != 0, :]
 
         # Impute missing values
-        col_medians = np.nanmedian(features, axis=0)
+        features_mask = np.ma.array(features, mask=False)
+        features_mask[~np.isfinite(features)] = np.ma.masked
+        col_medians = np.nanmedian(features_mask, axis=0)
         col_medians = np.stack([col_medians] * features.shape[0])
         features[~np.isfinite(features)] = col_medians[~np.isfinite(features)]
 
@@ -358,8 +360,8 @@ if __name__ == "__main__":
         myplate = cmd_args[2]
         results = apply_to_plate(myplate)
         out_fn = os.path.join(
-            BASEDIR, myplate, "%s_organoid_classification.h5"
+            BASEDIR, myplate, "%s_organoid_classification.csv"
             % myplate)
         if not os.path.isdir(os.path.dirname(out_fn)):
             os.makedirs(os.path.dirname(out_fn))
-        results.to_hdf(out_fn, myplate)
+        results.to_csv(out_fn)

@@ -9,22 +9,27 @@ selectByStability <- function(
     dimnames = list(NULL, NULL, colnames(features)))
   D[,1,] = Drep1
   D[,2,] = Drep2
+  Dorig = D
   
   correlation = rep(NA_real_, Rdim)
   correlationAll = list()
   ratioPositive = rep(NA_real_, Rdim)
   selected = rep("", Rdim)
   
-  DSel = D[,1,]
+  # DSel = D[,1,]
+  DSel = D
   DSel[] = NA_real_
   colnames(DSel) = NULL
+  early_end = 0
   for (k in 1:Rdim) {
     if (k > length(preselect)) {
       for (i in length(preselect):dim(D)[3]) {
         if(verbose) cat("k=",k," i=",i,"\r")
-        model = lm(as.vector(D[,1,i]) ~ DSel[,1:(k-1),drop=FALSE]+0)
+        # model = lm(as.vector(D[,1,i]) ~ DSel[,1:(k-1),drop=FALSE]+0)
+        model = lm(as.vector(D[,1,i]) ~ DSel[,1,1:(k-1),drop=TRUE]+0)
         D[,1,i] = model$residuals
-        model = lm(as.vector(D[,2,i]) ~ DSel[,1:(k-1),drop=FALSE]+0)
+        # model = lm(as.vector(D[,2,i]) ~ DSel[,1:(k-1),drop=FALSE]+0)
+        model = lm(as.vector(D[,2,i]) ~ DSel[,2,1:(k-1),drop=TRUE]+0)
         D[,2,i] = model$residuals
       }
     }
@@ -46,9 +51,14 @@ selectByStability <- function(
       "k=",k," selected = ",selected[k], " cor = ", correlation[k], 
       " r = ", ratioPositive[k], "\n")
     correlationAll[[k]] = C
-    DSel[,k] = apply(D[,,I,drop=FALSE],1,mean,na.rm=TRUE)
+    # DSel[,k] = apply(D[,,I,drop=FALSE],1,mean,na.rm=TRUE)
+    # DSel[,k] = apply(Dorig[,,I,drop=FALSE],1,mean,na.rm=TRUE)
+    DSel[,,k] = Dorig[,,I,drop=FALSE]
     D = D[,,dimnames(D)[[3]] != I,drop=FALSE]
     if(dim(D)[3] < length(preselect)) break
+    if(ratioPositive[k] < 0.5) early_end = early_end + 1
+    if(ratioPositive[k] >= 0.5) early_end = 0
+    if(early_end >= 25) break
   }
   
   res = list(selected = selected, correlation = correlation, 

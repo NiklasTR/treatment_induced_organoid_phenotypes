@@ -490,22 +490,23 @@ ggplot(data = ggplotdf) + geom_line(aes(x = Features, y = Correlation)) +
   ggtitle("Correlations between Replicates across all Cell Lines")
 ```
 
-Keep features that correlate between replicates within each cell line with $\rho >= 0.3$. I also ensure that the number of organoids and the total biomass are guaranteed to be in the dataset (regardless of their correlation).
+Keep features that correlate between replicates within each cell line and across the entire screen with $\rho >= 0.4$. I also ensure that the number of organoids and the total biomass are guaranteed to be in the dataset (regardless of their correlation).
 ```{r}
-cor_thresh = 0.3
+cor_thresh = 0.4
 cell_line_features = cl_correlations[cl_correlations$Correlations >= cor_thresh, "Feature.Name"]
 cell_line_features = names(which(table(cell_line_features) == max(table(cell_line_features))))
-if(!"organoids_num.of.objects" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "organoids_num.of.objects")
-if(!"organoids_x.0.s.area_expected" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "organoids_x.0.s.area_expected")
-if(!"Total.Biomass" %in% cell_line_features) 
-  cell_line_features = c(cell_line_features, "Total.Biomass")
+screen_features = names(screen_correlations[screen_correlations >= cor_thresh])
+features_to_keep = intersect(screen_features, cell_line_features)
 
-features = features[,cell_line_features]
+if(!"organoids_num.of.objects" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "organoids_num.of.objects")
+if(!"organoids_x.0.s.area_expected" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "organoids_x.0.s.area_expected")
+if(!"Total.Biomass" %in% features_to_keep) 
+  features_to_keep = c(features_to_keep, "Total.Biomass")
+
+features = features[,features_to_keep]
 features_metadata$CELL.LINE = substr(rownames(features_metadata), 1, 7)
-# saveRDS(object = features, file = "Features_Human_QC.rds")
-# saveRDS(object = features_metadata, file = "FeaturesMetadata_Human_QC.rds")
 ```
 
 # Stability Selection
@@ -521,14 +522,14 @@ I perform a stability selection over the entire screen and then individually for
 
 ```{r}
 # If data already exists, skip this part.
-if(!file.exists(sprintf("QC_human__stability_selection__features_%s.rds", cell_line))){
+if(!file.exists("QC_human__stability_selection__features.rds")){
   source("../functions/StabilitySelection.R")
   
-  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.90).
+  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.99).
   features_cor = cor(features, use = "pairwise.complete.obs")
   feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
   features_cor[upper.tri(features_cor, diag = TRUE)] = 0
-  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.90))))
+  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99))))
   if(!"organoids_num.of.objects" %in% features_to_keep)
     features_to_keep = c(features_to_keep, "organoids_num.of.objects")
   if(!"Total.Biomass" %in% features_to_keep)
@@ -538,9 +539,9 @@ if(!file.exists(sprintf("QC_human__stability_selection__features_%s.rds", cell_l
   features_reduced <- features[,features_to_keep]
   
   selection = selectByStability(
-    features_reduced, features_metadata, 
+    features = features_reduced, metadata = features_metadata, 
     preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
-    Rdim = max(40, ncol(features_reduced)), verbose = FALSE)
+    Rdim = ncol(features_reduced)-3, verbose = FALSE)
   
   # Keep only the selected features until the ratio drops to 0.5
   selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
@@ -573,11 +574,11 @@ for(cell_line in cell_lines) {
   features_reduced = features[features_metadata$CELL.LINE == cell_line,]
   metadata_reduced = features_metadata[features_metadata$CELL.LINE == cell_line,]
   
-  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.90).
+  # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.95).
   features_cor = cor(features_reduced, use = "pairwise.complete.obs")
   feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
   features_cor[upper.tri(features_cor, diag = TRUE)] = 0
-  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.90))))
+  features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99))))
   if(!"organoids_num.of.objects" %in% features_to_keep)
     features_to_keep = c(features_to_keep, "organoids_num.of.objects")
   if(!"Total.Biomass" %in% features_to_keep)
@@ -589,7 +590,7 @@ for(cell_line in cell_lines) {
   selection = selectByStability(
     features_reduced, metadata_reduced, 
     preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
-    Rdim = max(40, ncol(features_reduced)), verbose = FALSE)
+    Rdim = ncol(features_reduced)-3, verbose = FALSE)
   
   # Keep only the selected features until the ratio drops to 0.5
   selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
