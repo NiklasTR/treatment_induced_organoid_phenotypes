@@ -12,10 +12,12 @@ number_sections: true
 ```{r setup}
 library(PROMISE)
 library(ggplot2)
+library(reshape2)
 
 # Directories and files
-config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
-data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/organoid_classifier"
+# config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/organoid_classifier/data"
 source(file.path(config_dir, "watchdogConfig.R"))
 ```
 
@@ -62,7 +64,7 @@ rownames(mortality) = sapply(strsplit(rownames(mortality), ".", fixed = TRUE), "
 
 # Classifier Verification
 
-There are two steps to showing that the classifier does actually differentiate between live and dead cells. For this verification I do not differentiate between cell lines as the ratios of dead cells should, in princple, be directly comparable.
+There are three steps to showing that the classifier does actually differentiate between live and dead cells. For this verification I do not differentiate between cell lines as the ratios of dead cells should, in princple, be directly comparable.
 
 ## Training Set Verification
 
@@ -85,6 +87,21 @@ ggplot(data = ggplotdf) + geom_violin(aes(x = Control, y = Percent.Dead, fill = 
 
 ```
 
+```{r}
+most_dead_dmso = strsplit(
+  rownames(neg_ctrls[which.max(neg_ctrls$Percent.Dead),]), 
+  "_")[[1]]
+
+most_dead_dmso_fn = thumbnailFilename(
+  filedir = file.path(htmldir, most_dead_dmso[[1]]), 
+  platename = most_dead_dmso[[1]], row = most_dead_dmso[[2]], 
+  col = most_dead_dmso[[3]], configdir = config_dir, level = 1, 
+  addPath = TRUE)
+```
+
+The "most dead" DMSO well is pictured here. The misclassification is apparently more of a problem with the blurry wells, which I've erroneously forgotten to filter away for this task.
+![`r paste0(most_dead_dmso, collapse = "_")`; Identified as overwhelmingly dead](`r most_dead_dmso_fn`)
+
 ## Positive Control Gradients
 
 The classifier was trained on concentrations of 0.2 and 1.0 of both Bortezomib and Irinotecan / SN-38. Both of these concentrations led to a complete death of all organoids in the wells. As a second verification step, I take a look at the lower concentrations of these two drugs.
@@ -104,9 +121,37 @@ correlation = cor(
 ```
 The fraction of dead organoids correlates strongly with the concentration of the positive controls ($\rho$ = `r correlation`). I used the rank-based spearman correlation as the concentrations are on a logarithmic scale and I am more interested in the common trend rather than an actual, linear relationship between the two.
 
+## Replicate similarity
+
+Finally, I assess the replicate similarity under the classifier. Instead of looking at the correlation, I instead look at the standard deviations between the two replicates. I expect the standard deviations to be close to zero. With exceptions (again, possible due to blurry organoids) the standard deviations are all below 0.1, indicating a stable classification result across replicates.
+
+```{r, message=FALSE}
+wells_id = paste0(
+  substr(rownames(mortality), 1, 7), "_", 
+  substr(rownames(mortality), 12, 19))
+
+# Drop any wells without a replicate
+mortality_rep = mortality[
+  wells_id %in% names(which(table(wells_id) == 2)), ]
+wells_id = paste0(
+  substr(rownames(mortality_rep), 1, 7), "_", 
+  substr(rownames(mortality_rep), 12, 19))
+
+mortality_agg = mortality_rep[,c(
+  "Percent.Live", "Percent.Dead",
+  "Median.Certainty.Live", "Median.Certainty.Dead")]
+mortality_agg = aggregate(mortality_agg, list(wells_id), function(x) sd(x))
+rownames(mortality_agg) = mortality_agg$Group.1
+mortality_agg$Group.1 = NULL
+
+mortality_agg = melt(mortality_agg)
+mortality_agg = mortality_agg[is.finite(mortality_agg$value), ]
+ggplot(data = mortality_agg) + geom_boxplot(aes(x = variable, y = value))
+```
+
 # Staurosporine Wells
 
-An interesting pseudo-validation of the method is to look at the effect that Staurosporine has on each cell line. We confirmed visually that the Staurosporine concentration was too low and the cell lines reacted to varying degrees to it.
+An interesting pseudo-validation of the method is to look at the effect that Staurosporine has on each cell line. We confirmed visually that the Staurosporine concentration was too low and the cell lines reacted to varying degrees to it. The ratios of dead to live organoids as detected by the classifier matches our visual assessment.
 
 ```{r}
 stauro_wells = mortality[
@@ -119,4 +164,28 @@ stauro_cl_medians = aggregate(
 ggplot_levels = stauro_cl_medians$Group.1[order(stauro_cl_medians$x, decreasing = TRUE)]
 stauro_wells$Cell.Line = factor(stauro_wells$Cell.Line, levels = ggplot_levels)
 ggplot(data = stauro_wells) + geom_boxplot(aes(x = Cell.Line, y = Percent.Dead, fill = Cell.Line))
+```
+
+# Differential Treatments
+
+I am interested in treatments that lead to individual differences between cell lines.
+
+```{r}
+mortality_num = mortality[,c(
+  "Percent.Live", "Percent.Dead", 
+  "Median.Certainty.Live", "Median.Certainty.Dead")]
+mortality_agg = aggregate(
+  mortality_num, list(substr(rownames(mortality), 1, 7), 
+                      mortality$Product.Name), 
+  mean, na.rm = TRUE)
+colnames(mortality_agg) = c("Cell.Line", "Treatment", colnames(mortality_agg)[3:6])
+mortality_agg_num = mortality_agg[,c(
+  "Percent.Live", "Percent.Dead", 
+  "Median.Certainty.Live", "Median.Certainty.Dead")]
+treatment_range = aggregate(
+  mortality_agg_num, list(mortality_agg$Treatment), 
+  function(x) max(x) - min(x))
+colnames(treatment_range) = c("Treatment", colnames(treatment_range)[2:5])
+treatment_range = treatment_range[
+  order(treatment_range$Percent.Live, decreasing = TRUE), ]
 ```
