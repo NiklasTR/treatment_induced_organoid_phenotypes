@@ -168,24 +168,51 @@ ggplot(data = stauro_wells) + geom_boxplot(aes(x = Cell.Line, y = Percent.Dead, 
 
 # Differential Treatments
 
-I am interested in treatments that lead to individual differences between cell lines.
+I am interested in treatments that lead to individual differences between cell lines. Plotted below are the treatments with the largest "spread" ($max_{dead} - min_{dead}$) across all cell lines. As a first filtering step, I want to keep only treatments that have distinct effects on each cell line, i.e. keep only treatments that have a small range of dead organoid percentages between replicates for each cell line. I then look at which treatments have differential effects between cell lines
 
 ```{r}
-mortality_num = mortality[,c(
-  "Percent.Live", "Percent.Dead", 
-  "Median.Certainty.Live", "Median.Certainty.Dead")]
-mortality_agg = aggregate(
-  mortality_num, list(substr(rownames(mortality), 1, 7), 
-                      mortality$Product.Name), 
+# Calculate the range of values between replicates for each treatment and cell line
+mortality_range = aggregate(
+  mortality[,"Percent.Dead", drop=FALSE], 
+  list(substr(rownames(mortality), 1, 7), mortality$Product.Name), 
+  function(x) diff(range(x, na.rm = TRUE)))
+
+# Calculate the mean range across cell lines
+mortality_mean_range = aggregate(
+  mortality_range[,"Percent.Dead", drop=FALSE], 
+  list(mortality_range$Group.2), mean, na.rm = TRUE)
+
+# Look only at treatments with a small range of values
+stable_treatments = mortality_mean_range[
+  mortality_mean_range$Percent.Dead <= 0.15, "Group.1"]
+
+# Look at the mean killing percentage across replicates
+mortality_mean_killing = aggregate(
+  mortality[,"Percent.Dead", drop=FALSE], 
+  list(substr(rownames(mortality), 1, 7), mortality$Product.Name), 
   mean, na.rm = TRUE)
-colnames(mortality_agg) = c("Cell.Line", "Treatment", colnames(mortality_agg)[3:6])
-mortality_agg_num = mortality_agg[,c(
-  "Percent.Live", "Percent.Dead", 
-  "Median.Certainty.Live", "Median.Certainty.Dead")]
-treatment_range = aggregate(
-  mortality_agg_num, list(mortality_agg$Treatment), 
-  function(x) max(x) - min(x))
-colnames(treatment_range) = c("Treatment", colnames(treatment_range)[2:5])
-treatment_range = treatment_range[
-  order(treatment_range$Percent.Live, decreasing = TRUE), ]
+colnames(mortality_mean_killing) = c(
+  "Cell.Line", "Treatment", "Percent.Dead")
+mortality_mean_killing = mortality_mean_killing[
+  mortality_mean_killing$Treatment %in% stable_treatments, ]
+
+# Select the treatments with the highest range across cell lines
+mortality_range_killing = aggregate(
+  mortality_mean_killing[,"Percent.Dead", drop=FALSE], 
+  list(mortality_mean_killing$Treatment), 
+  function(x) diff(range(x, na.rm = TRUE)))
+mortality_range_killing = mortality_range_killing[
+  order(mortality_range_killing$Percent.Dead, decreasing = TRUE), ]
+
+# Plot top treatments
+top_treatments = mortality_range_killing$Group.1[1:5]
+top_drug_mortality = mortality[
+  mortality$Product.Name %in% top_treatments, 
+    c("Product.Name", "Percent.Dead")]
+top_drug_mortality$Cell.Line = substr(rownames(top_drug_mortality), 1, 7)
+
+ggplot(data = top_drug_mortality) + 
+  geom_boxplot(aes(x = Product.Name, y = Percent.Dead, fill = Cell.Line)) + 
+  scale_fill_brewer(palette = "Paired")
+
 ```

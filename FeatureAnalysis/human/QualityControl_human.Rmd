@@ -541,7 +541,7 @@ if(!file.exists("QC_human__stability_selection__features.rds")){
   selection = selectByStability(
     features = features_reduced, metadata = features_metadata, 
     preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
-    Rdim = ncol(features_reduced)-3, verbose = FALSE)
+    Rdim = ncol(features_reduced)-3, verbose = TRUE)
   
   # Keep only the selected features until the ratio drops to 0.5
   selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
