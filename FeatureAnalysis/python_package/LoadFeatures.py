@@ -37,8 +37,11 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
 
     # Check feature type
     keymap = {
-        "organoids": ("features_organoids", "feature_names_organoids"),
-        "clumps": ("features_clumps", "feature_names_clumps")}
+        "organoids": (
+            "features_organoids", "feature_names_organoids",
+            "object_type_organoids"),
+        "clumps": (
+            "features_clumps", "feature_names_clumps", "object_type_clumps")}
 
     if Config.FEATURETYPE not in keymap.keys():
         raise KeyError("'Config.FEATURETYPE' must be one of '%s'"
@@ -72,6 +75,7 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
     features = []
     feature_names = []
     well_names = []
+    object_types = []
     for well in wells:
         feature_fn = os.path.join(
             Config.FEATUREDIR, well.split("_")[0], well_folder, well)
@@ -87,6 +91,13 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
         except KeyError:
             pass
 
+        if normalized:
+            try:
+                with h5py.File(feature_fn, "r") as h5handle:
+                    object_types.append(h5handle[hdf5_keys[2]][()])
+            except KeyError:
+                pass
+
     # Check feature names consistency
     fname_iter = iter(feature_names)
     if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
@@ -96,10 +107,15 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
     # Combine features and well names
     features = np.concatenate(features, axis=1)
     well_names = np.concatenate(well_names)
-
-    return {
-        "features": features, "feature_names": feature_names,
-        "well_names": well_names}
+    if normalized:
+        return {
+            "features": features, "feature_names": feature_names,
+            "well_names": well_names,
+            "object_type": np.concatenate(object_types)}
+    else:
+        return {
+            "features": features, "feature_names": feature_names,
+            "well_names": well_names}
 
 
 def remove_blurry_organoids(features, feature_names, well_names):

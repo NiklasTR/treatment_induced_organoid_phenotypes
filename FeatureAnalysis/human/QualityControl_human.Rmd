@@ -27,7 +27,7 @@ source(file.path(config_dir, "watchdogConfig.R"))
 
 # Parameters
 feature_type = "organoids"
-hdf5_dataset = "features_tm05_zscore_rep"
+hdf5_dataset = paste0("features_zscore_rep_", feature_type)
 ```
 
 # Data preprocessing
@@ -66,6 +66,14 @@ features = do.call(rbind, features)
 rownames(features) = sapply(strsplit(rownames(features), ".", fixed = TRUE), "[[", 2)
 features_metadata = do.call(rbind, features_metadata)
 rownames(features_metadata) = sapply(strsplit(rownames(features_metadata), ".", fixed = TRUE), "[[", 2)
+```
+
+Ensure that only wells with two replicates are kept
+```{r}
+rows_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+valid_row_ids = names(which(table(rows_repid) == 2))
+features = features[rows_repid %in% valid_row_ids, ]
+features_metadata = features_metadata[rows_repid %in% valid_row_ids, ]
 ```
 
 For any number of reasons, some wells may not have been processed properly. In particular, if there is no information to the total number of organoids in a well then it can be safely discarded as this feature should always be computable.
@@ -541,7 +549,7 @@ if(!file.exists("QC_human__stability_selection__features.rds")){
   selection = selectByStability(
     features = features_reduced, metadata = features_metadata, 
     preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
-    Rdim = ncol(features_reduced)-3, verbose = TRUE)
+    Rdim = ncol(features_reduced)-3, verbose = FALSE)
   
   # Keep only the selected features until the ratio drops to 0.5
   selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])
