@@ -20,13 +20,23 @@ feature_type = "organoids"
 ```
 
 # Clustering of Organoids in well D004T01P005L08_A_09
-## Load and Preprocess data
+The well in question shows a clear split in organoid types.
 
-I use a set of pseudo-labels to get a rough idea of how well the clustering methods work. In particular, I've annotated blurry objects ("BLU"), shrapnel ("SHR"), live organoids ("NEG"), and dead organoids ("POS").
 ```{r}
 plate = "D004T01P005L08"
 row = "A"
 col = "09"
+preview_fn = thumbnailFilename(
+  filedir = file.path(htmldir, plate), platename = plate, 
+  row = row, col = col, configdir = config_dir)
+```
+
+!["D004T01P005L08_A_09"](`r preview_fn`)
+
+## Load and Preprocess data
+
+I use a set of pseudo-labels to get a rough idea of how well the clustering methods work. In particular, I've annotated blurry objects ("BLU"), shrapnel ("SHR"), live organoids ("NEG"), and dead organoids ("POS").
+```{r}
 # features_fn = file.path(feature_dir, plate, "wells_normalized", sprintf("%s_%s_%s_features_normalized.h5", plate, row, col))
 # features = h5read(features_fn, sprintf("features_%s", feature_type))
 # colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
@@ -36,6 +46,7 @@ features = h5read(features_fn, sprintf("features_%s", feature_type))
 colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
 
 # Remove FIELD column
+organoids_field = features[,"FIELD"]
 features = features[, colnames(features) != "FIELD"]
 
 # Load pseudo labels
@@ -103,7 +114,7 @@ print(sprintf("Optimal number of clusters: %s", clustering$nc))
 ```
 
 Next, I restrict the clustering to only as many groups as defined in the pseudo labels. The groups can be described as follows:
-* Positive and negative controls, i.e. dead and live organoids, are almost entirely in cluster 1
+* Positive and negative controls, i.e. dead and live organoids, are almost entirely in cluster 1; they cannot be differentiated by unsupervised clustering.
 * Blurry objects are split between clusters 2 and 3.
 * Shrapnel is split across all four clusters. This is possibly due to the uninformed definition of shrapnel as anything with an area of less than 2500 pixels. There seem to be different types of shrapnel.
 
