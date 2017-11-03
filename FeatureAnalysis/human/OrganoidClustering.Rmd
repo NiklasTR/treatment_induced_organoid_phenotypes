@@ -1,0 +1,125 @@
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+library(PROMISE)
+library(ggplot2)
+library(rhdf5)
+library(Rtsne)
+library(sparcl)
+library(fpc)
+library(cluster)
+library(ape)
+
+# Directories and files
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+source(file.path(config_dir, "watchdogConfig.R"))
+
+# Parameters
+feature_type = "organoids"
+```
+
+# Clustering of Organoids in well D004T01P005L08_A_09
+## Load and Preprocess data
+
+I use a set of pseudo-labels to get a rough idea of how well the clustering methods work. In particular, I've annotated blurry objects ("BLU"), shrapnel ("SHR"), live organoids ("NEG"), and dead organoids ("POS").
+```{r}
+plate = "D004T01P005L08"
+row = "A"
+col = "09"
+# features_fn = file.path(feature_dir, plate, "wells_normalized", sprintf("%s_%s_%s_features_normalized.h5", plate, row, col))
+# features = h5read(features_fn, sprintf("features_%s", feature_type))
+# colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
+# object_type = h5read(features_fn, sprintf("object_type_%s", feature_type))
+features_fn = file.path(feature_dir, plate, "wells", sprintf("%s_%s_%s_features.h5", plate, row, col))
+features = h5read(features_fn, sprintf("features_%s", feature_type))
+colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
+
+# Remove FIELD column
+features = features[, colnames(features) != "FIELD"]
+
+# Load pseudo labels
+labels = read.table(
+  sprintf("well_labels/%s_%s_%s_labels.txt", plate, row, col), 
+  header = FALSE, stringsAsFactors = FALSE)$V1
+blurry = which(labels == "BLU")
+labels[features[,"x.0.s.area"] < 2500] = "SHR"
+labels[blurry] = "BLU"
+```
+
+## PCA
+Remove useless features/constant features and perform a PCA. A look at the cumulative explained variance of the PCA shows that there are no "distinct" components; nearly 150 features are required to explain 90% of the variance in the dataset.
+```{r}
+features = round(features, 8)
+  
+# Remove NA features
+na_feature_vals = colSums(is.na(features))
+features = features[, na_feature_vals == 0]
+
+# Remove constant features
+feature_range = apply(features, 2, function(x) mad(x, na.rm = TRUE))
+features = features[, feature_range > 0]
+
+# Remove highly correlated features (rho >= 0.99)
+features_cor = cor(features, use = "pairwise.complete.obs")
+feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99, na.rm = TRUE))))
+features = features[, features_to_keep]
+
+# PCA
+pca = prcomp(features, center = TRUE, scale. = TRUE)
+features_pca = pca$x[, cumsum(pca$sdev) / sum(pca$sdev) <= 0.9]
+pca_df = data.frame(
+  "Cumulative.Variance" = cumsum(pca$sdev) / sum(pca$sdev), 
+  "Principal.Component" = seq_along(pca$sdev))
+ggplot(data = pca_df) + geom_point(aes(x = Principal.Component, y = Cumulative.Variance)) + 
+  ggtitle("Cumulative Explained Variance of PCA Components")
+```
+
+## t-SNE
+I look at the t-SNE for various perplexities. None of them show any indication of clustering.
+```{r}
+perplexities = c(5, 10, 15, 20, 25)
+tsne_data = lapply(perplexities, function(x) Rtsne(
+  features, perplexity = x, initial_dims = 250, 
+  theta = 0, pca_scale = TRUE, pca_center = TRUE))
+names(tsne_data) = perplexities
+for(x in perplexities) {
+  tsne_df = data.frame(tsne_data[[as.character(x)]]$Y)
+  plot(
+    ggplot(data = tsne_df) + geom_point(aes(x = X1, y = X2)) + 
+      ggtitle(sprintf("T-SNE Plot with perplexity %s", x)))
+}
+```
+
+## K-Means Clustering 
+K-Means clustering can be performed for different numbers of clusters and compared. The function 'pamk' does this and determines the "optimal" number of clusters. I allow it to test all possible numbers of clusters between 2 and the number of objects-1 (the maximum allowed by the function). It chose 342 clusters for 343 objects.
+```{r}
+clustering = pamk(
+  data.frame(features_pca), krange = 2:(nrow(features)-1), 
+  criterion = "ch", usepam = TRUE, scaling=TRUE, ns=10)
+print(sprintf("Optimal number of clusters: %s", clustering$nc))
+```
+
+Next, I restrict the clustering to only as many groups as defined in the pseudo labels. The groups can be described as follows:
+* Positive and negative controls, i.e. dead and live organoids, are almost entirely in cluster 1
+* Blurry objects are split between clusters 2 and 3.
+* Shrapnel is split across all four clusters. This is possibly due to the uninformed definition of shrapnel as anything with an area of less than 2500 pixels. There seem to be different types of shrapnel.
+
+```{r}
+clustering2 = pam(x = features_pca, k = length(unique(labels)))
+table(clustering2$clustering, labels)
+```
+
+## Hierarchical Clustering
+An unsupervised hierarchical clustering was performed. The colored branches indicate whether the organoids are blurry (i.e. "invalid"), live, or dead organoids. There seems to be no visibly meaningful clustering pattern.
+```{r, width=12, height=12}
+d = dist(features_pca)
+h = hclust(d)
+colors = c("red", "blue", "green", "black")
+plot.phylo(
+  as.phylo(h), cex = 0.6, label.offset = 0.5, type = "fan", 
+  show.tip.label = FALSE, edge.color = colors[as.factor(labels)], 
+  tip.color = colors[as.factor(labels)])
+```
