@@ -10,6 +10,7 @@ LAYOUTDIR = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
 SEGMENTATIONDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
 BLURRYWELLFN = os.path.join(BASEDIR, "blurry_wells_predicted.txt")
 FEATURETYPE = "organoids"
-SIZETHRESHOLD = 2500
+SIZETHRESHOLD = 1500
 BLURRYORGANOIDCLF = os.path.join(
     BASEDIR, "blurry_organoid_classifier_%s.pkl" % FEATURETYPE)
+DEADORGANOIDCLASSIFIERDIR = os.path.join(BASEDIR, "dead_organoid_classifier")

@@ -3,7 +3,6 @@ import Config
 import h5py
 import numpy as np
 import re
-import BlurryOrganoidClassifier
 
 
 def load_organoid_features(wells=None, plates=None, normalized=False):
@@ -59,6 +58,8 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
             os.listdir(os.path.join(Config.FEATUREDIR, plate, "wells"))])
     # If 'wells' is set but 'plates' is not
     elif wells is not None and plates is None:
+        # Trim any trailing text from the wells
+        wells = ["_".join(well.split("_")[0:3]) for well in wells]
         if normalized:
             wells = sorted([
                 s + "_features_normalized.h5" for s in wells])
@@ -107,6 +108,13 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
     # Combine features and well names
     features = np.concatenate(features, axis=1)
     well_names = np.concatenate(well_names)
+
+    # Remove FIELD field, this is useless for this workflow
+    features = np.delete(
+        features, np.where(feature_names == "FIELD")[0], axis=0)
+    feature_names = np.delete(
+        feature_names, np.where(feature_names == "FIELD")[0])
+
     if normalized:
         return {
             "features": features, "feature_names": feature_names,
@@ -116,29 +124,3 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
         return {
             "features": features, "feature_names": feature_names,
             "well_names": well_names}
-
-
-def remove_blurry_organoids(features, feature_names, well_names):
-    """
-    Removes blurry organoids
-
-    :param features: A 2D numpy array with the shape (features, samples)
-    :param feature_names:
-    :param well_names:
-    :return:
-    """
-
-    clf = BlurryOrganoidClassifier.get_blurry_organoid_classifier(
-        Config.BLURRYORGANOIDCLF)
-
-    features_clf = np.array(features).transpose()
-    features_clf = features_clf[
-        ..., [f in clf["feature_names"] for f in feature_names]]
-
-    is_focused = clf["clf"].predict(features_clf)
-    features = features[..., [s == 1 for s in is_focused]]
-    well_names = well_names[[s == 1 for s in is_focused]]
-
-    return {
-        "features": features, "feature_names": feature_names,
-        "well_names": well_names}

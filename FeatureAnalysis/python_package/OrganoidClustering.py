@@ -41,8 +41,7 @@ def get_organoid_labels_for_well(well_id):
             feature_names, np.where(feature_names == "FIELD")[0])
 
     # Label blurry organoids
-    clf = BlurryOrganoidClassifier.get_blurry_organoid_classifier(
-        Config.BLURRYORGANOIDCLF)
+    clf = BlurryOrganoidClassifier.get_blurry_organoid_classifier()
 
     features_clf = np.array(features).transpose()
     features_clf = features_clf[

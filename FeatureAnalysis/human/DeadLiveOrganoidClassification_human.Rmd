@@ -17,7 +17,8 @@ library(reshape2)
 # Directories and files
 # config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
 config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
-data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/organoid_classifier/data"
+# data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/organoid_classifier/data"
+data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/dead_organoid_classifier"
 source(file.path(config_dir, "watchdogConfig.R"))
 ```
 
@@ -33,6 +34,7 @@ The classifier was trained for each cell line individually. The preprocessing an
 
 ```{r load_data}
 all_plates = sort(list.files(path = data_dir, pattern = "^D0"))
+all_plates = sort(unique(substr(all_plates, 1, 14)))
 
 # Use only plates that haven't been reimaged
 use_plates = c()
@@ -53,13 +55,21 @@ all_plates = sort(all_plates[use_plates])
 # Load data
 mortality = list()
 for(plate in all_plates) {
-  dat = read.csv(file.path(data_dir, plate, sprintf("%s_organoid_classification.csv", plate)))
+  # dat = read.csv(file.path(data_dir, plate, sprintf("%s_organoid_classification.csv", plate)))
+  dat = read.csv(file.path(data_dir, sprintf("%s_organoid_classification.csv", plate)))
   rownames(dat) = paste0(plate, "_", substr(dat$Well.ID, 1, 1), "_", substr(dat$Well.ID, 2, 3))
   dat$X = NULL
   mortality[[plate]] = dat
 }
 mortality = do.call(rbind, mortality)
 rownames(mortality) = sapply(strsplit(rownames(mortality), ".", fixed = TRUE), "[[", 2)
+```
+
+Keep only wells with replicates
+```{r}
+rep_id = paste0(substr(rownames(mortality), 1, 7), "_", substr(rownames(mortality), 12, 19))
+wells_to_keep = names(which(table(rep_id) == 2))
+mortality = mortality[rep_id %in% wells_to_keep, ]
 ```
 
 # Classifier Verification
@@ -99,7 +109,7 @@ most_dead_dmso_fn = thumbnailFilename(
   addPath = TRUE)
 ```
 
-The "most dead" DMSO well is pictured here. The misclassification is apparently more of a problem with the blurry wells, which I've erroneously forgotten to filter away for this task.
+The "most dead" DMSO well is pictured here.
 ![`r paste0(most_dead_dmso, collapse = "_")`; Identified as overwhelmingly dead](`r most_dead_dmso_fn`)
 
 ## Positive Control Gradients
@@ -123,7 +133,7 @@ The fraction of dead organoids correlates strongly with the concentration of the
 
 ## Replicate similarity
 
-Finally, I assess the replicate similarity under the classifier. Instead of looking at the correlation, I instead look at the standard deviations between the two replicates. I expect the standard deviations to be close to zero. With exceptions (again, possible due to blurry organoids) the standard deviations are all below 0.1, indicating a stable classification result across replicates.
+Finally, I assess the replicate similarity under the classifier. Instead of looking at the correlation, I instead look at the standard deviations between the two replicates. I expect the standard deviations to be close to zero. With the exception of outliers, the standard deviations are all below 0.1, indicating a stable classification result across replicates.
 
 ```{r, message=FALSE}
 wells_id = paste0(
@@ -168,51 +178,65 @@ ggplot(data = stauro_wells) + geom_boxplot(aes(x = Cell.Line, y = Percent.Dead, 
 
 # Differential Treatments
 
-I am interested in treatments that lead to individual differences between cell lines. Plotted below are the treatments with the largest "spread" ($max_{dead} - min_{dead}$) across all cell lines. As a first filtering step, I want to keep only treatments that have distinct effects on each cell line, i.e. keep only treatments that have a small range of dead organoid percentages between replicates for each cell line. I then look at which treatments have differential effects between cell lines
-
+I am interested in treatments that lead to individual differences between cell lines. For simplicity's sake, I only look at plates with layouts L02 and L03. 
 ```{r}
-# Calculate the range of values between replicates for each treatment and cell line
-mortality_range = aggregate(
-  mortality[,"Percent.Dead", drop=FALSE], 
-  list(substr(rownames(mortality), 1, 7), mortality$Product.Name), 
-  function(x) diff(range(x, na.rm = TRUE)))
-
-# Calculate the mean range across cell lines
-mortality_mean_range = aggregate(
-  mortality_range[,"Percent.Dead", drop=FALSE], 
-  list(mortality_range$Group.2), mean, na.rm = TRUE)
-
-# Look only at treatments with a small range of values
-stable_treatments = mortality_mean_range[
-  mortality_mean_range$Percent.Dead <= 0.15, "Group.1"]
-
-# Look at the mean killing percentage across replicates
-mortality_mean_killing = aggregate(
-  mortality[,"Percent.Dead", drop=FALSE], 
-  list(substr(rownames(mortality), 1, 7), mortality$Product.Name), 
-  mean, na.rm = TRUE)
-colnames(mortality_mean_killing) = c(
-  "Cell.Line", "Treatment", "Percent.Dead")
-mortality_mean_killing = mortality_mean_killing[
-  mortality_mean_killing$Treatment %in% stable_treatments, ]
-
-# Select the treatments with the highest range across cell lines
-mortality_range_killing = aggregate(
-  mortality_mean_killing[,"Percent.Dead", drop=FALSE], 
-  list(mortality_mean_killing$Treatment), 
-  function(x) diff(range(x, na.rm = TRUE)))
-mortality_range_killing = mortality_range_killing[
-  order(mortality_range_killing$Percent.Dead, decreasing = TRUE), ]
-
-# Plot top treatments
-top_treatments = mortality_range_killing$Group.1[1:5]
-top_drug_mortality = mortality[
-  mortality$Product.Name %in% top_treatments, 
-    c("Product.Name", "Percent.Dead")]
-top_drug_mortality$Cell.Line = substr(rownames(top_drug_mortality), 1, 7)
-
-ggplot(data = top_drug_mortality) + 
-  geom_boxplot(aes(x = Product.Name, y = Percent.Dead, fill = Cell.Line)) + 
-  scale_fill_brewer(palette = "Paired")
-
+layout_id = substr(rownames(mortality), 12, 14)
+mortality_l02l03 = mortality[layout_id %in% c("L02", "L03"), ]
 ```
+
+I'm interested in treatments that have differential effects between cell lines. As a first step, I look at how stable the effect of treatments is between replicates. I look at the difference of the values of percent dead organoids between the two replicates. As seen in the histogram, most wells and their replicates show stable behaviour with regard to organoid death.
+```{r}
+rep_id = paste0(
+  substr(rownames(mortality_l02l03), 1, 7), "_", 
+  substr(rownames(mortality_l02l03), 12, 19))
+mortality_l02l03_agg = aggregate(
+  mortality_l02l03[, "Percent.Dead", drop=FALSE], 
+  list(rep_id), function(x) diff(range(x, na.rm = TRUE)))
+ggplot(data = mortality_l02l03_agg) + geom_histogram(aes(x = Percent.Dead), binwidth = 0.01) + 
+  xlab("Difference of PDO between replicates") + ylab("Count") + 
+  ggtitle("Difference of Percent Dead Organoids (PDO) between replicates")
+```
+
+A look at the "worst" well pair shows that this is due to the combination of poor image quality and resulting poor segmentation.
+
+Classified as Alive (D030T01P002L03_G_02) | Classified as Dead (D030T01P906L03_G_02)
+----------------------------------------- | ----------------------------------------
+![](/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/htmldir/D030T01P002L03/D030T01P002L03_G_02_1.jpeg) | ![](/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/htmldir/D030T01P906L03/D030T01P906L03_G_02_1.jpeg)
+![](/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentationhtmldir/D030T01P002L03/D030T01P002L03_G_02_1.jpeg) | ![](/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentationhtmldir/D030T01P906L03/D030T01P906L03_G_02_1.jpeg)
+
+I keep only treatments that have reasonably consistent effects on the replicates, i.e. a difference of dead organoid percentage of <= 25% between replicates. 
+```{r}
+good_wells = mortality_l02l03_agg[mortality_l02l03_agg$Percent.Dead <= 0.25, "Group.1"]
+mortality_l02l03 = mortality_l02l03[rep_id %in% good_wells, ]
+```
+
+Next, I look at which treatments have a differential effect between cell lines. For this, I look at the range of the number of killed organoids for each treatment across cell lines. A look at these ranges shows that there are a number of treatments with a stable effect that show a substantial difference in their killing effect between cell lines.
+```{r}
+mortality_l02l03_agg = aggregate(
+  mortality_l02l03[,"Percent.Dead", drop=FALSE],
+  list(substr(rownames(mortality_l02l03), 1, 7), mortality_l02l03$Product.Name),
+  mean)
+
+effect_range_per_treatment = aggregate(
+  mortality_l02l03_agg[, "Percent.Dead", drop=FALSE], 
+  list(mortality_l02l03_agg$Group.2), 
+  function(x) diff(range(x, na.rm = TRUE)))
+
+effect_range_per_treatment = effect_range_per_treatment[
+  order(effect_range_per_treatment$Percent.Dead, decreasing = TRUE), ]
+effect_range_per_treatment$x = seq_len(nrow(effect_range_per_treatment))
+
+ggplot(data = effect_range_per_treatment) + geom_point(aes(x = x, y = Percent.Dead)) + 
+  xlab("Treatment") + ylab("Killing Range") + 
+  ggtitle("Range of dead organoid ratio between cell lines for a single treatment")
+```
+
+I plot the top three treatments below as an example.
+```{r}
+top_treatments = as.character(effect_range_per_treatment$Group.1[1:3])
+ggplotdf = mortality_l02l03[mortality_l02l03$Product.Name %in% top_treatments, ]
+ggplotdf$Cell.Line = substr(rownames(ggplotdf), 1, 7)
+ggplot(data = ggplotdf) + geom_boxplot(aes(x = Product.Name, y = Percent.Dead, fill = Cell.Line))
+```
+
+From these three treatments alone it is clear that certain patients react much more strongly to treatments than others. A followup analysis could attempt to find common genetic markers in patients that react similarly to treatments to determine potential gene-drug interactions.

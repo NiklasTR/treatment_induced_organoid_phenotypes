@@ -3,36 +3,58 @@ import sklearn.model_selection
 import sklearn.ensemble
 import re
 import os
-import h5py
 import random
 import pickle
 import Config
+import LoadFeatures
 
 
-def get_blurry_organoid_classifier(classifierfn):
+def remove_blurry_organoids(features, feature_names, well_names):
     """
-    Calls the training function or loads an existing classifier from disk
+    Removes blurry organoids
+
+    :param features: A 2D numpy array with the shape (features, samples)
+    :param feature_names:
+    :param well_names:
     :return:
     """
 
-    if os.path.isfile(classifierfn):
-        with open(classifierfn, "r") as f:
+    clf = get_blurry_organoid_classifier()
+
+    features_clf = np.array(features).transpose()
+    features_clf = features_clf[
+        ..., [f in clf["feature_names"] for f in feature_names]]
+
+    is_focused = clf["clf"].predict(features_clf)
+    features = features[..., [s == 1 for s in is_focused]]
+    well_names = well_names[[s == 1 for s in is_focused]]
+
+    return {
+        "features": features, "feature_names": feature_names,
+        "well_names": well_names}
+
+
+def get_blurry_organoid_classifier():
+    """
+    Loads the blurry organoid classifier
+    :return:
+    """
+
+    if os.path.isfile(Config.BLURRYORGANOIDCLF):
+        with open(Config.BLURRYORGANOIDCLF, "r") as f:
             clf = pickle.load(f)
     else:
         print(
             "Training blurry organoid classifier for '%s'"
             % Config.FEATURETYPE)
-        clf = learn_blurry_organoids(
-            featuretype=Config.FEATURETYPE,
-            blurrywellfn=Config.BLURRYWELLFN,
-            featuredir=Config.FEATUREDIR)
+        clf = learn_blurry_organoids()
         clf["feature_type"] = Config.FEATURETYPE
-        with open(classifierfn, "w") as f:
+        with open(Config.BLURRYORGANOIDCLF, "w") as f:
             pickle.dump(clf, f)
     return clf
 
 
-def learn_blurry_organoids(featuretype, blurrywellfn, featuredir):
+def learn_blurry_organoids():
     """
     Trains a classifier to tell the difference between blurry and in-focus
     organoids based on the features. This function currently explicitly
@@ -51,44 +73,24 @@ def learn_blurry_organoids(featuretype, blurrywellfn, featuredir):
         - The expected accuracy on a validation set
     """
 
-    keymap = {
-        "organoids": ("features_organoids", "feature_names_organoids"),
-        "clumps": ("features_clumps", "feature_names_clumps")}
-
-    if featuretype not in keymap.keys():
-        raise KeyError("'feature_type' must be one of '%s'"
-                       % str(keymap.keys()))
-
-    hdf5_keys = keymap[featuretype]
-
-    with open(blurrywellfn, "r") as f:
+    with open(Config.BLURRYWELLFN, "r") as f:
         blurry_wells = [s.strip() for s in f.readlines()]
     all_plates = [
-        s for s in os.listdir(featuredir) if
+        s for s in os.listdir(Config.FEATUREDIR) if
         s.startswith("M001") or s.startswith("D0")]
     features = []
     feature_names = []
     for plate in all_plates:
         wells = [s for s in os.listdir(
-            os.path.join(featuredir, plate, "wells"))]
+            os.path.join(Config.FEATUREDIR, plate, "wells"))]
         wells = [s for s in wells if s[0:19] not in blurry_wells]
         wells = random.sample(wells, 15)
-        for well in wells:
-            feature_fn = os.path.join(featuredir, plate, "wells", well)
-            try:
-                with h5py.File(feature_fn, "r") as h5handle:
-                    features.append(h5handle[hdf5_keys[0]][()])
-                    feature_names.append(h5handle[hdf5_keys[1]][()])
-            except KeyError:
-                pass
+        well_features = LoadFeatures.load_organoid_features(wells=wells)
+        features.append(well_features["features"])
+        feature_names.append(well_features["feature_names"])
     features = np.concatenate(features, axis=1)
     features = features.transpose()
     feature_names = feature_names[0]
-
-    features = np.delete(
-        features, np.where(feature_names == "FIELD")[0], axis=1)
-    feature_names = np.delete(
-        feature_names, np.where(feature_names == "FIELD")[0])
 
     cy3_ind = np.where(feature_names == "x.a.b.q099")[0][0]
     max_cy3_intensity = features[:, cy3_ind]
