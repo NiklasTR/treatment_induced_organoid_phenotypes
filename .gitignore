@@ -10,3 +10,4 @@ methods/coculture
 **/*.idea
 **/*.h5
 **/*.pkl
+.DS_Store

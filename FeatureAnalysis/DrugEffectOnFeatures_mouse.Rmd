@@ -19,12 +19,13 @@ library(data.table)
 library(rhdf5)
 library(imageHTS)
 library(pander)
-
+library(here) #can be downloaded using CRAN
 # Directories and files
-config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
-feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/features"
+ 
+config_dir = "/Volumes/collab/PROMISE/data-10x-4t-c-16z/configdir" #mount volume
+feature_dir = paste0(here(), "/FeatureAnalysis/features")
 source(file.path(config_dir, "watchdogConfig.R"))
-blurrywells = "/Users/jansauer/Thesis/Projects/PROMISE/FilterBlurryWells/mouse/blurry_wells_predicted.txt"
+blurrywells = paste0(here(), "/FilterBlurryWells/mouse/blurry_wells_predicted.txt")
 
 # Parameters
 feature_type = "organoids"
@@ -40,12 +41,12 @@ The data preprocessing consists of the following steps:
   * I decided for this summary statistic as some features may only have features within a certain range, e.g. [0, 1] for the asphericity. Even under the assumption of normally distributed variation within a well, this limitation would cause the mean to skew the summary statistic towards the middle of the interval.
 * Apply glog transformation
 * Subtract the median of the DMSO wells from each feature on each plate to eliminate batch effects.
-* Combine plates belonging to a single cell line and calculate the z-score for each feature.
+* Combine plates belonging to a single replicate and calculate the z-score for each feature. This is necessary since considerable batch to batch variation was encountered during the screens. 
 
 This is done in an external python script. The data and all intermediate steps are stored in the corresponding hdf5 files in the PROMISE features directory.
 
 ```{r load_data}
-cell_lines = unique(substr(list.files(featuresdir, pattern = "M001"), 1, 7))
+cell_lines = unique(substr(list.files(feature_dir, pattern = "M001"), 1, 7))
 features = setNames(
   object = vector(mode="list", length=length(cell_lines)), 
   nm = cell_lines)
