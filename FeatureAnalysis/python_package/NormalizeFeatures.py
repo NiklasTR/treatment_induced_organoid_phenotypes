@@ -1,4 +1,5 @@
 # These functions normalize the organoid features
+from __future__ import division
 import os
 import pandas as pd
 import numpy as np
@@ -8,10 +9,10 @@ import Config
 import LoadFeatures
 import h5py
 import Utils
-import FeatureSummaries
+import SummarizeFeatures
 
 
-def get_normalized_organoid_features(features, feature_names, well_names):
+def get_normalized_organoid_features(features, feature_names, well_names, organoid_type):
     """
     Applies the DMSO normalization to the features, i.e.
 
@@ -19,6 +20,7 @@ def get_normalized_organoid_features(features, feature_names, well_names):
     :param features:
     :param feature_names:
     :param well_names:
+    :param organoid_type:
     :return:
     """
 
@@ -46,13 +48,10 @@ def get_normalized_organoid_features(features, feature_names, well_names):
             object_types.append(well_features["object_type"])
         else:
             well_features = features[..., well_names == well]
-            dmso_average = get_dmso_average_for_plate(plate)
+            well_object_types = organoid_type[well_names == well]
 
-            # Separate into organoids and shrapnel
-            f_size = well_features[np.where(
-                feature_names == "x.0.s.area")[0][0]]
-            features_shrapnel = well_features[:, f_size < Config.SIZETHRESHOLD]
-            features_organoids = well_features[:, f_size >= Config.SIZETHRESHOLD]
+            # Load DMSO averages
+            dmso_average = get_dmso_average_for_plate(plate)
 
             # Remove the number of objects entries
             dmso_avg_organoids = dmso_average["organoids"]["expected"][[
@@ -68,19 +67,23 @@ def get_normalized_organoid_features(features, feature_names, well_names):
                 re.search("num\.of\.objects", s) is None
                 for s in dmso_average["shrapnel"]["feature_names_variation"]]]
 
-            features_organoids_norm = np.transpose(
-                (features_organoids.transpose() - dmso_avg_organoids) /
-                dmso_dev_organoids)
-            features_shrapnel_norm = np.transpose(
-                (features_shrapnel.transpose() - dmso_avg_shrapnel) /
-                dmso_dev_shrapnel)
-            features_norm = np.concatenate(
-                (features_organoids_norm, features_shrapnel_norm),
-                axis=1)
-            object_type = np.repeat(
-                ("Organoid", "Shrapnel"),
-                (features_organoids_norm.shape[1],
-                 features_shrapnel_norm.shape[1]))
+            # Build a normalization matrix fitting to the organoid type and
+            # normalize the features
+            f_size = well_features[np.where(
+                feature_names == "x.0.s.area")[0][0]]
+            object_type = np.stack([
+                "Organoid" if fs >= Config.SIZETHRESHOLD else
+                "Shrapnel" for fs in f_size])
+            object_type[well_object_types == "BLURRY"] = "BLURRY"
+            dmso_avg_matrix = np.stack([
+                dmso_avg_organoids if fs >= Config.SIZETHRESHOLD else
+                dmso_avg_shrapnel for fs in f_size])
+            dmso_dev_matrix = np.stack([
+                dmso_dev_organoids if fs >= Config.SIZETHRESHOLD else
+                dmso_dev_shrapnel for fs in f_size])
+            features_norm = np.transpose(
+                (well_features.transpose() - dmso_avg_matrix) /
+                dmso_dev_matrix)
 
             features_normalized.append(features_norm)
             feature_names_normalized.append(feature_names)
@@ -167,7 +170,12 @@ def calc_dmso_organoid_average_of_plate(plate):
     features = LoadFeatures.load_organoid_features(wells=dmso_wells)
 
     # Remove blurry organoids
-    features = BlurryOrganoidClassifier.remove_blurry_organoids(**features)
+    features = BlurryOrganoidClassifier.label_blurry_organoids(**features)
+    focused_organoids = np.array([
+        val == "GOOD" for val in features["organoid_type"]])
+    features["features"] = features["features"][
+        ..., focused_organoids]
+    features["well_names"] = features["well_names"][focused_organoids]
 
     # Determine the average object numbers
     organoids_in_wells = []
@@ -195,14 +203,14 @@ def calc_dmso_organoid_average_of_plate(plate):
 
     # Calculate the summaries over the features and add the summaries of
     # the number of objects as a feature
-    summary = FeatureSummaries.calc_feature_summary(
+    summary = SummarizeFeatures.calc_feature_summary(
         features=features["features"],
         feature_names=features["feature_names"],
         summary_func_middle=Utils.trim_func,
         summary_func_var=Utils.trim_func,
         kwargs_middle={"func": np.nanmean, "percent": 0.05},
         kwargs_var={"func": np.nanstd, "percent": 0.05})
-    summary_objects = FeatureSummaries.calc_feature_summary(
+    summary_objects = SummarizeFeatures.calc_feature_summary(
         features=objects_in_wells,
         feature_names=np.array(["num.of.objects", "x.0.s.area"]),
         summary_func_middle=Utils.trim_func,

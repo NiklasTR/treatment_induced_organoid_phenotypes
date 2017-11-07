@@ -9,7 +9,7 @@ import Config
 import LoadFeatures
 
 
-def remove_blurry_organoids(features, feature_names, well_names):
+def label_blurry_organoids(features, feature_names, well_names):
     """
     Removes blurry organoids
 
@@ -26,12 +26,14 @@ def remove_blurry_organoids(features, feature_names, well_names):
         ..., [f in clf["feature_names"] for f in feature_names]]
 
     is_focused = clf["clf"].predict(features_clf)
-    features = features[..., [s == 1 for s in is_focused]]
-    well_names = well_names[[s == 1 for s in is_focused]]
+    organoid_type = np.array([
+        "GOOD" if val == 1 else "BLURRY" for val in is_focused])
+    # features = features[..., [s == 1 for s in is_focused]]
+    # well_names = well_names[[s == 1 for s in is_focused]]
 
     return {
         "features": features, "feature_names": feature_names,
-        "well_names": well_names}
+        "well_names": well_names, "organoid_type": organoid_type}
 
 
 def get_blurry_organoid_classifier():

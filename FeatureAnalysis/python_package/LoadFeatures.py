@@ -2,7 +2,7 @@ import os
 import Config
 import h5py
 import numpy as np
-import re
+# import re
 
 
 def load_organoid_features(wells=None, plates=None, normalized=False):
@@ -53,9 +53,15 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
         raise ValueError("At least one of 'wells' and 'plates' must be a list")
     # If 'plates' is set but 'wells' is not
     elif wells is None and plates is not None:
-        wells = sorted([
-            s for plate in plates for s in
-            os.listdir(os.path.join(Config.FEATUREDIR, plate, "wells"))])
+        if normalized:
+            wells = sorted([
+                s for plate in plates for s in
+                os.listdir(os.path.join(Config.FEATUREDIR, plate,
+                                        "wells_normalized"))])
+        else:
+            wells = sorted([
+                s for plate in plates for s in
+                os.listdir(os.path.join(Config.FEATUREDIR, plate, "wells"))])
     # If 'wells' is set but 'plates' is not
     elif wells is not None and plates is None:
         # Trim any trailing text from the wells
@@ -85,8 +91,11 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
                 well_features = h5handle[hdf5_keys[0]][()]
                 well_feature_names = h5handle[hdf5_keys[1]][()]
             well_names.append(np.repeat(
-                re.sub("_[0-9a-zA-Z]*\.h5", "", well),
+                "_".join(well.split("_")[0:3]),
                 well_features.shape[1]))
+            # well_names.append(np.repeat(
+            #     re.sub("_[0-9a-zA-Z]*\.h5", "", well),
+            #     well_features.shape[1]))
             features.append(well_features)
             feature_names.append(well_feature_names)
         except KeyError:

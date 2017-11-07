@@ -14,3 +14,4 @@ SIZETHRESHOLD = 1500
 BLURRYORGANOIDCLF = os.path.join(
     BASEDIR, "blurry_organoid_classifier_%s.pkl" % FEATURETYPE)
 DEADORGANOIDCLASSIFIERDIR = os.path.join(BASEDIR, "dead_organoid_classifier")
+DRUGTARGETCLASSIFIERDIR = os.path.join(BASEDIR, "drug_target_classifier")

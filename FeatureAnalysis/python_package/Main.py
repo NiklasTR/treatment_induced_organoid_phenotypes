@@ -5,7 +5,7 @@ import LoadFeatures
 import BlurryOrganoidClassifier
 import NormalizeFeatures
 import DeadOrganoidClassifier
-
+import SummarizeFeatures
 
 if __name__ == "__main__":
     try:
@@ -20,6 +20,7 @@ if __name__ == "__main__":
         print "Possible COMMAND <option> combinations:"
         print "- NORMALIZE_WELL <PLATE_ID>"
         print "- CLASSIFY_ORGANOIDS <PLATE_ID>"
+        print "- AVERAGE_WELLS <PLATE_ID>"
     elif cmd == "NORMALIZE_WELL":
         try:
             plate = sys.argv[2]
@@ -34,7 +35,7 @@ if __name__ == "__main__":
             print well
             try:
                 FEATURES = LoadFeatures.load_organoid_features(wells=[well])
-                FEATURES = BlurryOrganoidClassifier.remove_blurry_organoids(
+                FEATURES = BlurryOrganoidClassifier.label_blurry_organoids(
                     **FEATURES)
                 FEATURES = NormalizeFeatures.get_normalized_organoid_features(
                     **FEATURES)
@@ -47,6 +48,13 @@ if __name__ == "__main__":
             print "Usage: %s CLASSIFY_ORGANOIDS [plate_id]" % sys.argv[0]
             sys.exit()
         cls = DeadOrganoidClassifier.classify_organoids(plate=plate)
+    elif cmd == "AVERAGE_WELLS":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s AVERAGE_WELLS [plate_id]" % sys.argv[0]
+            sys.exit()
+        wellavg = SummarizeFeatures.calc_well_summaries(plate=plate)
     else:
         print "Usage: %s [COMMAND] <options>" % sys.argv[0]
         print "Run '%s help' for a list of commands" % sys.argv[0]

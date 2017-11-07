@@ -127,9 +127,28 @@ def train_classifier(cell_line, return_data=False, save=True):
     neg_ctrls = [("DMSO", None)]
 
     # Run over one cell line
-    plates = [
+    plates = sorted([
         plate for plate in os.listdir(Config.FEATUREDIR)
-        if plate.startswith(cell_line) if plate.endswith("L08")]
+        if plate.startswith(cell_line) if plate.endswith("L08")])
+
+    # Use only re-imaged plates (9XX vs 0XX)
+    plate_ids = [s[8:11] for s in plates]
+    use_plate = []
+    for plate_id in plate_ids:
+        if plate_id[0] == "9":
+            use_plate.append(True)
+            continue
+        reimaged = "9" + plate_id[1:3]
+        if reimaged in plate_ids:
+            use_plate.append(False)
+        else:
+            use_plate.append(True)
+    plates = [
+        plates[i] for i in
+        range(len(plates)) if use_plate[i]]
+
+    # Sort the plates
+    plates = sorted(plates, key=lambda x: x[9:14])
 
     # Load control features on plate
     pos_ctrl_features = []
