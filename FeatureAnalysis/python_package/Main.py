@@ -1,11 +1,8 @@
 import sys
 import Config
 import os
-import LoadFeatures
-import BlurryOrganoidClassifier
-import NormalizeFeatures
 import DeadOrganoidClassifier
-import SummarizeFeatures
+import ProcessFeatures
 
 if __name__ == "__main__":
     try:
@@ -34,10 +31,10 @@ if __name__ == "__main__":
         for well in all_wells:
             print well
             try:
-                FEATURES = LoadFeatures.load_organoid_features(wells=[well])
-                FEATURES = BlurryOrganoidClassifier.label_blurry_organoids(
+                FEATURES = ProcessFeatures.load_organoid_features(wells=[well])
+                FEATURES = ProcessFeatures.label_blurry_organoids(
                     **FEATURES)
-                FEATURES = NormalizeFeatures.get_normalized_organoid_features(
+                FEATURES = ProcessFeatures.get_normalized_organoid_features(
                     **FEATURES)
             except:
                 continue
@@ -54,7 +51,14 @@ if __name__ == "__main__":
         except IndexError:
             print "Usage: %s AVERAGE_WELLS [plate_id]" % sys.argv[0]
             sys.exit()
-        wellavg = SummarizeFeatures.calc_well_summaries(plate=plate)
+        wellavg = ProcessFeatures.calc_well_summaries(plate=plate)
+    elif cmd == "BLURRY_ORGANOID_STATS":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s CLASSIFY_ORGANOIDS [plate_id]" % sys.argv[0]
+            sys.exit()
+        cls = ProcessFeatures.create_blurry_organoid_statistics(plate=plate)
     else:
         print "Usage: %s [COMMAND] <options>" % sys.argv[0]
         print "Run '%s help' for a list of commands" % sys.argv[0]

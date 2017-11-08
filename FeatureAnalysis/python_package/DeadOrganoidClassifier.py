@@ -8,6 +8,19 @@ import sklearn.ensemble
 import sklearn.model_selection
 
 
+def get_classification_labels(features, feature_names, well_names, object_type):
+    """
+    Gets the dead/live label of a given set of features. Returns a (numpy)
+    array of labels in which any original
+    :param features:
+    :param feature_names:
+    :param well_names:
+    :param object_type:
+    :return:
+    """
+    pass
+
+
 def classify_organoids(plate):
     """
     Classifies the organoids into either live or dead organoids
@@ -89,7 +102,7 @@ def classify_organoids(plate):
         return dead_percentage
 
 
-def train_classifier(cell_line, return_data=False, save=True):
+def train_classifier(cell_line, save=True):
     """
     Train a classifier to learn the difference between a live and a dead
     organoid. The live and dead organoids are taken from "control" wells.
@@ -99,8 +112,6 @@ def train_classifier(cell_line, return_data=False, save=True):
     and 1.0. Negative controls are DMSO wells.
 
     :param cell_line:
-    :param return_data: Boolean. Whether or not to return the training
-        data as well.
     :param save: Boolean. If True, the function tries to load a preexisting
         classifier and also saves a newly trained classifier to disk.
     :return: A tuple (classifier, accuracy, features used) or
@@ -213,11 +224,24 @@ def train_classifier(cell_line, return_data=False, save=True):
     neg_ctrl_features = np.transpose(
         np.concatenate(neg_ctrl_features, axis=1))
 
+    pos_ctrl_object_types = np.concatenate(pos_ctrl_object_types)
+    neg_ctrl_object_types = np.concatenate(neg_ctrl_object_types)
+
+    # Remove blurry organoids from training
+    pos_ctrl_features = pos_ctrl_features[pos_ctrl_object_types != "BLURRY"]
+    pos_ctrl_object_types = pos_ctrl_object_types[
+        pos_ctrl_object_types != "BLURRY"]
+    neg_ctrl_features = neg_ctrl_features[neg_ctrl_object_types != "BLURRY"]
+    neg_ctrl_object_types = neg_ctrl_object_types[
+        neg_ctrl_object_types != "BLURRY"]
+
     # Remove bad organoids from dataset (i.e. no features at all)
     bad_wells_pos = np.sum(np.isfinite(pos_ctrl_features), axis=1)
     pos_ctrl_features = pos_ctrl_features[bad_wells_pos >= 0, :]
+    pos_ctrl_object_types = pos_ctrl_object_types[bad_wells_pos >= 0]
     bad_wells_neg = np.sum(np.isfinite(neg_ctrl_features), axis=1)
     neg_ctrl_features = neg_ctrl_features[bad_wells_neg >= 0, :]
+    neg_ctrl_object_types = neg_ctrl_object_types[bad_wells_neg >= 0]
 
     # Remove bad features (any NaN values)
     combined_posneg = np.concatenate(
@@ -249,12 +273,11 @@ def train_classifier(cell_line, return_data=False, save=True):
 
     if save:
         with open(clf_fn, "wb") as f:
-            pickle.dump((clf, acc, feature_names), f, pickle.HIGHEST_PROTOCOL)
+            pickle.dump((
+                clf, acc, feature_names, x_test, y_test),
+                f, pickle.HIGHEST_PROTOCOL)
 
-    if return_data:
-        return clf, acc, feature_names, x, y
-    else:
-        return clf, acc, feature_names
+    return clf, acc, feature_names, x_test, y_test
 
 
 def get_wells_for_treatment(plate, treatments=None, concentrations=None):
