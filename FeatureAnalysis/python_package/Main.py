@@ -18,6 +18,7 @@ if __name__ == "__main__":
         print "- NORMALIZE_WELL <PLATE_ID>"
         print "- CLASSIFY_ORGANOIDS <PLATE_ID>"
         print "- AVERAGE_WELLS <PLATE_ID>"
+        print "- BLURRY_ORGANOID_STATS <PLATE_ID>"
     elif cmd == "NORMALIZE_WELL":
         try:
             plate = sys.argv[2]
@@ -56,9 +57,16 @@ if __name__ == "__main__":
         try:
             plate = sys.argv[2]
         except IndexError:
-            print "Usage: %s CLASSIFY_ORGANOIDS [plate_id]" % sys.argv[0]
+            print "Usage: %s BLURRY_ORGANOID_STATS [plate_id]" % sys.argv[0]
             sys.exit()
         cls = ProcessFeatures.create_blurry_organoid_statistics(plate=plate)
+    elif cmd == "DMSO_NORM":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s DMSO_NORM [plate_id]" % sys.argv[0]
+            sys.exit()
+        cls = ProcessFeatures.get_dmso_average_for_plate(plate=plate)
     else:
         print "Usage: %s [COMMAND] <options>" % sys.argv[0]
         print "Run '%s help' for a list of commands" % sys.argv[0]

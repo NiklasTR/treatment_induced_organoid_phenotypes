@@ -20,7 +20,8 @@ import scipy.stats.mstats
 # LOAD ORGANOIDS #
 
 
-def load_organoid_features(wells=None, plates=None, normalized=False):
+def load_organoid_features(
+        wells=None, plates=None, normalized=False, strip_field_info=True):
     """
     Loads the organoid features. Can load features from all passed plates or
     all passed wells. If both 'plates' and 'wells' are not None, then 'plates'
@@ -39,6 +40,8 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
     :param wells:
     :param plates:
     :param normalized:
+    :param strip_field_info: Boolean. DO NOT CHANGE THIS unless you know
+    what you're doing. The workflow currently expects this to be True.
     :return:
     """
     # Check that plates and wells are non-string iterables
@@ -134,10 +137,11 @@ def load_organoid_features(wells=None, plates=None, normalized=False):
     well_names = np.concatenate(well_names)
 
     # Remove FIELD field, this is useless for this workflow
-    features = np.delete(
-        features, np.where(feature_names == "FIELD")[0], axis=0)
-    feature_names = np.delete(
-        feature_names, np.where(feature_names == "FIELD")[0])
+    if strip_field_info:
+        features = np.delete(
+            features, np.where(feature_names == "FIELD")[0], axis=0)
+        feature_names = np.delete(
+            feature_names, np.where(feature_names == "FIELD")[0])
 
     if normalized:
         return {
@@ -240,18 +244,28 @@ def learn_blurry_organoids():
 
     cy3_ind = np.where(feature_names == "x.a.b.q099")[0][0]
     max_cy3_intensity = features[:, cy3_ind]
-    max_cy3_thresh = np.percentile(max_cy3_intensity, 90)
+    max_cy3_thresh = np.percentile(max_cy3_intensity, 95)
     min_cy3_thresh = np.percentile(max_cy3_intensity, 35)
+    fitc_ind = np.where(feature_names == "x.b.b.q099")[0][0]
+    max_fitc_intensity = features[:, fitc_ind]
+    max_fitc_thresh = np.percentile(max_fitc_intensity, 95)
+    min_fitc_thresh = np.percentile(max_fitc_intensity, 35)
     dapi_ind = np.where(feature_names == "x.c.b.q099")[0][0]
     max_dapi_intensity = features[:, dapi_ind]
-    max_dapi_thresh = np.percentile(max_dapi_intensity, 90)
+    max_dapi_thresh = np.percentile(max_dapi_intensity, 95)
     min_dapi_thresh = np.percentile(max_dapi_intensity, 35)
-    pos_training = features[np.logical_and(
-        max_dapi_intensity >= max_dapi_thresh,
-        max_cy3_thresh >= max_cy3_thresh), :]
-    neg_training = features[np.logical_and(
-        max_dapi_intensity <= min_dapi_thresh,
-        max_cy3_intensity <= min_cy3_thresh), :]
+
+    # The positive samples are those with pixels with intensities in the top
+    # 95th percentile in at least one of the channels. Negative samples are
+    # those with intensities in the bottom 35th percentile in ALL channels.
+    pos_training = features[
+        (max_cy3_intensity >= max_cy3_thresh) +
+        (max_fitc_intensity >= max_fitc_thresh) +
+        (max_dapi_intensity >= max_dapi_thresh), :]
+    neg_training = features[
+        (max_cy3_intensity <= min_cy3_thresh) *
+        (max_dapi_intensity <= min_dapi_thresh) *
+        (max_fitc_intensity <= min_fitc_thresh), :]
     min_size = min(pos_training.shape[0], neg_training.shape[0])
     pos_rand_ind = np.random.choice(
         a=range(pos_training.shape[0]), size=min_size)
@@ -287,6 +301,97 @@ def learn_blurry_organoids():
     return {
         "clf": rfclf, "feature_names": altered_feature_names,
         "accuracy": val_acc}
+
+
+def test_blurry_organoid_classifier(well_id=None, field_id=0):
+    """
+    A function to visually test the blurry organoid classifier
+    
+    Wells to visualize:
+    M001W01P012L05_N_06
+    M001A03P006L05_N_06
+    M001B04P008L07_M_12
+    D018T01P906L03_A_12
+
+    :param well_id:
+    :param field_id:
+    :return:
+    """
+    import matplotlib.pyplot as plt
+
+    if well_id is None:
+        well_id = "M001W01P012L05_N_06"
+
+    plate, row, col = well_id.split("_")[0:3]
+
+    segmentation_dir = os.path.join(
+        os.path.dirname(Config.FEATUREDIR), "segmentation")
+    projection_dir = os.path.join(
+        os.path.dirname(Config.FEATUREDIR), "hdf5projection")
+
+    features = load_organoid_features(wells=[well_id], strip_field_info=False)
+
+    segmask_fn = os.path.join(
+        segmentation_dir, plate,
+        "%s_%s_%s_DNNsegmentation.h5" % (plate, row, col))
+    with h5py.File(segmask_fn, "r") as h5handle:
+        m = h5handle["mask"][field_id, ...]
+        m[m > 0] = 1
+        mask = m
+
+    proj_fn = os.path.join(
+        projection_dir, plate,
+        "%s_%s_%s_contrastProjections.h5" % (plate, row, col))
+    with h5py.File(proj_fn, "r") as h5handle:
+        proj = h5handle["images"][field_id, ...]
+
+    well_objects = features["features"][
+        features["feature_names"] == "FIELD", :][0] == (field_id + 1)
+    features["features"] = features["features"][..., well_objects]
+    features["well_names"] = features["well_names"][well_objects]
+
+    # Remove small spots as these aren't organoids and irrelevant for this
+    # visualization
+    # sizes = np.squeeze(test_features[:, np.where(test_feature_names == "x.0.s.area")[0]])
+    # test_features = test_features[[s >= 1000 for s in sizes], ...]
+
+    # Run classifier
+    features = label_blurry_organoids(**features)
+
+    # Preprocess projection for visualization
+    proj = np.transpose(proj, (1, 2, 0))
+    proj = proj.astype(np.float32)
+    proj /= np.min(np.max(proj, axis=(0, 1)))
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(121)
+    plt.imshow(mask)
+    for organoid_id in range(features["features"].shape[1]):
+        # R and Python store x- and y- coordinates in reverse order for matrices.
+        # However, matplotlib flips them AGAIN, effectively cancelling the
+        # difference. The double reverse order is kept here for clarity's sake,
+        # however.
+        y, x = features["features"][..., organoid_id][0:2]
+        bx, by = x, y
+        # bx = np.sign(mask.shape[0]/2 - x) * 30 + x
+        # by = np.sign(mask.shape[1]/2 - y) * 30 + y
+        if features["object_type"][organoid_id] == "BLURRY":
+            # ax1.annotate("B" + str(organoid_id), xy=(y, x))
+            bbox_props = dict(
+                boxstyle="round", fc="r", ec="0.6", alpha=0.3)
+            ax1.text(
+                by, bx, "B", ha="center",
+                va="center", size=10, bbox=bbox_props)
+        else:
+            # ax1.annotate("S" + str(organoid_id), xy=(y, x))
+            bbox_props = dict(
+                boxstyle="round", fc="g", ec="0.6", alpha=0.3)
+            ax1.text(
+                by, bx, "S", ha="center",
+                va="center", size=10, bbox=bbox_props)
+    ax2 = fig.add_subplot(122)
+    plt.imshow(proj)
+    plt.show()
 
 
 def create_blurry_organoid_statistics(plate):
