@@ -244,28 +244,37 @@ def learn_blurry_organoids():
 
     cy3_ind = np.where(feature_names == "x.a.b.q099")[0][0]
     max_cy3_intensity = features[:, cy3_ind]
-    max_cy3_thresh = np.percentile(max_cy3_intensity, 95)
+    max_cy3_thresh = np.percentile(max_cy3_intensity, 90)
     min_cy3_thresh = np.percentile(max_cy3_intensity, 35)
     fitc_ind = np.where(feature_names == "x.b.b.q099")[0][0]
     max_fitc_intensity = features[:, fitc_ind]
-    max_fitc_thresh = np.percentile(max_fitc_intensity, 95)
     min_fitc_thresh = np.percentile(max_fitc_intensity, 35)
     dapi_ind = np.where(feature_names == "x.c.b.q099")[0][0]
     max_dapi_intensity = features[:, dapi_ind]
-    max_dapi_thresh = np.percentile(max_dapi_intensity, 95)
     min_dapi_thresh = np.percentile(max_dapi_intensity, 35)
 
+    # BAD VERSION
     # The positive samples are those with pixels with intensities in the top
     # 95th percentile in at least one of the channels. Negative samples are
     # those with intensities in the bottom 35th percentile in ALL channels.
-    pos_training = features[
-        (max_cy3_intensity >= max_cy3_thresh) +
-        (max_fitc_intensity >= max_fitc_thresh) +
-        (max_dapi_intensity >= max_dapi_thresh), :]
+    # pos_training = features[
+    #     (max_cy3_intensity >= max_cy3_thresh) +
+    #     (max_fitc_intensity >= max_fitc_thresh) +
+    #     (max_dapi_intensity >= max_dapi_thresh), :]
+    # neg_training = features[
+    #     (max_cy3_intensity <= min_cy3_thresh) *
+    #     (max_dapi_intensity <= min_dapi_thresh) *
+    #     (max_fitc_intensity <= min_fitc_thresh), :]
+
+    # The positive samples contain pixels with a DAPI intensity in the top
+    # 90th percentile. Negative samples are those with intensities in the
+    # bottom 35th percentile in ALL channels.
+    pos_training = features[max_cy3_intensity >= max_cy3_thresh, :]
     neg_training = features[
         (max_cy3_intensity <= min_cy3_thresh) *
         (max_dapi_intensity <= min_dapi_thresh) *
         (max_fitc_intensity <= min_fitc_thresh), :]
+
     min_size = min(pos_training.shape[0], neg_training.shape[0])
     pos_rand_ind = np.random.choice(
         a=range(pos_training.shape[0]), size=min_size)

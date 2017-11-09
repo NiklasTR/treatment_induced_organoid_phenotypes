@@ -531,7 +531,7 @@ I perform a stability selection over the entire screen and then individually for
 ```{r}
 # If data already exists, skip this part.
 if(!file.exists("QC_human__stability_selection__features.rds")){
-  source("../functions/StabilitySelection.R")
+  source("../../functions/StabilitySelection.R")
   
   # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.99).
   features_cor = cor(features, use = "pairwise.complete.obs")
@@ -574,7 +574,7 @@ plot(ggplot(data = data.frame(
 
 ## Individually for each Cell Line
 ```{r}
-source("../functions/StabilitySelection.R")
+source("../../functions/StabilitySelection.R")
 for(cell_line in cell_lines) {
   # only run this if the data doesn't exist yet
   if(file.exists(sprintf("QC_human__stability_selection__features_%s.rds", cell_line))) next

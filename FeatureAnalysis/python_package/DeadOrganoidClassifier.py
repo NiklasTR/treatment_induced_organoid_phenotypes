@@ -8,7 +8,8 @@ import sklearn.ensemble
 import sklearn.model_selection
 
 
-def get_classification_labels(features, feature_names, well_names, object_type):
+def get_classification_labels(
+        features, feature_names, well_names, object_type, return_probs=False):
     """
     Gets the dead/live label of a given set of features. Returns a (numpy)
     array of labels in which any original
@@ -16,9 +17,45 @@ def get_classification_labels(features, feature_names, well_names, object_type):
     :param feature_names:
     :param well_names:
     :param object_type:
+    :param return_probs:
     :return:
     """
-    pass
+    # Handle each cell line separately
+    cell_lines = np.array([wn[0:7] for wn in well_names])
+    out_vec = []
+    for cl in set(cell_lines):
+        cl_features = np.transpose(features[..., cell_lines == cl])
+
+        # Impute missing features
+        # This is done by calculating the mean and standard deviation of each
+        # feature and assigning all NA entries randomly selected values from
+        # a normal distribution. If all features are NA, then a distribution
+        # N(0, 1) is used
+        # The imputation is done for each training set individually
+        masked_features = np.ma.array(
+            data=cl_features,
+            mask=~np.isfinite(cl_features))
+        for ii in range(len(feature_names)):
+            na_features = ~np.isfinite(cl_features[..., ii])
+            if np.sum(na_features) == 0:
+                continue
+            if np.sum(~na_features) == 0:
+                f_mean_pos = 0
+                f_sd_pos = 1
+            else:
+                f_mean_pos = np.mean(masked_features[..., ii])
+                f_sd_pos = np.std(masked_features[..., ii])
+            cl_features[..., ii][na_features] = np.random.normal(
+                f_mean_pos, f_sd_pos, np.sum(na_features))
+
+        clf = train_classifier(cl, save=False)
+        if return_probs:
+            out_vec.append(clf[0].predict_proba(cl_features))
+        else:
+            out_vec.append(clf[0].predict(cl_features))
+
+    out_vec = np.concatenate(out_vec, axis=0)
+    return out_vec
 
 
 def classify_organoids(plate):
@@ -36,70 +73,82 @@ def classify_organoids(plate):
         "%s_organoid_classification.csv" % plate)
     if os.path.isfile(out_fn):
         return pd.read_csv(out_fn)
-    else:
-        clf = train_classifier(plate[0:7], save=True)
 
-        # Load layout
-        layout_id = plate[11:14]
-        layout = pd.read_excel(
-            io=os.path.join(Config.LAYOUTDIR, "%s.xlsx" % layout_id))
+    clf = train_classifier(plate[0:7], save=True)
 
-        well_dir = os.path.join(Config.FEATUREDIR, plate, "wells_normalized")
-        wells = sorted(
-            [well for well in os.listdir(well_dir) if
-             well.startswith(plate)])
+    # Load layout
+    layout_id = plate[11:14]
+    layout = pd.read_excel(
+        io=os.path.join(Config.LAYOUTDIR, "%s.xlsx" % layout_id))
 
-        dead_percentage = []
-        for well in wells:
-            well_fn = os.path.join(well_dir, well)
-            with h5py.File(well_fn, "r") as h5handle:
-                features = np.transpose(
-                    h5handle["features_%s" % Config.FEATURETYPE][()])
-                feature_names = h5handle["feature_names_%s" % Config.FEATURETYPE][()]
+    well_dir = os.path.join(Config.FEATUREDIR, plate, "wells_normalized")
+    wells = sorted(
+        [well for well in os.listdir(well_dir) if
+         well.startswith(plate)])
 
-            # Reduce features to required set
-            features = features[:, np.in1d(feature_names, clf[2])]
+    dead_percentage = []
+    for well in wells:
+        well_fn = os.path.join(well_dir, well)
+        with h5py.File(well_fn, "r") as h5handle:
+            features = np.transpose(
+                h5handle["features_%s" % Config.FEATURETYPE][()])
+            feature_names = h5handle["feature_names_%s" % Config.FEATURETYPE][()]
 
-            # Remove bad organoids
-            bad_organoids = np.sum(np.isfinite(features), axis=1)
-            features = features[bad_organoids != 0, :]
+        # Remove bad organoids
+        bad_organoids = np.sum(np.isfinite(features), axis=1)
+        features = features[bad_organoids != 0, :]
 
-            # Impute missing values
-            features_mask = np.ma.array(features, mask=False)
-            features_mask[~np.isfinite(features)] = np.ma.masked
-            col_medians = np.nanmedian(features_mask, axis=0)
-            col_medians = np.stack([col_medians] * features.shape[0])
-            features[~np.isfinite(features)] = col_medians[~np.isfinite(features)]
+        # Impute missing features
+        # This is done by calculating the mean and standard deviation of each
+        # feature and assigning all NA entries randomly selected values from
+        # a normal distribution. If all features are NA, then a distribution
+        # N(0, 1) is used
+        # The imputation is done for each training set individually
+        masked_features = np.ma.array(
+            data=features,
+            mask=~np.isfinite(features))
+        for ii in range(len(feature_names)):
+            na_features = ~np.isfinite(features[..., ii])
+            if np.sum(na_features) == 0:
+                continue
+            if np.sum(~na_features) == 0:
+                f_mean_pos = 0
+                f_sd_pos = 1
+            else:
+                f_mean_pos = np.mean(masked_features[..., ii])
+                f_sd_pos = np.std(masked_features[..., ii])
+            features[..., ii][na_features] = np.random.normal(
+                f_mean_pos, f_sd_pos, np.sum(na_features))
 
-            # Apply classifier to wells
-            prediction = clf[0].predict(features)
-            prediction_prob = clf[0].predict_proba(features)
-            index_live = np.where(clf[0].classes_ == "NEG")[0][0]
-            index_dead = np.where(clf[0].classes_ == "POS")[0][0]
-            prediction_prob_live = np.nanmedian(
-                prediction_prob[:, index_live][
-                    prediction_prob[:, index_live] > 0.5])
-            prediction_prob_dead = np.nanmedian(
-                prediction_prob[:, index_dead][
-                    prediction_prob[:, index_dead] > 0.5])
+        # Apply classifier to wells
+        prediction = clf[0].predict(features)
+        prediction_prob = clf[0].predict_proba(features)
+        index_live = np.where(clf[0].classes_ == "NEG")[0][0]
+        index_dead = np.where(clf[0].classes_ == "POS")[0][0]
+        prediction_prob_live = np.nanmedian(
+            prediction_prob[:, index_live][
+                prediction_prob[:, index_live] > 0.5])
+        prediction_prob_dead = np.nanmedian(
+            prediction_prob[:, index_dead][
+                prediction_prob[:, index_dead] > 0.5])
 
-            well_id = "".join(well.split("_")[1:3])
-            entry = layout.loc[
-                layout["Well_ID_384"] == well_id,
-                ("Product.Name", "concentration")]
-            entry["Product.Name"] = entry["Product.Name"].astype(str)
-            entry["concentration"] = entry["concentration"].astype(str)
-            entry["Well.ID"] = well_id
-            entry["Num.Objects"] = features.shape[0]
-            entry["Percent.Live"] = np.mean(prediction == "NEG")
-            entry["Percent.Dead"] = np.mean(prediction == "POS")
-            entry["Median.Certainty.Live"] = prediction_prob_live
-            entry["Median.Certainty.Dead"] = prediction_prob_dead
-            dead_percentage.append(entry)
-        dead_percentage = pd.concat(dead_percentage)
-        dead_percentage.to_csv(out_fn, index=False)
+        well_id = "".join(well.split("_")[1:3])
+        entry = layout.loc[
+            layout["Well_ID_384"] == well_id,
+            ("Product.Name", "concentration")]
+        entry["Product.Name"] = entry["Product.Name"].astype(str)
+        entry["concentration"] = entry["concentration"].astype(str)
+        entry["Well.ID"] = well_id
+        entry["Num.Objects"] = features.shape[0]
+        entry["Percent.Live"] = np.mean(prediction == "NEG")
+        entry["Percent.Dead"] = np.mean(prediction == "POS")
+        entry["Median.Certainty.Live"] = prediction_prob_live
+        entry["Median.Certainty.Dead"] = prediction_prob_dead
+        dead_percentage.append(entry)
+    dead_percentage = pd.concat(dead_percentage)
+    dead_percentage.to_csv(out_fn, index=False)
 
-        return dead_percentage
+    return dead_percentage
 
 
 def train_classifier(cell_line, save=True):
@@ -124,7 +173,7 @@ def train_classifier(cell_line, save=True):
     clf_fn = os.path.join(
         Config.DEADORGANOIDCLASSIFIERDIR,
         "OrganoidClassifier_%s.pkl" % cell_line)
-    if save and os.path.isfile(clf_fn):
+    if os.path.isfile(clf_fn):
         with open(clf_fn, "rb") as f:
             return pickle.load(f)
 
@@ -243,13 +292,39 @@ def train_classifier(cell_line, save=True):
     neg_ctrl_features = neg_ctrl_features[bad_wells_neg >= 0, :]
     neg_ctrl_object_types = neg_ctrl_object_types[bad_wells_neg >= 0]
 
-    # Remove bad features (any NaN values)
-    combined_posneg = np.concatenate(
-        (pos_ctrl_features, neg_ctrl_features), axis=0)
-    bad_features = np.sum(~np.isfinite(combined_posneg), axis=0)
-    pos_ctrl_features = pos_ctrl_features[:, bad_features == 0]
-    neg_ctrl_features = neg_ctrl_features[:, bad_features == 0]
-    feature_names = feature_names[bad_features == 0]
+    # Impute missing features
+    # This is done by calculating the mean and standard deviation of each
+    # feature and assigning all NA entries randomly selected values from
+    # a normal distribution. If all features are NA, then a distribution
+    # N(0, 1) is used
+    # The imputation is done for each training set individually
+    masked_pos = np.ma.array(
+        data=pos_ctrl_features,
+        mask=~np.isfinite(pos_ctrl_features))
+    masked_neg = np.ma.array(
+        data=neg_ctrl_features,
+        mask=~np.isfinite(neg_ctrl_features))
+    for ii in range(len(feature_names)):
+        na_pos_features = ~np.isfinite(pos_ctrl_features[..., ii])
+        na_neg_features = ~np.isfinite(neg_ctrl_features[..., ii])
+        if np.sum(na_pos_features) == 0 and np.sum(na_neg_features) == 0:
+            continue
+        if np.sum(~na_pos_features) == 0:
+            f_mean_pos = 0
+            f_sd_pos = 1
+        else:
+            f_mean_pos = np.mean(masked_pos[..., ii])
+            f_sd_pos = np.std(masked_pos[..., ii])
+        pos_ctrl_features[..., ii][na_pos_features] = \
+            np.random.normal(f_mean_pos, f_sd_pos, np.sum(na_pos_features))
+        if np.sum(~na_neg_features) == 0:
+            f_mean_neg = 0
+            f_sd_neg = 1
+        else:
+            f_mean_neg = np.mean(masked_neg[..., ii])
+            f_sd_neg = np.std(masked_neg[..., ii])
+        neg_ctrl_features[..., ii][na_neg_features] = \
+            np.random.normal(f_mean_neg, f_sd_neg, np.sum(na_neg_features))
 
     # Subsample to equalize training groups
     num_samples = min(pos_ctrl_features.shape[0], neg_ctrl_features.shape[0])
@@ -307,3 +382,41 @@ def get_wells_for_treatment(plate, treatments=None, concentrations=None):
     indices = np.logical_and(concentration_indices, treatment_indices)
 
     return layout.loc[indices, "Well_ID_384"].values.astype(str)
+
+
+def create_diagnostic_data():
+    """
+    This function generates diagnostic data for the dead/live classifiers.
+    This includes running each classifier on every other cell line's
+    validation data.
+    :return:
+    """
+
+    all_cell_lines = sorted(set([
+        plate[0:7] for plate in os.listdir(Config.FEATUREDIR)
+        if plate.startswith("D0")]))
+
+    # Load validation data and classifiers
+    val_data = []
+    clfs = []
+    for cl in all_cell_lines:
+        clf = train_classifier(cl, save=False)
+        val_data.append((clf[3], clf[4]))
+        clfs.append((clf[0], clf[2]))
+
+    # Calculate accuracy matrix
+    acc_matrix = []
+    for clf in clfs:
+        entry = []
+        for ii in range(len(val_data)):
+            vd = val_data[ii]
+            entry.append(clf[0].score(*vd))
+        acc_matrix.append(entry)
+
+    with open("dead_organoid_classifier/diagnostic_matrix.csv", "w") as f:
+        f.write("# Accuracy of classifier for cell line (ROW) applied to "
+                "validation data for cell line (COL)\n")
+        f.write("CLASSIFIER_DATA," + ",".join(all_cell_lines) + "\n")
+        for ii in range(len(acc_matrix)):
+            f.write(all_cell_lines[ii] + "," +
+                    ",".join([str(s) for s in acc_matrix[ii]]) + "\n")

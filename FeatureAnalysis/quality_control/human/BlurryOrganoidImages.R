@@ -20,3 +20,4 @@ for(plate in all_plate_files) {
   # colnames(ratio) = as.character(1:24)
   # pheatmap(ratio, cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = total_num)
 }
+worst_plates = do.call(rbind, worst_plates)
