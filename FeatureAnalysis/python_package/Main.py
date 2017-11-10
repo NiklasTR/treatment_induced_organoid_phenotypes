@@ -28,6 +28,10 @@ if __name__ == "__main__":
             print "Usage: %s NORMALIZE_WELL [plate_id]" % sys.argv[0]
             sys.exit()
 
+        # Calc blurry organoid stats
+        blurry_cls = ProcessFeatures.create_blurry_organoid_statistics(
+            plate=plate)
+
         # Calc DMSO average
         cls = ProcessFeatures.get_dmso_average_for_plate(plate=plate)
 
@@ -50,11 +54,6 @@ if __name__ == "__main__":
         # Calc plate average
         wellavg = ProcessFeatures.calc_well_summaries(plate=plate)
 
-        # Classify organoids
-        dead_cls = DeadOrganoidClassifier.classify_organoids(plate=plate)
-
-        # Blurry organoid stats
-        blurry_cls = ProcessFeatures.create_blurry_organoid_statistics(plate=plate)
     elif cmd == "NORMALIZE_WELLS":
         try:
             plate = sys.argv[2]

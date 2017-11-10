@@ -11,7 +11,6 @@ import numpy as np
 import sklearn.model_selection
 import sklearn.ensemble
 import re
-import random
 import pickle
 import pandas as pd
 import Utils
@@ -167,44 +166,57 @@ def label_blurry_organoids(features, feature_names, well_names):
     :return:
     """
 
-    clf = get_blurry_organoid_classifier()
+    all_plates = np.array([wn[0:14] for wn in well_names])
+    object_type = []
+    cur_plate = None
+    for plate in all_plates:
+        if plate == cur_plate:
+            continue
 
-    features_clf = np.array(features).transpose()
-    features_clf = features_clf[
-        ..., [f in clf["feature_names"] for f in feature_names]]
+        cur_plate = plate
+        clf = get_blurry_organoid_classifier(plate=plate)
 
-    is_focused = clf["clf"].predict(features_clf)
-    object_type = np.array([
-        "GOOD" if val == 1 else "BLURRY" for val in is_focused])
-    # features = features[..., [s == 1 for s in is_focused]]
-    # well_names = well_names[[s == 1 for s in is_focused]]
+        features_plate = features[:, all_plates == plate]
+
+        features_clf = np.array(features_plate).transpose()
+        features_clf = features_clf[
+            ..., [f in clf["feature_names"] for f in feature_names]]
+
+        is_focused = clf["clf"].predict(features_clf)
+        object_type.append(np.array([
+            "GOOD" if val == 1 else "BLURRY" for val in is_focused]))
+    object_type = np.concatenate(object_type)
 
     return {
         "features": features, "feature_names": feature_names,
         "well_names": well_names, "object_type": object_type}
 
 
-def get_blurry_organoid_classifier():
+def get_blurry_organoid_classifier(plate):
     """
     Loads the blurry organoid classifier
+    :param plate:
     :return:
     """
 
-    if os.path.isfile(Config.BLURRYORGANOIDCLF):
-        with open(Config.BLURRYORGANOIDCLF, "r") as f:
+    cls_fn = os.path.join(
+        Config.BLURRYORGANOIDDIR,
+        "Classifier_%s_%s.pkl" % (plate, Config.FEATURETYPE))
+    if os.path.isfile(cls_fn):
+        with open(cls_fn, "r") as f:
             clf = pickle.load(f)
     else:
         print(
-            "Training blurry organoid classifier for '%s'"
-            % Config.FEATURETYPE)
-        clf = learn_blurry_organoids()
+            "Training blurry organoid classifier for '%s_%s'"
+            % (plate, Config.FEATURETYPE))
+        clf = learn_blurry_organoids(plate=plate)
         clf["feature_type"] = Config.FEATURETYPE
-        with open(Config.BLURRYORGANOIDCLF, "w") as f:
+        with open(cls_fn, "w") as f:
             pickle.dump(clf, f)
     return clf
 
 
-def learn_blurry_organoids():
+def learn_blurry_organoids(plate):
     """
     Trains a classifier to tell the difference between blurry and in-focus
     organoids based on the features. This function currently explicitly
@@ -224,23 +236,15 @@ def learn_blurry_organoids():
     """
 
     with open(Config.BLURRYWELLFN, "r") as f:
-        blurry_wells = [s.strip() for s in f.readlines()]
-    all_plates = [
-        s for s in os.listdir(Config.FEATUREDIR) if
-        s.startswith("M001") or s.startswith("D0")]
-    features = []
-    feature_names = []
-    for plate in all_plates:
-        wells = [s for s in os.listdir(
-            os.path.join(Config.FEATUREDIR, plate, "wells"))]
-        wells = [s for s in wells if s[0:19] not in blurry_wells]
-        wells = random.sample(wells, 15)
-        well_features = load_organoid_features(wells=wells)
-        features.append(well_features["features"])
-        feature_names.append(well_features["feature_names"])
-    features = np.concatenate(features, axis=1)
-    features = features.transpose()
-    feature_names = feature_names[0]
+        blurry_wells = [
+            s.strip() for s in f.readlines() if s.startswith(plate)]
+
+    wells = [s for s in os.listdir(
+        os.path.join(Config.FEATUREDIR, plate, "wells"))]
+    wells = [s for s in wells if s[0:19] not in blurry_wells]
+    well_features = load_organoid_features(wells=wells)
+    features = np.transpose(well_features["features"])
+    feature_names = well_features["feature_names"]
 
     cy3_ind = np.where(feature_names == "x.a.b.q099")[0][0]
     max_cy3_intensity = features[:, cy3_ind]
@@ -252,19 +256,6 @@ def learn_blurry_organoids():
     dapi_ind = np.where(feature_names == "x.c.b.q099")[0][0]
     max_dapi_intensity = features[:, dapi_ind]
     min_dapi_thresh = np.percentile(max_dapi_intensity, 35)
-
-    # BAD VERSION
-    # The positive samples are those with pixels with intensities in the top
-    # 95th percentile in at least one of the channels. Negative samples are
-    # those with intensities in the bottom 35th percentile in ALL channels.
-    # pos_training = features[
-    #     (max_cy3_intensity >= max_cy3_thresh) +
-    #     (max_fitc_intensity >= max_fitc_thresh) +
-    #     (max_dapi_intensity >= max_dapi_thresh), :]
-    # neg_training = features[
-    #     (max_cy3_intensity <= min_cy3_thresh) *
-    #     (max_dapi_intensity <= min_dapi_thresh) *
-    #     (max_fitc_intensity <= min_fitc_thresh), :]
 
     # The positive samples contain pixels with a DAPI intensity in the top
     # 90th percentile. Negative samples are those with intensities in the
@@ -286,20 +277,34 @@ def learn_blurry_organoids():
     x = np.concatenate((neg_training, pos_training), axis=0)
     y = np.repeat((0, 1), min_size)
 
-    # Remove the feature used to annotate, and similar features, to prevent
-    # overfitting
-    remove_features_names = [
-        s for s in feature_names if
-        re.match("x\..*\.b", s)
-        is not None]
-    altered_feature_names = [
-        s for s in feature_names if s not in remove_features_names]
-    index_mask = np.ma.array(range(len(feature_names)), mask=False)
-    for feat_name in remove_features_names:
-        feat_index = np.where(feature_names == feat_name)[0][0]
-        index_mask[feat_index] = np.ma.masked
+    # Remove constant features
+    featrange = np.apply_along_axis(lambda i: np.max(i) - np.min(i), 0, x)
+    x = x[:, featrange > 0]
+    x_names = feature_names[featrange > 0]
 
-    x = x[:, index_mask.compressed()]
+    # Remove all intensity features
+    remove_features_names = np.array([
+        s for s in x_names if
+        re.match("x\..*\.b", s)
+        is not None])
+    remaining_x_names = np.array([
+        s for s in x_names if
+        s not in remove_features_names])
+    x_intensity = x[:, np.in1d(x_names, remove_features_names)]
+    x = x[:, np.in1d(x_names, remaining_x_names)]
+    x_names = x_names[np.in1d(x_names, remaining_x_names)]
+
+    # Remove features strongly correlated with any of the intensity features
+    cor = []
+    for ii in range(len(remaining_x_names)):
+        cor.append([])
+        for jj in range(len(remove_features_names)):
+            cor[ii].append(np.corrcoef(
+                x[:, ii], x_intensity[:, jj])[0, 1])
+    max_cor = np.array([max([abs(s) for s in cc]) for cc in cor])
+    x = x[:, max_cor < 0.6]
+    x_names = x_names[max_cor < 0.6]
+
     x_train, x_val, y_train, y_val = sklearn.model_selection.train_test_split(
         x, y, test_size=0.25)
 
@@ -308,7 +313,7 @@ def learn_blurry_organoids():
     val_acc = rfclf.score(x_val, y_val)
 
     return {
-        "clf": rfclf, "feature_names": altered_feature_names,
+        "clf": rfclf, "feature_names": x_names,
         "accuracy": val_acc}
 
 
@@ -411,15 +416,13 @@ def create_blurry_organoid_statistics(plate):
     :return:
     """
 
-    out_dir = os.path.join(Config.BASEDIR, "blurry_organoid_statistics")
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir)
-
-    out_fn = os.path.join(out_dir, "%s_blurry_organoid_statistics.csv" % plate)
+    out_fn = os.path.join(
+        Config.BLURRYORGANOIDDIR,
+        "%s_blurry_organoid_statistics.csv" % plate)
     if os.path.isfile(out_fn):
         return False
 
-    clf = get_blurry_organoid_classifier()
+    clf = get_blurry_organoid_classifier(plate=plate)
 
     wells = sorted([
         well for well in os.listdir(os.path.join(

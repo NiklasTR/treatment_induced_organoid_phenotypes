@@ -13,8 +13,6 @@ SIZETHRESHOLD = 1500
 BLURRYORGANOIDDIR = os.path.join(BASEDIR, "blurry_organoids")
 if not os.path.isdir(BLURRYORGANOIDDIR):
     os.makedirs(BLURRYORGANOIDDIR)
-BLURRYORGANOIDCLF = os.path.join(
-    BLURRYORGANOIDDIR, "Classifier_%s.pkl" % FEATURETYPE)
 BLURRYWELLFN = os.path.join(
     BLURRYORGANOIDDIR, "blurry_wells_predicted.txt")
 DEADORGANOIDCLASSIFIERDIR = os.path.join(BASEDIR, "dead_organoid_classifier")
