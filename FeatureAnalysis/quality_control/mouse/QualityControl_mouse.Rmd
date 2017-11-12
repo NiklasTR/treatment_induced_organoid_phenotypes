@@ -22,12 +22,13 @@ library(pander)
 # Directories and files
 config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
 # feature_dir = "/collab-ag-fischer/FeatureAnalysis/features"
-feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/features"
+feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/cell_line_features"
+blurry_organoid_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/blurry_organoids"
 source(file.path(config_dir, "watchdogConfig.R"))
 
 # Parameters
 feature_type = "organoids"
-hdf5_dataset = "features_tm05_zscore_rep"
+hdf5_dataset = "features_zscore_rep_organoids"
 ```
 
 # Data preprocessing
@@ -68,6 +69,14 @@ features_metadata = do.call(rbind, features_metadata)
 rownames(features_metadata) = sapply(strsplit(rownames(features_metadata), ".", fixed = TRUE), "[[", 2)
 ```
 
+Ensure that only wells with two replicates are kept
+```{r}
+rows_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+valid_row_ids = names(which(table(rows_repid) == 2))
+features = features[rows_repid %in% valid_row_ids, ]
+features_metadata = features_metadata[rows_repid %in% valid_row_ids, ]
+```
+
 For any number of reasons, some wells may not have been processed properly. In particular, if there is no information to the total number of organoids in a well then it can be safely discarded as this feature should always be computable.
 ```{r}
 na_rows = rownames(features)[!is.finite(features$organoids_num.of.objects)]
@@ -88,7 +97,10 @@ The features should now all be finite
 cat("Number of NaN features:", sum(!is.finite(as.matrix(features))))
 ```
 
-Lastly, some of the wells were found to be entirely blurry and are effectively unusable. These have been previously classified with a random forest classifier. The blurry wells and their replicates are filtered out.
+# Quality Control
+## Blurry Wells
+
+Some of the wells were found to be entirely blurry and are effectively unusable. These have been previously classified with a random forest classifier. The blurry wells and their replicates are filtered out.
 ```{r}
 blurry_wells = read.table("blurry_wells_mouse.txt", stringsAsFactors = FALSE)
 blurry_wells_repid = paste0(substr(blurry_wells$V1, 1, 7), "_", substr(blurry_wells$V1, 12, 19))
@@ -98,7 +110,33 @@ features = features[wells_to_keep,]
 features_metadata = features_metadata[wells_to_keep,]
 ```
 
-# Quality Control
+## Blurry Organoids
+
+The microscope images are projections of 3D image stacks. As a result, many organoids are not captured in focus by the microscope. A first step of quality control is remove wells (and necessarily their replicates), that do not have a sufficient number of focused organoids in the images. To ensure the image quality of a well, I require that the ratio of focused to blurry organoids is at least 50%. I also remove the replicates of these wells.
+```{r}
+plates = substr(rownames(features), 1, 14)
+blurry_well_dat = list()
+for(plate in unique(plates)) {
+  blurry_well_dat[[plate]] = read.csv(
+    file.path(blurry_organoid_dir, sprintf("%s_blurry_organoid_statistics.csv", plate)), 
+    row.names = 1)
+}
+blurry_well_dat = do.call(rbind, blurry_well_dat)
+rownames(blurry_well_dat) = sapply(
+  strsplit(rownames(blurry_well_dat), ".", fixed = TRUE), "[[", 2)
+blurry_well_dat = blurry_well_dat[rownames(features), ]
+blurry_well_dat$Ratio = blurry_well_dat$Focused_Organoids / 
+  (blurry_well_dat$Focused_Organoids + blurry_well_dat$Blurry_Organoids)
+
+remove_wells = rownames(blurry_well_dat)[blurry_well_dat$Ratio < 0.5]
+
+rw_repid = paste0(substr(remove_wells, 1, 7), "_", substr(remove_wells, 12, 19))
+all_wells_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+features = features[!all_wells_repid %in% rw_repid, ]
+features_metadata = features_metadata[!all_wells_repid %in% rw_repid, ]
+blurry_well_dat = blurry_well_dat[!all_wells_repid %in% rw_repid, ]
+```
+
 ## Cell Line Quality
 Normally, one would look at the z-factor, a degree of separation between positive and negative controls, for each feature to determine the assay quality. As there are no known positive controls for the mouse screen, I instead look at the z-factor for all treatments compared to the negative controls (DMSO) for a few characteristic features, the number of organoids, the total biomass, and the average organoid size. I expect that at least some of the treatments should show considerable differences to the DMSO controls in these features.
 
@@ -197,25 +235,25 @@ for(cell_line in cell_lines) {
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Total.Biomass, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
+  coord_cartesian(ylim = c(-1, 1)) + 
   ggtitle(label = "Z-Factor of the Total Biomass for the Treatments of each Cell Line")
 ```
 
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Num.Organoids, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
+  coord_cartesian(ylim = c(-1, 1)) + 
   ggtitle(label = "Z-Factor of the Number of Organoids for the Treatments of each Cell Line")
 ```
 
 ```{r}
 ggplot(data = ggplotdf) +
   geom_line(aes(x = Treatment, y = Avg.Organoid.Size, color = Cell.Line)) + 
-  coord_cartesian(ylim = c(-1, 1), xlim = c(1000, 1250)) + 
+  coord_cartesian(ylim = c(-1, 1)) + 
   ggtitle(label = "Z-Factor of the Average Organoid Size for the Treatments of each Cell Line")
 ```
 
-While the quality of the screen is far from ideal, only cell line M001W01 gives reason for concern.
+While the quality of the screen is far from ideal by this standard, all cell lines perform equally well.
 
 ## Pruning Features
 
@@ -287,7 +325,7 @@ ggplot(data = cl_correlations) + geom_line(aes(x = Features, y = Correlations, c
   ggtitle("Correlations between Replicates for each Individual Cell Line")
 ```
 
-Cell lines M001W01 and M001A03 both show inadequate correlations. This will become a problem during the feature selection, which requires that features correlate significantly between replicates.
+Cell lines M001W01 and M001A03 both show very low correlations. This will become a problem during the feature selection, which requires that features correlate significantly between replicates.
 
 ### Screen-wide
 ```{r, warning=FALSE}
@@ -349,7 +387,7 @@ The features selected via between-replicate correlation may still be highly redu
 ```{r}
 # If data already exists, skip this part.
 if(!file.exists("QC_mouse__stability_selection__features.rds")){
-  source("../functions/StabilitySelection.R")
+  source("../../functions/StabilitySelection.R")
   
   # To reduce the runtime of the feature selection, I remove strongly correlating features (r >= +/-0.99).
   features_cor = cor(features, use = "pairwise.complete.obs")
@@ -367,7 +405,7 @@ if(!file.exists("QC_mouse__stability_selection__features.rds")){
   selection = selectByStability(
     features = features_reduced, metadata = features_metadata, 
     preselect = c("organoids_num.of.objects", "Total.Biomass", "organoids_x.0.s.area_expected"), 
-    Rdim = ncol(features_reduced)-3, verbose = FALSE)
+    Rdim = ncol(features_reduced)-3, verbose = TRUE)
   
   # Keep only the selected features until the ratio drops to 0.5
   selected_features = na.omit(selection$selected[selection$ratioPositive >= 0.5])

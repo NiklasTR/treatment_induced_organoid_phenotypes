@@ -6,6 +6,8 @@ import os
 import pickle
 import sklearn.ensemble
 import sklearn.model_selection
+import sklearn.metrics
+import sklearn.preprocessing
 
 
 def get_classification_labels(
@@ -413,10 +415,67 @@ def create_diagnostic_data():
             entry.append(clf[0].score(*vd))
         acc_matrix.append(entry)
 
-    with open("dead_organoid_classifier/diagnostic_matrix.csv", "w") as f:
+    out_fn = os.path.join(
+        Config.DEADORGANOIDCLASSIFIERDIR,
+        "diagnostic_matrix.csv")
+    with open(out_fn, "w") as f:
         f.write("# Accuracy of classifier for cell line (ROW) applied to "
                 "validation data for cell line (COL)\n")
         f.write("CLASSIFIER_DATA," + ",".join(all_cell_lines) + "\n")
         for ii in range(len(acc_matrix)):
             f.write(all_cell_lines[ii] + "," +
                     ",".join([str(s) for s in acc_matrix[ii]]) + "\n")
+
+
+def create_roc_data(cell_line, data_cell_line=None, plot=False):
+    """
+    Create ROC data for the given cell line. Can optionally create ROC data
+    using a classifier for one cell line and the validation data of another
+    cell line.
+    :param cell_line:
+    :param data_cell_line:
+    :param plot: Boolean. Determines whether data is returned or a plot shown
+
+    :return:
+    """
+    if data_cell_line is None:
+        data_cell_line = cell_line
+    clf = train_classifier(cell_line, save=False)
+    classifier = clf[0]
+    val_clf = train_classifier(data_cell_line, save=False)
+    x_val = val_clf[3]
+    y_val = val_clf[4]
+
+    y_true = sklearn.preprocessing.label_binarize(
+        y_val, classes=classifier.classes_)[..., 0]
+    y_pred = classifier.predict_proba(x_val)[..., 1]
+    fpr, tpr, thresh = sklearn.metrics.roc_curve(y_true, y_pred)
+    roc_auc = sklearn.metrics.auc(fpr, tpr)
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        lw = 2
+        plt.plot(fpr, tpr, color='darkorange',
+                 lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+        plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic example')
+        plt.legend(loc="lower right")
+        plt.show()
+    else:
+        out_fn = os.path.join(
+            Config.DEADORGANOIDCLASSIFIERDIR,
+            "roc_data_%s_on_%s.csv" % (cell_line, data_cell_line))
+        out_dat = np.stack((thresh, fpr, tpr), axis=1)
+        with open(out_fn, "w") as f:
+            f.write(
+                "# ROC Data for %s classifier applied to %s data\n"
+                % (cell_line, data_cell_line))
+            f.write("# AUC: %s\n" % roc_auc)
+            f.write("Threshold,FalsePosRate,TruePosRate\n")
+            for ii in range(out_dat.shape[0]):
+                f.write(",".join(out_dat[ii, ...].astype(str)) + "\n")

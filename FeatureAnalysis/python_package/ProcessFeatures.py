@@ -125,6 +125,9 @@ def load_organoid_features(
             except KeyError:
                 pass
 
+    if len(features) == 0:
+        return None
+
     # Check feature names consistency
     fname_iter = iter(feature_names)
     if not all(np.array_equal(next(fname_iter), rest) for rest in fname_iter):
@@ -249,13 +252,13 @@ def learn_blurry_organoids(plate):
     cy3_ind = np.where(feature_names == "x.a.b.q099")[0][0]
     max_cy3_intensity = features[:, cy3_ind]
     max_cy3_thresh = np.percentile(max_cy3_intensity, 90)
-    min_cy3_thresh = np.percentile(max_cy3_intensity, 35)
+    min_cy3_thresh = np.percentile(max_cy3_intensity, 30)
     fitc_ind = np.where(feature_names == "x.b.b.q099")[0][0]
     max_fitc_intensity = features[:, fitc_ind]
-    min_fitc_thresh = np.percentile(max_fitc_intensity, 35)
+    min_fitc_thresh = np.percentile(max_fitc_intensity, 30)
     dapi_ind = np.where(feature_names == "x.c.b.q099")[0][0]
     max_dapi_intensity = features[:, dapi_ind]
-    min_dapi_thresh = np.percentile(max_dapi_intensity, 35)
+    min_dapi_thresh = np.percentile(max_dapi_intensity, 30)
 
     # The positive samples contain pixels with a DAPI intensity in the top
     # 90th percentile. Negative samples are those with intensities in the
@@ -326,6 +329,8 @@ def test_blurry_organoid_classifier(well_id=None, field_id=0):
     M001A03P006L05_N_06
     M001B04P008L07_M_12
     D018T01P906L03_A_12
+    D022T01P005L02_A_17
+    D019T01P006L03_G_07
 
     :param well_id:
     :param field_id:
@@ -391,11 +396,12 @@ def test_blurry_organoid_classifier(well_id=None, field_id=0):
         # by = np.sign(mask.shape[1]/2 - y) * 30 + y
         if features["object_type"][organoid_id] == "BLURRY":
             # ax1.annotate("B" + str(organoid_id), xy=(y, x))
-            bbox_props = dict(
-                boxstyle="round", fc="r", ec="0.6", alpha=0.3)
-            ax1.text(
-                by, bx, "B", ha="center",
-                va="center", size=10, bbox=bbox_props)
+            # bbox_props = dict(
+            #     boxstyle="round", fc="r", ec="0.6", alpha=0.3)
+            # ax1.text(
+            #     by, bx, "B", ha="center",
+            #     va="center", size=10, bbox=bbox_props)
+            pass
         else:
             # ax1.annotate("S" + str(organoid_id), xy=(y, x))
             bbox_props = dict(
@@ -426,7 +432,7 @@ def create_blurry_organoid_statistics(plate):
 
     wells = sorted([
         well for well in os.listdir(os.path.join(
-            Config.FEATUREDIR, plate, "wells_normalized"))])
+            Config.FEATUREDIR, plate, "wells"))])
     plate_stats = []
     well_ids = []
     plate_stats_colnames = (
@@ -435,6 +441,8 @@ def create_blurry_organoid_statistics(plate):
     for well in wells:
         well_id = "_".join(well.split("_")[0:3])
         features = load_organoid_features(wells=[well_id])
+        if features is None:
+            continue
         features = label_blurry_organoids(**features)
         f_size = features["features"][np.where(
             features["feature_names"] == "x.0.s.area")[0][0]]

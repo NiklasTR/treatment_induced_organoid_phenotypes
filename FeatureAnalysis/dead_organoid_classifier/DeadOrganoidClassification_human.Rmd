@@ -15,8 +15,8 @@ library(ggplot2)
 library(reshape2)
 
 # Directories and files
-# config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
-config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+# config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
 # data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/organoid_classifier/data"
 data_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/dead_organoid_classifier"
 source(file.path(config_dir, "watchdogConfig.R"))

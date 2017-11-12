@@ -22,7 +22,8 @@ library(pander)
 # Directories and files
 config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
 # feature_dir = "/collab-ag-fischer/FeatureAnalysis/features"
-feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/features"
+feature_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/cell_line_features"
+blurry_organoid_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/blurry_organoids"
 source(file.path(config_dir, "watchdogConfig.R"))
 
 # Parameters
@@ -34,7 +35,7 @@ hdf5_dataset = paste0("features_zscore_rep_", feature_type)
 
 The data preprocessing consists of the following steps:
 
-* Separate objects into "organoids" (area >= 2500 pixels) and "shrapnel" (area <= 2500 pixels).
+* Separate objects into "organoids" (area >= 1500 pixels) and "shrapnel" (area <= 1500 pixels).
 * Calculate the summary features for each of these categories of objects within a well (median / mad).
   * I decided for this summary statistic as some features may only have features within a certain range, e.g. [0, 1] for the asphericity. Even under the assumption of normally distributed variation within a well, this limitation would cause the mean to skew the summary statistic towards the middle of the interval.
 * Subtract from each feature the median of the DMSO wells and divide by their standard deviation on each plate to eliminate batch effects.
@@ -97,6 +98,34 @@ cat("Number of NaN features:", sum(!is.finite(as.matrix(features))))
 ```
 
 # Quality Control
+
+## Blurry Organoids
+
+The microscope images are projections of 3D image stacks. As a result, many organoids are not captured in focus by the microscope. A first step of quality control is remove wells (and necessarily their replicates), that do not have a sufficient number of focused organoids in the images. To ensure the image quality of a well, I require that the ratio of focused to blurry organoids is at least 50%. I also remove the replicates of these wells.
+```{r}
+plates = substr(rownames(features), 1, 14)
+blurry_well_dat = list()
+for(plate in unique(plates)) {
+  blurry_well_dat[[plate]] = read.csv(
+    file.path(blurry_organoid_dir, sprintf("%s_blurry_organoid_statistics.csv", plate)), 
+    row.names = 1)
+}
+blurry_well_dat = do.call(rbind, blurry_well_dat)
+rownames(blurry_well_dat) = sapply(
+  strsplit(rownames(blurry_well_dat), ".", fixed = TRUE), "[[", 2)
+blurry_well_dat = blurry_well_dat[rownames(features), ]
+blurry_well_dat$Ratio = blurry_well_dat$Focused_Organoids / 
+  (blurry_well_dat$Focused_Organoids + blurry_well_dat$Blurry_Organoids)
+
+remove_wells = rownames(blurry_well_dat)[blurry_well_dat$Ratio < 0.5]
+
+rw_repid = paste0(substr(remove_wells, 1, 7), "_", substr(remove_wells, 12, 19))
+all_wells_repid = paste0(substr(rownames(features), 1, 7), "_", substr(rownames(features), 12, 19))
+features = features[!all_wells_repid %in% rw_repid, ]
+features_metadata = features_metadata[!all_wells_repid %in% rw_repid, ]
+blurry_well_dat = blurry_well_dat[!all_wells_repid %in% rw_repid, ]
+```
+
 ## Comparing Positive controls
 
 The drugs Bortezomib, Irinotecan / SN-38, Staurosporine, Volasertib, and Methotrexate are all potential positive controls. To see how suitable they are for this, I look at how they compare to DMSO, the negative control. To compare treatments, I look at the number of organoids as a proxy for organoid survival.
