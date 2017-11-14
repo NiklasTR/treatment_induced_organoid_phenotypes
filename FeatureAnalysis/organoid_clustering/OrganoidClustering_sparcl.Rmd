@@ -1,0 +1,303 @@
+---
+title: "Clustering of Organoid Features"
+author: "Jan Sauer"
+date: "10.11.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+library(PROMISE)
+library(ggplot2)
+library(rhdf5)
+library(Rtsne)
+library(sparcl)
+# library(fpc)
+library(cluster)
+library(ape)
+# library(abind)
+# library(EBImage)
+
+# Directories and files
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+source(file.path(config_dir, "watchdogConfig.R"))
+
+# Parameters
+feature_type = "organoids"
+```
+
+# Clustering of Organoids in well D004T01P005L08_A_09
+The well in question shows a clear split in organoid types.
+
+```{r}
+plate = "D004T01P005L08"
+row = "A"
+col = "09"
+preview_fn = thumbnailFilename(
+  filedir = file.path(htmldir, plate), platename = plate, 
+  row = row, col = col, configdir = config_dir)
+```
+
+!["D004T01P005L08_A_09"](`r preview_fn`)
+
+## Load and Preprocess data
+
+I use a set of pseudo-labels to get a rough idea of how well the clustering methods work. In particular, I've annotated blurry objects ("BLU"), shrapnel ("SHR"), live organoids ("NEG"), and dead organoids ("POS").
+```{r}
+# features_fn = file.path(feature_dir, plate, "wells_normalized", sprintf("%s_%s_%s_features_normalized.h5", plate, row, col))
+# features = h5read(features_fn, sprintf("features_%s", feature_type))
+# colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
+# object_type = h5read(features_fn, sprintf("object_type_%s", feature_type))
+features_fn = file.path(feature_dir, plate, "wells_normalized", sprintf("%s_%s_%s_features_normalized.h5", plate, row, col))
+features = h5read(features_fn, sprintf("features_%s", feature_type))
+colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
+object_type = h5read(features_fn, sprintf("object_type_%s", feature_type))
+```
+
+```{r}
+# Remove NA features
+na_feature_vals = colSums(is.na(features))
+features = features[, na_feature_vals == 0]
+
+# Remove constant features
+feature_range = apply(features, 2, function(x) mad(x, na.rm = TRUE))
+features = features[, feature_range > 0]
+```
+
+Keep only focused organoids
+```{r}
+features = features[object_type != "BLURRY", ]
+object_type = object_type[object_type != "BLURRY"]
+```
+
+Normalize features
+```{r}
+features = apply(features, 2, function(x) {
+  (x - mean(x)) / sd(x)})
+```
+
+# Gap Statistic
+I take a look at the gap statistic (Tibshirani et al, 2000; Grün et al, 2015) to determine the optimal number of clusters.
+```{r}
+pam1 = function(x, k) list(cluster = pam(x, k, cluster.only = TRUE))
+gapstat = clusGap(x = features, FUNcluster = pam1, K.max = 20, B = 50, verbose = FALSE)
+plot(gapstat, main = "Gap Statistic for Full Feature Set")
+```
+
+# t-SNE
+I look at the t-SNE for various perplexities. The coloring indicates the type of object; I differentiate between blurry objects, "organoids" with an area >= 1500 pixels, and "shrapnel" with an area of < 1500 pixels. The clustering shows a separation between blurry objects and organoids.
+```{r}
+perplexities = c(10, 20, 30, 40, 50)
+tsne_data = lapply(perplexities, function(x) Rtsne(
+  features, perplexity = x, initial_dims = 250, 
+  theta = 0, pca_scale = TRUE, pca_center = TRUE, 
+  max_iter = 5000))
+names(tsne_data) = perplexities
+for(x in perplexities) {
+  tsne_df = data.frame(tsne_data[[as.character(x)]]$Y)
+  tsne_df$Object.Type = object_type
+  plot(
+    ggplot(data = tsne_df) + geom_point(aes(x = X1, y = X2, col = Object.Type)) + 
+      ggtitle(sprintf("T-SNE Plot with perplexity %s", x)))
+}
+```
+
+# Hierarchical Clustering
+I use a sparse hierarchical clustering approach
+```{r}
+hclust = HierarchicalSparseCluster(features, method = "centroid", niter = 50, silent = TRUE)
+colors = c("red", "blue", "green", "black")
+plot.phylo(
+  as.phylo(hclust$hc), cex = 0.6, label.offset = 0.5, type = "phylogram", 
+  show.tip.label = FALSE, edge.color = colors[as.factor(object_type)], 
+  tip.color = colors[as.factor(object_type)])
+legend(x="topleft",legend = levels(as.factor(tolower(object_type))), fill = colors,xpd = T, cex = 1)
+```
+
+# K-Means Clustering
+```{r}
+clus = KMeansSparseCluster(features_norm, K = 6, silent = TRUE)
+```
+
+## PCA
+Remove useless features/constant features and perform a PCA. A look at the cumulative explained variance of the PCA shows that there are no "distinct" components; nearly 150 features are required to explain 90% of the variance in the dataset.
+```{r}
+features = round(features, 8)
+  
+# Remove NA features
+na_feature_vals = colSums(is.na(features))
+features = features[, na_feature_vals == 0]
+
+# Remove constant features
+feature_range = apply(features, 2, function(x) mad(x, na.rm = TRUE))
+features = features[, feature_range > 0]
+
+# Remove highly correlated features (rho >= 0.99)
+features_cor = cor(features, use = "pairwise.complete.obs")
+feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
+features_cor[upper.tri(features_cor, diag = TRUE)] = 0
+features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99, na.rm = TRUE))))
+features = features[, features_to_keep]
+
+# PCA
+pca = prcomp(features, center = TRUE, scale. = TRUE)
+features_pca = pca$x[, cumsum(pca$sdev) / sum(pca$sdev) <= 0.9]
+pca_df = data.frame(
+  "Cumulative.Variance" = cumsum(pca$sdev) / sum(pca$sdev), 
+  "Principal.Component" = seq_along(pca$sdev))
+ggplot(data = pca_df) + geom_point(aes(x = Principal.Component, y = Cumulative.Variance)) + 
+  ggtitle("Cumulative Explained Variance of PCA Components")
+```
+
+## t-SNE
+I look at the t-SNE for various perplexities. The coloring indicates the type of object; I differentiate between blurry objects, "organoids" with an area >= 1500 pixels, and "shrapnel" with an area of < 1500 pixels. The clustering shows a separation between blurry objects and organoids.
+```{r}
+perplexities = c(30)
+tsne_data = lapply(perplexities, function(x) Rtsne(
+  features, perplexity = x, initial_dims = 250, 
+  theta = 0, pca_scale = TRUE, pca_center = TRUE))
+names(tsne_data) = perplexities
+for(x in perplexities) {
+  tsne_df = data.frame(tsne_data[[as.character(x)]]$Y)
+  tsne_df$Object.Type = object_type
+  plot(
+    ggplot(data = tsne_df) + geom_point(aes(x = X1, y = X2, col = Object.Type)) + 
+      ggtitle(sprintf("T-SNE Plot with perplexity %s", x)))
+}
+```
+
+All further analyses will be performed without the blurry organoids.
+```{r}
+features_focus = features[object_type != "BLURRY", ]
+object_type_focus = object_type[object_type != "BLURRY"]
+```
+
+## Hierarchical Clustering
+An unsupervised hierarchical clustering was performed. Coloring is as with the t-SNE. If I ignore the shrapnel and blurry objects then the organoids themselves seem to cluster into 8 categories.
+```{r, width=12, height=12}
+# The normalization doesn't change the clustering, only the distances, making the 
+# dendrogram easier to read
+features_norm = apply(features_focus, 2, function(x) {
+  (x - mean(x)) / sd(x)})
+d = dist(features_norm)
+h = hclust(d)
+colors = c("red", "blue", "green", "black")
+plot.phylo(
+  as.phylo(h), cex = 0.6, label.offset = 0.5, type = "phylogram", 
+  show.tip.label = FALSE, edge.color = colors[as.factor(object_type_focus)], 
+  tip.color = colors[as.factor(object_type_focus)])
+legend(x="topleft",legend = levels(as.factor(tolower(object_type_focus))), fill = colors,xpd = T, cex = 1)
+```
+
+## K-Means Clustering 
+I take a look at the gap statistic (Tibshirani et al, 2000; Grün et al, 2015) to determine the optimal number of clusters.
+```{r}
+pam1 = function(x, k) list(cluster = pam(x, k, cluster.only = TRUE))
+gapstat = clusGap(x = features, FUNcluster = pam1, K.max = 20, B = 50, verbose = FALSE)
+plot(gapstat, main = "Gap Statistic for Full Feature Set")
+```
+
+As seen above, 
+
+
+I attempt to recreate this split using only those objects. While the optimal number of clusters is clearly k = 1, a significant local maximum can also be seen at k = 7
+```{r}
+gapstat = clusGap(
+  x = features[object_type == "Organoid", ], FUNcluster = pam1, 
+  K.max = 20, B = 50, verbose = FALSE)
+plot(gapstat, main = "Gap Statistic for Organoid Features")
+```
+
+## Examples of clustered organoids
+Next, I show some examples of the individual clusters to visually confirm the clustering. The clustering isn't ideal, as three of the clusters have only one entry.
+```{r}
+object_id = seq_len(nrow(features))
+object_id_organoids = object_id[object_type == "Organoid"]
+
+# Perform clustering
+clusters = pam1(x = features[object_type == "Organoid", ], k = 7)$cluster
+print(table(clusters))
+```
+
+```{r}
+# Load and normalize projection
+data_fn = projectionHdf5Filename(
+  filedir = file.path(hdf5projection, plate), platename = plate, 
+  row = row, col = col, configdir = config_dir)
+proj = h5read(data_fn, "images")
+for(ch_i in 1:3) {
+  for(field_i in 1:4) {
+    q = quantile(proj[,,ch_i,field_i], 0.999)
+    proj[,,ch_i,field_i][proj[,,ch_i,field_i] > q] = q
+  }
+  proj[,,ch_i,] = proj[,,ch_i,] - min(proj[,,ch_i,])
+  proj[,,ch_i,] = proj[,,ch_i,] / max(proj[,,ch_i,])
+}
+
+# Load unaltered features for coordinates
+orig_features_fn = file.path(
+  feature_dir, plate, "wells", 
+  sprintf("%s_%s_%s_features.h5", plate, row, col))
+features_original = h5read(orig_features_fn, sprintf("features_%s", feature_type))
+colnames(features_original) = h5read(orig_features_fn, sprintf("feature_names_%s", feature_type))
+
+# Extract sample organoids
+num_samples = 5
+valid_clusters = as.numeric(names(table(clusters)[table(clusters) >= num_samples]))
+set.seed(20171110)
+all_segments = list()
+for(cl in valid_clusters) {
+  cl_object_ids = sample(object_id_organoids[clusters == cl], num_samples, replace = FALSE)
+  cl_coords = features_original[cl_object_ids, c("x.0.m.cx", "x.0.m.cy", "x.0.s.radius.max", "FIELD")]
+  colnames(cl_coords) = c("x", "y", "radius", "field")
+  segments = list()
+  for(oid in seq_len(nrow(cl_coords))) {
+    xx = round(cl_coords[oid, "x"])
+    yy = round(cl_coords[oid, "y"])
+    rad = ceiling(cl_coords[oid, "radius"]) + 10
+    fld = cl_coords[oid, "field"]
+    minx = max(xx - rad, 0)
+    maxx = min(xx + rad, dim(proj)[1])
+    miny = max(yy - rad, 0)
+    maxy = min(yy + rad, dim(proj)[2])
+    segments[[oid]] = proj[minx:maxx, miny:maxy, 1:3, fld]
+  }
+  all_segments[[as.character(cl)]] = segments
+}
+
+# Embed all segments into a single image
+max_x = 0
+max_y = 0
+for(cl in all_segments) {
+  for(seg in cl) {
+    max_x = max(max_x, dim(seg)[1] + 5)
+    max_y = max(max_y, dim(seg)[2] + 5)
+  }
+}
+
+all_embed_segments = list()
+ii = 1
+for(cl in all_segments) {
+  embed_segments = list()
+  jj = 1
+  for(seg in cl) {
+    new_embed = array(0, dim = c(max_x, max_y, 3))
+    ddim = round((dim(new_embed) - dim(seg))[1:2] / 2)
+    new_embed[ddim[1]:(ddim[1] + dim(seg)[1] - 1), ddim[2]:(ddim[2] + dim(seg)[2] - 1), ] = seg
+    new_embed[1:dim(new_embed)[1], 1, 1:3] = 1
+    new_embed[1, 1:dim(new_embed)[2], 1:3] = 1
+    embed_segments[[jj]] = new_embed
+    jj = jj + 1
+  }
+  all_embed_segments[[ii]] = abind(embed_segments, along = 2)
+  ii = ii + 1
+}
+all_embed_segments = Image(abind(all_embed_segments, along = 1), colormode = "color")
+writeImage(all_embed_segments, "OrganoidClusters.png")
+```
+
+[Organoid Clusters. Each column shows 5 randomly chosen members of one of the clusters with more than one member](OrganoidClusters.png)
