@@ -331,6 +331,7 @@ def test_blurry_organoid_classifier(well_id=None, field_id=0):
     D018T01P906L03_A_12
     D022T01P005L02_A_17
     D019T01P006L03_G_07
+    D021T01P905L02_H_04
 
     :param well_id:
     :param field_id:

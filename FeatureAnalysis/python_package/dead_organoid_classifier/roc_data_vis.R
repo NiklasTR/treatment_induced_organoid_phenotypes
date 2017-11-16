@@ -1,7 +1,7 @@
 library(ggplot2)
 
 setwd("/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_package/dead_organoid_classifier")
-fname = "roc_data_D004T01_on_D021T01.csv"
+fname = "roc_data_D021T01_on_D015T01.csv"
 clf_cl = strsplit(fname, "_")[[1]][3]
 data_cl = strsplit(strsplit(fname, "_")[[1]][5], ".", fixed = TRUE)[[1]][1]
 
