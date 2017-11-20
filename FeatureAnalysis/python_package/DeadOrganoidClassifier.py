@@ -294,40 +294,6 @@ def train_classifier(cell_line, save=True):
     neg_ctrl_features = neg_ctrl_features[bad_wells_neg >= 0, :]
     neg_ctrl_object_types = neg_ctrl_object_types[bad_wells_neg >= 0]
 
-    # Impute missing features
-    # This is done by calculating the mean and standard deviation of each
-    # feature and assigning all NA entries randomly selected values from
-    # a normal distribution. If all features are NA, then a distribution
-    # N(0, 1) is used
-    # The imputation is done for each training set individually
-    masked_pos = np.ma.array(
-        data=pos_ctrl_features,
-        mask=~np.isfinite(pos_ctrl_features))
-    masked_neg = np.ma.array(
-        data=neg_ctrl_features,
-        mask=~np.isfinite(neg_ctrl_features))
-    for ii in range(len(feature_names)):
-        na_pos_features = ~np.isfinite(pos_ctrl_features[..., ii])
-        na_neg_features = ~np.isfinite(neg_ctrl_features[..., ii])
-        if np.sum(na_pos_features) == 0 and np.sum(na_neg_features) == 0:
-            continue
-        if np.sum(~na_pos_features) == 0:
-            f_mean_pos = 0
-            f_sd_pos = 1
-        else:
-            f_mean_pos = np.mean(masked_pos[..., ii])
-            f_sd_pos = np.std(masked_pos[..., ii])
-        pos_ctrl_features[..., ii][na_pos_features] = \
-            np.random.normal(f_mean_pos, f_sd_pos, np.sum(na_pos_features))
-        if np.sum(~na_neg_features) == 0:
-            f_mean_neg = 0
-            f_sd_neg = 1
-        else:
-            f_mean_neg = np.mean(masked_neg[..., ii])
-            f_sd_neg = np.std(masked_neg[..., ii])
-        neg_ctrl_features[..., ii][na_neg_features] = \
-            np.random.normal(f_mean_neg, f_sd_neg, np.sum(na_neg_features))
-
     # Subsample to equalize training groups
     num_samples = min(pos_ctrl_features.shape[0], neg_ctrl_features.shape[0])
     pos_ctrl_features = pos_ctrl_features[np.random.choice(
@@ -340,6 +306,16 @@ def train_classifier(cell_line, save=True):
     # Create training data
     x = np.concatenate((pos_ctrl_features, neg_ctrl_features), axis=0)
     y = np.repeat(("POS", "NEG"), num_samples)
+
+    # Impute missing features
+    # This is done by assigning all missing values a random number from a
+    # N(0, 1) distribution
+    masked_x = np.ma.array(
+        data=x,
+        mask=~np.isfinite(x))
+    x[masked_x.mask] = np.random.normal(
+        0, 1, np.sum(masked_x.mask))
+
     x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(
         x, y, test_size=0.25)
 
@@ -386,7 +362,7 @@ def get_wells_for_treatment(plate, treatments=None, concentrations=None):
     return layout.loc[indices, "Well_ID_384"].values.astype(str)
 
 
-def create_diagnostic_data():
+def create_transfer_learning_data():
     """
     This function generates diagnostic data for the dead/live classifiers.
     This includes running each classifier on every other cell line's
@@ -417,7 +393,7 @@ def create_diagnostic_data():
 
     out_fn = os.path.join(
         Config.DEADORGANOIDCLASSIFIERDIR,
-        "diagnostic_matrix.csv")
+        "transfer_learning_matrix.csv")
     with open(out_fn, "w") as f:
         f.write("# Accuracy of classifier for cell line (ROW) applied to "
                 "validation data for cell line (COL)\n")
@@ -612,40 +588,6 @@ def train_classifier_on_all_cell_lines(save=True):
     neg_ctrl_features = neg_ctrl_features[bad_wells_neg >= 0, :]
     neg_ctrl_object_types = neg_ctrl_object_types[bad_wells_neg >= 0]
 
-    # Impute missing features
-    # This is done by calculating the mean and standard deviation of each
-    # feature and assigning all NA entries randomly selected values from
-    # a normal distribution. If all features are NA, then a distribution
-    # N(0, 1) is used
-    # The imputation is done for each training set individually
-    masked_pos = np.ma.array(
-        data=pos_ctrl_features,
-        mask=~np.isfinite(pos_ctrl_features))
-    masked_neg = np.ma.array(
-        data=neg_ctrl_features,
-        mask=~np.isfinite(neg_ctrl_features))
-    for ii in range(len(feature_names)):
-        na_pos_features = ~np.isfinite(pos_ctrl_features[..., ii])
-        na_neg_features = ~np.isfinite(neg_ctrl_features[..., ii])
-        if np.sum(na_pos_features) == 0 and np.sum(na_neg_features) == 0:
-            continue
-        if np.sum(~na_pos_features) == 0:
-            f_mean_pos = 0
-            f_sd_pos = 1
-        else:
-            f_mean_pos = np.mean(masked_pos[..., ii])
-            f_sd_pos = np.std(masked_pos[..., ii])
-        pos_ctrl_features[..., ii][na_pos_features] = \
-            np.random.normal(f_mean_pos, f_sd_pos, np.sum(na_pos_features))
-        if np.sum(~na_neg_features) == 0:
-            f_mean_neg = 0
-            f_sd_neg = 1
-        else:
-            f_mean_neg = np.mean(masked_neg[..., ii])
-            f_sd_neg = np.std(masked_neg[..., ii])
-        neg_ctrl_features[..., ii][na_neg_features] = \
-            np.random.normal(f_mean_neg, f_sd_neg, np.sum(na_neg_features))
-
     # Subsample to equalize training groups
     num_samples = min(pos_ctrl_features.shape[0], neg_ctrl_features.shape[0])
     pos_ctrl_features = pos_ctrl_features[np.random.choice(
@@ -658,6 +600,15 @@ def train_classifier_on_all_cell_lines(save=True):
     # Create training data
     x = np.concatenate((pos_ctrl_features, neg_ctrl_features), axis=0)
     y = np.repeat(("POS", "NEG"), num_samples)
+
+    # Impute missing features
+    # Missing features are given a random number selected from a N(0, 1)
+    # distribution
+    masked_x = np.ma.array(
+        data=x, mask=~np.isfinite(x))
+    x[masked_x.mask] = np.random.normal(
+            0, 1, np.sum(masked_x.mask))
+
     x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(
         x, y, test_size=0.25)
 
@@ -716,26 +667,13 @@ def classify_organoids_with_full_classifier(plate):
         features = features[bad_organoids != 0, :]
 
         # Impute missing features
-        # This is done by calculating the mean and standard deviation of each
-        # feature and assigning all NA entries randomly selected values from
-        # a normal distribution. If all features are NA, then a distribution
-        # N(0, 1) is used
-        # The imputation is done for each training set individually
+        # Missing features are replaced with a random number from a N(0, 1)
+        # distribution
         masked_features = np.ma.array(
             data=features,
             mask=~np.isfinite(features))
-        for ii in range(len(feature_names)):
-            na_features = ~np.isfinite(features[..., ii])
-            if np.sum(na_features) == 0:
-                continue
-            if np.sum(~na_features) == 0:
-                f_mean_pos = 0
-                f_sd_pos = 1
-            else:
-                f_mean_pos = np.mean(masked_features[..., ii])
-                f_sd_pos = np.std(masked_features[..., ii])
-            features[..., ii][na_features] = np.random.normal(
-                f_mean_pos, f_sd_pos, np.sum(na_features))
+        features[masked_features.mask] = np.random.normal(
+            0, 1, np.sum(masked_features.mask))
 
         # Apply classifier to wells
         prediction = clf[0].predict(features)
@@ -768,7 +706,7 @@ def classify_organoids_with_full_classifier(plate):
     return dead_percentage
 
 
-def create_diagnostic_data_for_full_classifier():
+def create_transfer_learning_data_for_full_classifier():
     """
     This function generates diagnostic data for the dead/live classifiers.
     This includes running each classifier on every other cell line's
@@ -795,11 +733,11 @@ def create_diagnostic_data_for_full_classifier():
 
     out_fn = os.path.join(
         Config.DEADORGANOIDCLASSIFIERDIR, "full_classifier",
-        "diagnostic_matrix_full_classifier.csv")
+        "transfer_learning_matrix_full_classifier.csv")
     with open(out_fn, "w") as f:
         f.write("# Accuracy of full classifier (ROW) applied to "
                 "validation data for cell line (COL)\n")
         f.write("CLASSIFIER_DATA," + ",".join(all_cell_lines) + "\n")
         for ii in range(len(acc_matrix)):
-            f.write(all_cell_lines[ii] + "," +
+            f.write("Full Classifier" + "," +
                     ",".join([str(s) for s in acc_matrix[ii]]) + "\n")

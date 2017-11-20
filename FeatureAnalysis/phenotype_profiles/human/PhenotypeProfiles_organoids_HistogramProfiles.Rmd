@@ -1,0 +1,217 @@
+---
+title: "Phenotypic Profiling of Drugs using Individual Organoid Features"
+author: "Jan Sauer"
+date: "10.11.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+library(PROMISE)
+library(ggplot2)
+library(rhdf5)
+library(ape)
+# library(cluster)
+# library(Rtsne)
+# library(kernlab)
+library(pheatmap)
+# library(caret)
+library(MASS)
+library(abind)
+
+feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+out_dir = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/phenotype_profiles/human"
+source(file.path(config_dir, "watchdogConfig.R"))
+cell_line = "D004T01"
+```
+
+# L08
+Calculate the TISS-vectors
+```{r, eval=FALSE}
+lib = loadLibrary("L08", config_dir, cols = c("Well_ID_384", "Product.Name", "concentration", "Target"))
+all_drugs = as.character(unique(lib$Product.Name))
+# Remove DMSO and Staurosporine from list
+all_drugs = all_drugs[all_drugs != "DMSO"]
+all_drugs = all_drugs[all_drugs != "Staurosporine_500nM"]
+
+source("tiss.R")
+for(drug in all_drugs) {
+  drug_name = gsub(pattern = "/", replacement = "--", x = drug, fixed = TRUE)
+  drug_name = gsub(pattern = " ", replacement = "__", x = drug_name, fixed = TRUE)
+  out_fn = file.path(out_dir, "tiss_vectors", sprintf("tiss_vec_%s.rds", drug_name))
+  if(file.exists(out_fn)) next
+  calc_tiss_vector(
+    drug = drug, cell_line = cell_line, out_fn = out_fn)
+}
+```
+
+As there are two replicates, I demand that both replicates must show a significant KS-statistic from DMSO. If this is not the case, the the averaged value is set to 0. This serves to eliminate some noise. I normalize the TISS vectors with the z-score to make them comparable between drugs.
+```{r}
+all_tiss_vectors = list.files(file.path(out_dir, "tiss_vectors"), pattern = "tiss_vec_.*.rds")
+all_drugs = gsub("tiss_vec_", "", all_tiss_vectors)
+all_drugs = gsub(".rds", "", all_drugs, fixed = TRUE)
+all_drugs = gsub("__", " ", all_drugs)
+all_drugs = gsub("--", "/", all_drugs)
+
+tiss_vectors = list()
+for(ii in seq_along(all_tiss_vectors)) {
+  fn = all_tiss_vectors[ii]
+  drug = all_drugs[ii]
+  tiss_vec = readRDS(file.path(out_dir, "tiss_vectors", fn))
+  
+  rep1 = (tiss_vec$rep1 - median(tiss_vec$rep1, na.rm = TRUE)) / mad(tiss_vec$rep1, na.rm = TRUE)
+  rep2 = (tiss_vec$rep2 - median(tiss_vec$rep2, na.rm = TRUE)) / mad(tiss_vec$rep2, na.rm = TRUE)
+  avg = (rep1 + rep2)
+  avg[tiss_vec$rep1_pval > 0.05 | tiss_vec$rep2_pval > 0.05] = NA
+  
+  tiss_vectors[[drug]] = avg
+}
+```
+
+Calculate the shift-correlation (http://science.sciencemag.org/content/306/5699/1194/tab-pdf) for $s \in (-3, 3)$ and from that the similarity score (Suppl. Materials C and Figure S2) for each drug pair.
+```{r}
+similarity_score = list()
+for(s in seq(0, 3)) {
+  trunc = abs(s) * 1571
+  s_matrix = matrix(
+    NA, nrow = length(all_drugs), ncol = length(all_drugs), 
+    dimnames = list(all_drugs, all_drugs))
+  for(drug_a in all_drugs) {
+    tiss_vec_a = tiss_vectors[[drug_a]]
+    tiss_vec_a = tiss_vec_a[1:(length(tiss_vec_a) - trunc)]
+    for(drug_b in all_drugs) {
+      tiss_vec_b = tiss_vectors[[drug_b]]
+      tiss_vec_b = tiss_vec_b[(trunc+1):length(tiss_vec_b)]
+      s_matrix[drug_a, drug_b] = cor(tiss_vec_a, tiss_vec_b, use = "pairwise.complete.obs")
+    }
+  }
+  
+  ss = matrix(
+    NA, nrow = length(all_drugs), ncol = length(all_drugs), 
+    dimnames = list(all_drugs, all_drugs))
+  for(drug_a in all_drugs) {
+    for(drug_b in all_drugs) {
+      # The -1 ensures that the entry isn't compared to itself
+      ss[drug_a, drug_b] = (
+        sum(s_matrix >= s_matrix[drug_a, drug_b]) - 1) / prod(dim(s_matrix))
+    }
+  }
+  
+  similarity_score[[as.character(s)]] = ss
+  if(s != 0) similarity_score[[as.character(-s)]] = t(ss)
+}
+
+# The TISS for each drug is the minimum similarity score across concentration shift. Note
+# that ss_ij == inverse(ss_ji) with regards to the shifts.
+similarity_score_combined = abind(... = similarity_score, along = 3)
+similarity_score_min = apply(similarity_score_combined, c(1,2), min)
+```
+
+Treat the similarity scores as distances and cluster the drugs
+```{r, fig.height=12, fig.width=10}
+target_lib = lib[, c("Product.Name", "Target")]
+target_lib = target_lib[!duplicated(target_lib), ]
+target_lib = target_lib[!target_lib$Product.Name %in% c("DMSO", "Staurosporine_500nM"), ]
+target_lib[target_lib$Target == "", "Target"] = NA
+rownames(target_lib) = target_lib$Product.Name
+target_lib$Product.Name = NULL
+target_lib$Target = as.character(target_lib$Target)
+
+
+
+
+clust = hclust(as.dist(similarity_score_min))
+plot.phylo(
+  as.phylo(clust), cex = 1, type = "phylogram", 
+  show.tip.label = TRUE, tip.color = target_lib[clust$labels, "Target"], 
+  edge.color = target_lib[clust$labels, "Target"])
+```
+
+
+
+
+
+
+
+
+<!-- Transform to z-scores -->
+<!-- ```{r} -->
+<!-- drug_stats_pvals_reduced_rep1 = drug_stats_pvals_rep1[] -->
+<!-- drug_stats_pvals_reduced_rep2 = drug_stats_pvals_rep2[] -->
+<!-- drug_stats_reduced_rep1 = apply(drug_stats_rep1, 2, function(x) { -->
+<!--   (x - median(x, na.rm = TRUE)) / mad(x, na.rm = TRUE) -->
+<!-- }) -->
+<!-- drug_stats_reduced_rep2 = apply(drug_stats_rep2, 2, function(x) { -->
+<!--   (x - median(x, na.rm = TRUE)) / mad(x, na.rm = TRUE) -->
+<!-- }) -->
+<!-- ``` -->
+
+<!-- Keep only features that could be fully calculated, i.e. have no NAs -->
+<!-- ```{r} -->
+<!-- combined = cbind(drug_stats_reduced_rep1, drug_stats_reduced_rep2) -->
+<!-- valid_indices = rowSums(is.na(combined)) == 0 -->
+<!-- drug_stats_reduced_rep1 = drug_stats_reduced_rep1[valid_indices, ] -->
+<!-- drug_stats_reduced_rep2 = drug_stats_reduced_rep2[valid_indices, ] -->
+<!-- drug_stats_pvals_reduced_rep1 = drug_stats_pvals_reduced_rep1[valid_indices, ] -->
+<!-- drug_stats_pvals_reduced_rep2 = drug_stats_pvals_reduced_rep2[valid_indices, ] -->
+<!-- ``` -->
+
+<!-- Apply a robust linear model to each feature to model the change between concentrations. The model doesn't have to accurately describe the shape of the response curve, it serves only to account for noise and detect trends. -->
+<!-- ```{r} -->
+<!-- slopes = c() -->
+<!-- drug_stats_model = NULL -->
+<!-- for(feature in rownames(drug_stats_reduced_rep1)) { -->
+<!--   rlmdf = data.frame( -->
+<!--     x = c( -->
+<!--       seq_len(ncol(drug_stats_reduced_rep1)),  -->
+<!--       seq_len(ncol(drug_stats_reduced_rep2))),  -->
+<!--     y = c( -->
+<!--       drug_stats_reduced_rep1[feature, ],  -->
+<!--       drug_stats_reduced_rep2[feature, ])) -->
+<!--   model = rlm(y ~ x, data = rlmdf, maxit = 100) -->
+<!--   slopes[[feature]] = model$coefficients["x"] -->
+<!--   pred = matrix( -->
+<!--     predict(model, data.frame(x = 1:5)), nrow = 1,  -->
+<!--     dimnames = list(feature, colnames(drug_stats_reduced_rep1))) -->
+<!--   drug_stats_model = rbind(drug_stats_model, pred) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- Plot the best example -->
+<!-- ```{r} -->
+<!-- best_feature = names(head(sort(abs(slopes), decreasing = TRUE), 1)) -->
+<!-- ggplotdf = data.frame( -->
+<!--   "x" = seq_len(ncol(drug_stats_reduced_rep1)), -->
+<!--   "ymin" = apply(rbind( -->
+<!--       drug_stats_reduced_rep1[best_feature, ],  -->
+<!--       drug_stats_reduced_rep2[best_feature, ]),  -->
+<!--     2, min), -->
+<!--   "ymax" = apply(rbind( -->
+<!--       drug_stats_reduced_rep1[best_feature, ],  -->
+<!--       drug_stats_reduced_rep2[best_feature, ]),  -->
+<!--     2, max), -->
+<!--   "ymean" = (drug_stats_reduced_rep1[best_feature, ] +  -->
+<!--     drug_stats_reduced_rep2[best_feature, ]) / 2) -->
+<!-- conc_transform = function(x) {log(x) / log(5) + 5} -->
+<!-- conc_inv_transform = function(x) {exp((x - 5) * log(5))} -->
+<!-- ggplot(data = ggplotdf) +  -->
+<!--   geom_ribbon(aes(x = x, ymin = ymin, ymax = ymax), alpha = 0.25) +  -->
+<!--   geom_line(aes(x = x, y = ymean), size = 2) +  -->
+<!--   scale_x_continuous(labels = conc_inv_transform) +  -->
+<!--   ggtitle(sprintf("Feature '%s' for drug '%s'", best_feature, drug)) +  -->
+<!--   theme(legend.position = "none") + xlab("Concentration") +  -->
+<!--   ylab("Normalized Response") -->
+<!-- ``` -->
+
+<!-- Heatmap of the features -->
+<!-- ```{r} -->
+<!-- best_features = names(which(abs(slopes) >= 0.4)) -->
+<!-- best_features_data = drug_stats_model[best_features, ] -->
+<!-- pheatmap( -->
+<!--   best_features_data, cluster_rows = FALSE, cluster_cols = FALSE, cellwidth = 12,  -->
+<!--   show_rownames = TRUE) -->
+<!-- ``` -->

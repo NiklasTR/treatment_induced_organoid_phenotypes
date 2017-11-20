@@ -56,37 +56,63 @@ features_fn = file.path(feature_dir, plate, "wells_normalized", sprintf("%s_%s_%
 features = h5read(features_fn, sprintf("features_%s", feature_type))
 colnames(features) = h5read(features_fn, sprintf("feature_names_%s", feature_type))
 object_type = h5read(features_fn, sprintf("object_type_%s", feature_type))
+
+# This is only for numeric stability
+features = round(features, 8)
 ```
 
-## PCA
-Remove useless features/constant features and perform a PCA. A look at the cumulative explained variance of the PCA shows that there are no "distinct" components; nearly 150 features are required to explain 90% of the variance in the dataset.
+Remove features with any NA's and with constant values
 ```{r}
-features = round(features, 8)
-  
 # Remove NA features
-na_feature_vals = colSums(is.na(features))
-features = features[, na_feature_vals == 0]
+na_feature_counts = colSums(!is.finite(features))
+features = features[, na_feature_counts == 0]
+```
 
+Discretize the features by rounding to the nearest 0.5
+```{r}
+features = round(features*2) / 2
+```
+
+```{r}
 # Remove constant features
 feature_range = apply(features, 2, function(x) mad(x, na.rm = TRUE))
 features = features[, feature_range > 0]
-
-# Remove highly correlated features (rho >= 0.99)
-features_cor = cor(features, use = "pairwise.complete.obs")
-feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)]
-features_cor[upper.tri(features_cor, diag = TRUE)] = 0
-features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99, na.rm = TRUE))))
-features = features[, features_to_keep]
-
-# PCA
-pca = prcomp(features, center = TRUE, scale. = TRUE)
-features_pca = pca$x[, cumsum(pca$sdev) / sum(pca$sdev) <= 0.9]
-pca_df = data.frame(
-  "Cumulative.Variance" = cumsum(pca$sdev) / sum(pca$sdev), 
-  "Principal.Component" = seq_along(pca$sdev))
-ggplot(data = pca_df) + geom_point(aes(x = Principal.Component, y = Cumulative.Variance)) + 
-  ggtitle("Cumulative Explained Variance of PCA Components")
 ```
+
+<!-- Correlating such a high-dimensional space can be difficult, so the features are discretized to remove some noise. To make features comparable, I discretize each feature individually: -->
+<!-- * if x <= 1st Quartile then set x to -1 -->
+<!-- * if 1st Quartile <= x <= 3rd Quartile then set x to 0 -->
+<!-- * if x >= 3rd Quartile then set x to 1 -->
+<!-- ```{r} -->
+<!-- features = apply(features, 2, function(x) { -->
+<!--   q1 = quantile(x, 0.25, na.rm = TRUE) -->
+<!--   q3 = quantile(x, 0.75, na.rm = TRUE) -->
+<!--   out = rep(0, length(x)) -->
+<!--   out[x <= q1] = -1 -->
+<!--   out[x >= q3] = 1 -->
+<!--   return(out) -->
+<!-- }) -->
+<!-- ``` -->
+
+<!-- ## PCA -->
+<!-- Remove useless features/constant features and perform a PCA. A look at the cumulative explained variance of the PCA shows that there are no "distinct" components; nearly 150 features are required to explain 90% of the variance in the dataset. -->
+<!-- ```{r} -->
+<!-- # Remove highly correlated features (rho >= 0.99) -->
+<!-- features_cor = cor(features, use = "pairwise.complete.obs") -->
+<!-- feature_cor_vector = features_cor[upper.tri(features_cor, diag = FALSE)] -->
+<!-- features_cor[upper.tri(features_cor, diag = TRUE)] = 0 -->
+<!-- features_to_keep = names(which(!apply(features_cor,2,function(x) any(abs(x) > 0.99, na.rm = TRUE)))) -->
+<!-- features = features[, features_to_keep] -->
+
+<!-- # PCA -->
+<!-- pca = prcomp(features, center = TRUE, scale. = TRUE) -->
+<!-- features_pca = pca$x[, cumsum(pca$sdev) / sum(pca$sdev) <= 0.9] -->
+<!-- pca_df = data.frame( -->
+<!--   "Cumulative.Variance" = cumsum(pca$sdev) / sum(pca$sdev),  -->
+<!--   "Principal.Component" = seq_along(pca$sdev)) -->
+<!-- ggplot(data = pca_df) + geom_point(aes(x = Principal.Component, y = Cumulative.Variance)) +  -->
+<!--   ggtitle("Cumulative Explained Variance of PCA Components") -->
+<!-- ``` -->
 
 ## t-SNE
 I look at the t-SNE for various perplexities. The coloring indicates the type of object; I differentiate between blurry objects, "organoids" with an area >= 1500 pixels, and "shrapnel" with an area of < 1500 pixels. The clustering shows a separation between blurry objects and organoids.
@@ -111,14 +137,29 @@ features_focus = features[object_type != "BLURRY", ]
 object_type_focus = object_type[object_type != "BLURRY"]
 ```
 
+```{r}
+perplexities = c(20)
+tsne_data = lapply(perplexities, function(x) Rtsne(
+  features_focus, perplexity = x, initial_dims = 250, 
+  theta = 0, pca_scale = TRUE, pca_center = TRUE))
+names(tsne_data) = perplexities
+for(x in perplexities) {
+  tsne_df = data.frame(tsne_data[[as.character(x)]]$Y)
+  tsne_df$Object.Type = object_type_focus
+  plot(
+    ggplot(data = tsne_df) + geom_point(aes(x = X1, y = X2, col = Object.Type)) + 
+      ggtitle(sprintf("T-SNE Plot with perplexity %s", x), subtitle = "Only focused objects"))
+}
+```
+
 ## Hierarchical Clustering
 An unsupervised hierarchical clustering was performed. Coloring is as with the t-SNE. If I ignore the shrapnel and blurry objects then the organoids themselves seem to cluster into 8 categories.
 ```{r, width=12, height=12}
 # The normalization doesn't change the clustering, only the distances, making the 
 # dendrogram easier to read
-features_norm = apply(features_focus, 2, function(x) {
-  (x - mean(x)) / sd(x)})
-d = dist(features_norm)
+# features_norm = apply(features_focus, 2, function(x) {
+#   (x - mean(x)) / sd(x)})
+d = dist(features_focus)
 h = hclust(d)
 colors = c("red", "blue", "green", "black")
 plot.phylo(
@@ -132,17 +173,14 @@ legend(x="topleft",legend = levels(as.factor(tolower(object_type_focus))), fill 
 I take a look at the gap statistic (Tibshirani et al, 2000; Grün et al, 2015) to determine the optimal number of clusters.
 ```{r}
 pam1 = function(x, k) list(cluster = pam(x, k, cluster.only = TRUE))
-gapstat = clusGap(x = features, FUNcluster = pam1, K.max = 20, B = 50, verbose = FALSE)
+gapstat = clusGap(x = features_focus, FUNcluster = pam1, K.max = 20, B = 50, verbose = FALSE)
 plot(gapstat, main = "Gap Statistic for Full Feature Set")
 ```
 
-As seen above, 
-
-
-I attempt to recreate this split using only those objects. While the optimal number of clusters is clearly k = 1, a significant local maximum can also be seen at k = 7
+As seen above, organoids separate very nicely from the shrapnel. I attempt to recreate this split using only those objects. While the optimal number of clusters is clearly k = 1, a significant local maximum can also be seen at k = 7
 ```{r}
 gapstat = clusGap(
-  x = features[object_type == "Organoid", ], FUNcluster = pam1, 
+  x = features_focus[object_type_focus == "Organoid", ], FUNcluster = pam1, 
   K.max = 20, B = 50, verbose = FALSE)
 plot(gapstat, main = "Gap Statistic for Organoid Features")
 ```

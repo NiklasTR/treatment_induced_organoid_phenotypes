@@ -18,9 +18,10 @@ library(cluster)
 library(Rtsne)
 library(kernlab)
 library(pheatmap)
+library(caret)
 
-feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
-config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+feature_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
 source(file.path(config_dir, "watchdogConfig.R"))
 cell_line = "D004T01"
 all_plates = list.files(feature_dir, pattern = paste0(cell_line, "P[0-9]{3}L08$"))
@@ -105,31 +106,44 @@ for(concentration in sort(unique(drug_metadata$CONCENTRATION))) {
   x = x[, colSums(!is.finite(x)) == 0]
   
   # Create data partition
-  dat = as.data.frame(x)
-  dat$Y = as.factor(y)
-  intrain = createDataPartition(y = dat$Y, p = 0.7, list = FALSE)
-  dat_train = dat[intrain, ]
-  dat_test = dat[-intrain, ]
+  intrain = createDataPartition(y = y, p = 0.7, list = FALSE)
+  x_train = x[intrain, ]
+  y_train = y[intrain]
+  x_test = x[-intrain, ]
+  y_test = y[-intrain]
   
-  # Run SVM classifier
-  model_svm = ksvm(Y ~ ., data = dat_train, kernel = "vanilladot")
-  conc_acc[[as.character(concentration)]] = mean(predict(model_svm, dat_test) == dat_test$Y)
+  # Perform feature selection
+  source("svmrfe.R")
+  svmrfe = svm_rfe(X = x_train, y = y_train, X_test = x_test, y_test = y_test, elim_frac = 0.1)
+  full_model = ksvm(x = x_train, y = y_train, scaled = TRUE, kernel = "vanilladot")
+  full_acc = mean(predict(full_model, x_test) == y_test)
+  
+  # Remove features whose removal doesn't cause the accuracy to drop below 90% of the full model accuracy
+  # "Remove" means that the features are set to 0
+  max_rank_to_keep = tryCatch(
+    max(svmrfe$Ranking[svmrfe$Accuracy <= full_acc*0.9] + 1), 
+    warning = function(w) 1)
+  if(length(max_rank_to_keep) == 0) max_rank_to_keep = 1
+  features_to_keep = colnames(x)[svmrfe$Ranking <= max_rank_to_keep]
+  reduced_model = ksvm(x = x_train[, features_to_keep], y = y_train, scaled = TRUE, kernel = "vanilladot")
+  reduced_acc = mean(predict(reduced_model, x_test[, features_to_keep]) == y_test)
+  
+  conc_acc[[as.character(concentration)]] = reduced_acc
   
   # # Calculate normal vector to hyperplane as profile
-  # norm_vec_vals = (model_svm@coef[[1]] %*% model_svm@xmatrix[[1]])[1,]
-  # norm_vec = setNames(
-  #   object = rep(0, ncol(conc_features)), 
-  #   nm = colnames(conc_features))
-  # norm_vec[names(norm_vec_vals)] = norm_vec_vals
-  # conc_vec[[as.character(concentration)]] = norm_vec / sqrt(norm_vec %*% norm_vec)[1,1]
+  norm_vec_vals = (reduced_model@coef[[1]] %*% reduced_model@xmatrix[[1]])[1,]
+  norm_vec = setNames(
+   object = rep(0, ncol(conc_features)), 
+   nm = colnames(conc_features))
+  norm_vec[names(norm_vec_vals)] = norm_vec_vals
+  conc_vec[[as.character(concentration)]] = norm_vec
   
   # Calculate the distance and vector between the groups
-  drug_centroid = colMeans(x[dat$Y == "DRUG", ])
-  dmso_centroid = colMeans(x[dat$Y == "DMSO", ])
-  
-  dist_vec = drug_centroid - dmso_centroid
-  conc_dist[[as.character(concentration)]] = sqrt(dist_vec %*% dist_vec)[1,1]
-  conc_vec[[as.character(concentration)]] = dist_vec / sqrt(dist_vec %*% dist_vec)[1,1]
+  # drug_centroid = colMeans(x[y == "DRUG", features_to_keep])
+  # dmso_centroid = colMeans(x[y == "DMSO", features_to_keep])
+  # dist_vec = drug_centroid - dmso_centroid
+  # conc_dist[[as.character(concentration)]] = sqrt(dist_vec %*% dist_vec)[1,1]
+  # conc_vec[[as.character(concentration)]] = dist_vec / sqrt(dist_vec %*% dist_vec)[1,1]
 }
 ```
 
@@ -150,6 +164,7 @@ for(conc1 in names(conc_vec)) {
     angle_matrix[conc1, conc2] = acos(dot_prod / (vec1_abs * vec2_abs)) * 180 / pi
   }
 }
+print(angle_matrix)
 ```
 
 

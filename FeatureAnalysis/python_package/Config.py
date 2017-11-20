@@ -8,6 +8,7 @@ BASEDIR = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis/python_packag
 FEATUREDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
 LAYOUTDIR = "/collab-ag-fischer/PROMISE/layouts/python_friendly"
 SEGMENTATIONDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/segmentation"
+IMAGEDIR = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/hdf5projection"
 FEATURETYPE = "organoids"
 SIZETHRESHOLD = 1500
 BLURRYORGANOIDDIR = os.path.join(BASEDIR, "blurry_organoids")
