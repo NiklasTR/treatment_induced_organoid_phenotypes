@@ -1,0 +1,309 @@
+---
+title: "Phenotypic Profiling of Drugs using Individual Organoid Features"
+author: "Jan Sauer"
+date: "10.11.2017"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+library(PROMISE)
+library(ggplot2)
+library(rhdf5)
+library(ape)
+library(cluster)
+library(Rtsne)
+library(kernlab)
+library(pheatmap)
+library(caret)
+
+feature_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+config_dir = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+source(file.path(config_dir, "watchdogConfig.R"))
+cell_line = "D004T01"
+all_plates = list.files(feature_dir, pattern = paste0(cell_line, "P[0-9]{3}L08$"))
+```
+
+The task here is to test how well each drug/drug-concentration can be separated from the DMSO controls for each cell line. Three metrics that arise from this are the classification accuracy, the distance between control and drugs in feature space, and the vector pointing from DMSO to the drug. This is closely related to the multivariate profiling as per Loo et al ("Image-based multivariate profiling of drug responses from single cells"). The only difference is that I use the normalized vector from the DMSO centroid to the drug centroid in feature space as a profile, instead of the SVM hyperplane normal as is done by Loo et al.
+
+# Clinical Library
+## Bortezomib
+Use Bortezomib as a proof of concept
+```{r}
+drug = "Bortezomib"
+lib = loadLibrary("L08", config_dir)
+drug_wells = as.character(lib[lib$Product.Name == drug, "Well_ID_384"])
+dmso_wells = as.character(lib[lib$Product.Name == "DMSO", "Well_ID_384"])
+
+drug_features = list()
+drug_otypes = c()
+dmso_features = list()
+dmso_otypes = c()
+for(plate in all_plates) {
+  for(well in drug_wells) {
+    feat_fn = file.path(
+      feature_dir, plate, "wells_normalized", 
+      sprintf("%s_%s_%s_features_normalized.h5", 
+              plate, substr(well, 1, 1), 
+              substr(well, 2, 3)))
+    feats = h5read(feat_fn, "features_organoids")
+    colnames(feats) = h5read(feat_fn, "feature_names_organoids")
+    well_id = paste0(plate, "_", substr(well, 1, 1), "_", substr(well, 2, 3))
+    rownames(feats) = paste0(well_id, "__", seq_len(nrow(feats)))
+    otype = h5read(feat_fn, "object_type_organoids")
+    feats = feats[otype != "BLURRY", ]
+    drug_otypes = c(drug_otypes, otype[otype != "BLURRY"])
+    drug_features[[well_id]] = feats
+  }
+  for(well in dmso_wells) {
+    feat_fn = file.path(
+      feature_dir, plate, "wells_normalized", 
+      sprintf("%s_%s_%s_features_normalized.h5", 
+              plate, substr(well, 1, 1), 
+              substr(well, 2, 3)))
+    feats = h5read(feat_fn, "features_organoids")
+    colnames(feats) = h5read(feat_fn, "feature_names_organoids")
+    well_id = paste0(plate, "_", substr(well, 1, 1), "_", substr(well, 2, 3))
+    rownames(feats) = paste0(well_id, "__", seq_len(nrow(feats)))
+    otype = h5read(feat_fn, "object_type_organoids")
+    feats = feats[otype != "BLURRY", ]
+    dmso_otypes = c(dmso_otypes, otype[otype != "BLURRY"])
+    dmso_features[[well_id]] = feats
+  }
+}
+drug_features = do.call(rbind, drug_features)
+drug_metadata = data.frame(
+  "CONCENTRATION" = lib[
+    sapply(
+      strsplit(rownames(drug_features), "_"), 
+      function(x) paste0(x[2], x[3])), 
+    "concentration"], 
+  "TYPE" = drug_otypes)
+dmso_features = do.call(rbind, dmso_features)
+dmso_metadata = data.frame("TYPE" = dmso_otypes)
+```
+
+Separate groups (each concentration) with SVM and calculate the metrics
+```{r, message=FALSE}
+conc_acc = c()
+conc_dist = c()
+conc_vec = list()
+for(concentration in sort(unique(drug_metadata$CONCENTRATION))) {
+  conc_features = drug_features[drug_metadata$CONCENTRATION == concentration, ]
+  conc_metadata = drug_metadata[drug_metadata$CONCENTRATION == concentration, ]
+  
+  # Downsample categories
+  min_samples = min(nrow(conc_features), nrow(dmso_features))
+  y = rep(c("DMSO", "DRUG"), c(min_samples, min_samples))
+  x = rbind(
+    conc_features[sample(seq_len(nrow(conc_features)), min_samples, replace = FALSE), ], 
+    dmso_features[sample(seq_len(nrow(dmso_features)), min_samples, replace = FALSE), ])
+  
+  # Remove features with any NA entries
+  x = x[, colSums(!is.finite(x)) == 0]
+  
+  # Create data partition
+  intrain = createDataPartition(y = y, p = 0.7, list = FALSE)
+  x_train = x[intrain, ]
+  y_train = y[intrain]
+  x_test = x[-intrain, ]
+  y_test = y[-intrain]
+  
+  # Perform feature selection
+  source("svmrfe.R")
+  svmrfe = svm_rfe(X = x_train, y = y_train, X_test = x_test, y_test = y_test, elim_frac = 0.1)
+  full_model = ksvm(x = x_train, y = y_train, scaled = TRUE, kernel = "vanilladot")
+  full_acc = mean(predict(full_model, x_test) == y_test)
+  
+  # Remove features whose removal doesn't cause the accuracy to drop below 90% of the full model accuracy
+  # "Remove" means that the features are set to 0
+  max_rank_to_keep = tryCatch(
+    max(svmrfe$Ranking[svmrfe$Accuracy <= full_acc*0.9] + 1), 
+    warning = function(w) 1)
+  if(length(max_rank_to_keep) == 0) max_rank_to_keep = 1
+  features_to_keep = colnames(x)[svmrfe$Ranking <= max_rank_to_keep]
+  reduced_model = ksvm(x = x_train[, features_to_keep], y = y_train, scaled = TRUE, kernel = "vanilladot")
+  reduced_acc = mean(predict(reduced_model, x_test[, features_to_keep]) == y_test)
+  
+  conc_acc[[as.character(concentration)]] = reduced_acc
+  
+  # # Calculate normal vector to hyperplane as profile
+  norm_vec_vals = (reduced_model@coef[[1]] %*% reduced_model@xmatrix[[1]])[1,]
+  norm_vec = setNames(
+   object = rep(0, ncol(conc_features)), 
+   nm = colnames(conc_features))
+  norm_vec[names(norm_vec_vals)] = norm_vec_vals
+  conc_vec[[as.character(concentration)]] = norm_vec
+  
+  # Calculate the distance and vector between the groups
+  # drug_centroid = colMeans(x[y == "DRUG", features_to_keep])
+  # dmso_centroid = colMeans(x[y == "DMSO", features_to_keep])
+  # dist_vec = drug_centroid - dmso_centroid
+  # conc_dist[[as.character(concentration)]] = sqrt(dist_vec %*% dist_vec)[1,1]
+  # conc_vec[[as.character(concentration)]] = dist_vec / sqrt(dist_vec %*% dist_vec)[1,1]
+}
+```
+
+Calculate the angles between all vectors to find potential outliers
+```{r}
+angle_matrix = matrix(
+  0, nrow = length(conc_vec), ncol = length(conc_vec), 
+  dimnames = list(names(conc_vec), names(conc_vec)))
+for(conc1 in names(conc_vec)) {
+  for(conc2 in names(conc_vec)) {
+    if(conc1 == conc2) {
+      angle_matrix[conc1, conc2] = 0
+      next
+    }
+    vec1_abs = (conc_vec[[conc1]] %*% conc_vec[[conc1]])[1,1]
+    vec2_abs = (conc_vec[[conc2]] %*% conc_vec[[conc2]])[1,1]
+    dot_prod = (conc_vec[[conc1]] %*% conc_vec[[conc2]])[1,1]
+    angle_matrix[conc1, conc2] = acos(dot_prod / (vec1_abs * vec2_abs)) * 180 / pi
+  }
+}
+print(angle_matrix)
+```
+
+
+
+
+
+```{r}
+features = readRDS("../../quality_control/human/QC_human__stability_selection__features.rds")
+metadata = readRDS("../../quality_control/human/QC_human__stability_selection__features_metadata.rds")
+layout = substr(rownames(features), 12, 14)
+features = features[layout %in% c("L08"), ]
+metadata = metadata[layout %in% c("L08"), ]
+```
+
+Renormalize features to make them comparable
+```{r}
+features = apply(features, 2, function(x) {
+  (x - mean(x)) / sd(x)})
+```
+
+# Distance maps for each drug to DMSO
+```{r}
+cell_line = "D004T01"
+cl_features = features[metadata$CELL.LINE == cell_line, ]
+cl_metadata = metadata[metadata$CELL.LINE == cell_line, ]
+dmso_features = cl_features[cl_metadata$DRUG == "DMSO", ]
+
+for(drug in unique(cl_metadata$DRUG)) {
+  if(drug == "DMSO") next
+  drug_features = cl_features[cl_metadata$DRUG == drug, ]
+  if(nrow(drug_features) < 10) next
+  combined_features = rbind(dmso_features, drug_features)
+  annotation = data.frame(
+    "Treatment" = cl_metadata[rownames(combined_features), "DRUG"], 
+    "Concentration" = as.character(ifelse(
+      test = cl_metadata[rownames(combined_features), "DRUG"] == "DMSO", 
+      yes = NA, no = cl_metadata[rownames(combined_features), "CONCENTRATION"])), 
+    row.names = rownames(combined_features))
+  annotation_colors = list(
+    "Treatment" = c("Blue", "Red"), 
+    "Concentration" = c("Grey", "Yellow", "Blue", "Green", "Red"))
+  names(annotation_colors$Treatment) = c("DMSO", drug)
+  names(annotation_colors$Concentration) = levels(annotation$Concentration)
+  pheatmap(
+    mat = dist(combined_features), annotation_col = annotation, 
+    annotation_colors = annotation_colors, main = drug)
+}
+```
+
+<!-- # KiStem library -->
+
+<!-- First I look at the KiStem library without concentrations -->
+<!-- ```{r} -->
+<!-- features = readRDS("../../quality_control/human/QC_human__stability_selection__features.rds") -->
+<!-- metadata = readRDS("../../quality_control/human/QC_human__stability_selection__features_metadata.rds") -->
+<!-- layout = substr(rownames(features), 12, 14) -->
+<!-- features = features[layout %in% c("L02", "L03"), ] -->
+<!-- metadata = metadata[layout %in% c("L02", "L03"), ] -->
+<!-- ``` -->
+
+<!-- Renormalize features to make them comparable -->
+<!-- ```{r} -->
+<!-- features = apply(features, 2, function(x) { -->
+<!--   (x - mean(x)) / sd(x)}) -->
+<!-- ``` -->
+
+<!-- Sort treatments by how similar their replicates are. This similarity is simply the mean of the standard deviation of each individual feature across replicates. I keep only treatments that have a mean standard deviation of $\langle SD \rangle \leq 1$ for each cell line. -->
+<!-- ```{r} -->
+<!-- drug_conc_cl_id = paste0(metadata$DRUG, "__", metadata$CELL.LINE) -->
+<!-- features_sd_agg = aggregate(features, list(drug_conc_cl_id), sd) -->
+<!-- rownames(features_sd_agg) = features_sd_agg$Group.1 -->
+<!-- features_sd_agg$Group.1 = NULL -->
+<!-- features_sd = apply(features_sd_agg, 1, mean) -->
+<!-- features_sd = data.frame( -->
+<!--   "SD" = features_sd,  -->
+<!--   "Drug" = sapply(strsplit(names(features_sd), "__"), "[[", 1),  -->
+<!--   "Cell.Line" = sapply(strsplit(names(features_sd), "__"), "[[", 2)) -->
+<!-- features_sd_sorted = list() -->
+<!-- for(cl in unique(features_sd$Cell.Line)) { -->
+<!--   cl_features_sd = features_sd[features_sd$Cell.Line == cl, ] -->
+<!--   cl_features_sd = cl_features_sd[order(cl_features_sd$SD, decreasing = FALSE), ] -->
+<!--   cl_features_sd$X = seq_len(nrow(cl_features_sd)) -->
+<!--   features_sd_sorted[[cl]] = cl_features_sd -->
+<!-- } -->
+<!-- features_sd_sorted = do.call(rbind, features_sd_sorted) -->
+<!-- ggplot(data = features_sd_sorted) + geom_line(aes(x = X, y = SD, color = Cell.Line)) -->
+
+<!-- features_sd_thresh = features_sd_sorted[features_sd_sorted$SD <= 1, ] -->
+<!-- drugs_to_keep = unique( -->
+<!--   c("DMSO", names(which(table(features_sd_thresh$Drug) == length(unique(metadata$CELL.LINE)))))) -->
+
+<!-- features = features[metadata$DRUG %in% drugs_to_keep, ] -->
+<!-- metadata = metadata[metadata$DRUG %in% drugs_to_keep, ] -->
+<!-- ``` -->
+
+<!-- From here, all operations are performed on individual cell lines. Calculate the difference vector pointing from DMSO to the treatment in feature space. -->
+<!-- ```{r} -->
+<!-- cell_line = "D004T01" -->
+<!-- cl_features = features[metadata$CELL.LINE == cell_line, ] -->
+<!-- cl_metadata = metadata[metadata$CELL.LINE == cell_line, ] -->
+
+<!-- cl_features_mean = aggregate(cl_features, list(cl_metadata$DRUG), mean) -->
+<!-- rownames(cl_features_mean) = cl_features_mean$Group.1 -->
+<!-- cl_features_mean$Group.1 = NULL -->
+<!-- for(feat in colnames(cl_features_mean)) { -->
+<!--   cl_features_mean[[feat]] = cl_features_mean[[feat]] - cl_features_mean["DMSO", feat] -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- t-SNE -->
+<!-- ```{r} -->
+<!-- perplexities = c(10, 20, 30, 40, 50) -->
+<!-- tsne_data = lapply(perplexities, function(x) Rtsne( -->
+<!--   cl_features_mean, perplexity = x, initial_dims = 250,  -->
+<!--   theta = 0, pca_scale = TRUE, pca_center = TRUE, max_iter = 5000)) -->
+<!-- names(tsne_data) = perplexities -->
+<!-- for(x in perplexities) { -->
+<!--   tsne_df = data.frame(tsne_data[[as.character(x)]]$Y) -->
+<!--   plot( -->
+<!--     ggplot(data = tsne_df) + geom_point(aes(x = X1, y = X2)) +  -->
+<!--       ggtitle(sprintf("T-SNE Plot with perplexity %s", x))) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- K-Means clustering -->
+<!-- ```{r} -->
+<!-- pam1 = function(x, k) list(cluster = pam(x, k, cluster.only = TRUE)) -->
+<!-- gapstat = clusGap(x = cl_features_mean, FUNcluster = pam1, K.max = 20, B = 50, verbose = FALSE) -->
+<!-- plot(gapstat, main = "Gap Statistic for Full Feature Set") -->
+<!-- ``` -->
+
+<!-- Hierarchical Clustering -->
+<!-- ```{r} -->
+<!-- dmat = dist(as.matrix(cl_features_mean)) -->
+<!-- hc = hclust(dmat) -->
+<!-- colors = c("Black", "Red") -->
+<!-- is_dmso = as.numeric(hc$labels == "DMSO") + 1 -->
+<!-- plot.phylo( -->
+<!--   as.phylo(hc), cex = 0.6, label.offset = 0.5, type = "fan",  -->
+<!--   show.tip.label = FALSE, edge.color = colors[as.factor(is_dmso)],  -->
+<!--   tip.color = colors[as.factor(is_dmso)]) -->
+<!-- ``` -->

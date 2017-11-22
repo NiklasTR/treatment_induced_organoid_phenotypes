@@ -1,11 +1,8 @@
 import sys
 import Config
 import os
-import LoadFeatures
-import BlurryOrganoidClassifier
-import NormalizeFeatures
 import DeadOrganoidClassifier
-import SummarizeFeatures
+import ProcessFeatures
 
 if __name__ == "__main__":
     try:
@@ -18,10 +15,46 @@ if __name__ == "__main__":
     if cmd == "help":
         print "Usage: %s [COMMAND] <options>" % sys.argv[0]
         print "Possible COMMAND <option> combinations:"
+        print "- FULL_WORKFLOW <PLATE_ID>"
         print "- NORMALIZE_WELL <PLATE_ID>"
         print "- CLASSIFY_ORGANOIDS <PLATE_ID>"
         print "- AVERAGE_WELLS <PLATE_ID>"
-    elif cmd == "NORMALIZE_WELL":
+        print "- BLURRY_ORGANOID_STATS <PLATE_ID>"
+        print "- DMSO_NORM <PLATE_ID>"
+    elif cmd == "FULL_WORKFLOW":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s NORMALIZE_WELL [plate_id]" % sys.argv[0]
+            sys.exit()
+
+        # Calc DMSO average
+        cls = ProcessFeatures.get_dmso_average_for_plate(plate=plate)
+
+        # Normalize wells
+        all_wells = sorted([
+            well for well in
+            os.listdir(os.path.join(Config.FEATUREDIR, plate, "wells"))
+            if well.startswith(plate)])
+        for well in all_wells:
+            print well
+            try:
+                FEATURES = ProcessFeatures.load_organoid_features(wells=[well])
+                FEATURES = ProcessFeatures.label_blurry_organoids(
+                    **FEATURES)
+                FEATURES = ProcessFeatures.get_normalized_organoid_features(
+                    **FEATURES)
+            except:
+                continue
+
+        # Calc plate average
+        wellavg = ProcessFeatures.calc_well_summaries(plate=plate)
+
+        # Calc blurry organoid stats
+        blurry_cls = ProcessFeatures.create_blurry_organoid_statistics(
+            plate=plate)
+
+    elif cmd == "NORMALIZE_WELLS":
         try:
             plate = sys.argv[2]
         except IndexError:
@@ -34,10 +67,10 @@ if __name__ == "__main__":
         for well in all_wells:
             print well
             try:
-                FEATURES = LoadFeatures.load_organoid_features(wells=[well])
-                FEATURES = BlurryOrganoidClassifier.label_blurry_organoids(
+                FEATURES = ProcessFeatures.load_organoid_features(wells=[well])
+                FEATURES = ProcessFeatures.label_blurry_organoids(
                     **FEATURES)
-                FEATURES = NormalizeFeatures.get_normalized_organoid_features(
+                FEATURES = ProcessFeatures.get_normalized_organoid_features(
                     **FEATURES)
             except:
                 continue
@@ -54,7 +87,21 @@ if __name__ == "__main__":
         except IndexError:
             print "Usage: %s AVERAGE_WELLS [plate_id]" % sys.argv[0]
             sys.exit()
-        wellavg = SummarizeFeatures.calc_well_summaries(plate=plate)
+        wellavg = ProcessFeatures.calc_well_summaries(plate=plate)
+    elif cmd == "BLURRY_ORGANOID_STATS":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s BLURRY_ORGANOID_STATS [plate_id]" % sys.argv[0]
+            sys.exit()
+        cls = ProcessFeatures.create_blurry_organoid_statistics(plate=plate)
+    elif cmd == "DMSO_NORM":
+        try:
+            plate = sys.argv[2]
+        except IndexError:
+            print "Usage: %s DMSO_NORM [plate_id]" % sys.argv[0]
+            sys.exit()
+        cls = ProcessFeatures.get_dmso_average_for_plate(plate=plate)
     else:
         print "Usage: %s [COMMAND] <options>" % sys.argv[0]
         print "Run '%s help' for a list of commands" % sys.argv[0]
