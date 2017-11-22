@@ -29,26 +29,13 @@ def get_classification_labels(
         cl_features = np.transpose(features[..., cell_lines == cl])
 
         # Impute missing features
-        # This is done by calculating the mean and standard deviation of each
-        # feature and assigning all NA entries randomly selected values from
-        # a normal distribution. If all features are NA, then a distribution
-        # N(0, 1) is used
-        # The imputation is done for each training set individually
+        # This is done by assigning all missing values a random number from a
+        # N(0, 1) distribution
         masked_features = np.ma.array(
             data=cl_features,
             mask=~np.isfinite(cl_features))
-        for ii in range(len(feature_names)):
-            na_features = ~np.isfinite(cl_features[..., ii])
-            if np.sum(na_features) == 0:
-                continue
-            if np.sum(~na_features) == 0:
-                f_mean_pos = 0
-                f_sd_pos = 1
-            else:
-                f_mean_pos = np.mean(masked_features[..., ii])
-                f_sd_pos = np.std(masked_features[..., ii])
-            cl_features[..., ii][na_features] = np.random.normal(
-                f_mean_pos, f_sd_pos, np.sum(na_features))
+        cl_features[masked_features.mask] = np.random.normal(
+            0, 1, np.sum(masked_features.mask))
 
         clf = train_classifier(cl, save=False)
         if return_probs:
@@ -95,32 +82,22 @@ def classify_organoids(plate):
             features = np.transpose(
                 h5handle["features_%s" % Config.FEATURETYPE][()])
             feature_names = h5handle["feature_names_%s" % Config.FEATURETYPE][()]
+            object_types = h5handle["object_type_%s" % Config.FEATURETYPE][()]
+
+        features = features[object_types != "BLURRY", :]
 
         # Remove bad organoids
         bad_organoids = np.sum(np.isfinite(features), axis=1)
         features = features[bad_organoids != 0, :]
 
         # Impute missing features
-        # This is done by calculating the mean and standard deviation of each
-        # feature and assigning all NA entries randomly selected values from
-        # a normal distribution. If all features are NA, then a distribution
-        # N(0, 1) is used
-        # The imputation is done for each training set individually
+        # Missing features are replaced with a random number from a N(0, 1)
+        # distribution
         masked_features = np.ma.array(
             data=features,
             mask=~np.isfinite(features))
-        for ii in range(len(feature_names)):
-            na_features = ~np.isfinite(features[..., ii])
-            if np.sum(na_features) == 0:
-                continue
-            if np.sum(~na_features) == 0:
-                f_mean_pos = 0
-                f_sd_pos = 1
-            else:
-                f_mean_pos = np.mean(masked_features[..., ii])
-                f_sd_pos = np.std(masked_features[..., ii])
-            features[..., ii][na_features] = np.random.normal(
-                f_mean_pos, f_sd_pos, np.sum(na_features))
+        features[masked_features.mask] = np.random.normal(
+            0, 1, np.sum(masked_features.mask))
 
         # Apply classifier to wells
         prediction = clf[0].predict(features)
@@ -457,6 +434,44 @@ def create_roc_data(cell_line, data_cell_line=None, plot=False):
                 f.write(",".join(out_dat[ii, ...].astype(str)) + "\n")
 
 
+def get_classification_labels_with_full_classifier(
+        features, feature_names, well_names, object_type, return_probs=False):
+    """
+    Gets the dead/live label of a given set of features. Returns a (numpy)
+    array of labels in which any original. This version uses the full
+    classifier trained on all cell lines simultaneously
+    :param features:
+    :param feature_names:
+    :param well_names:
+    :param object_type:
+    :param return_probs:
+    :return:
+    """
+    # Handle each cell line separately
+    cell_lines = np.array([wn[0:7] for wn in well_names])
+    out_vec = []
+    for cl in set(cell_lines):
+        cl_features = np.transpose(features[..., cell_lines == cl])
+
+        # Impute missing features
+        # This is done by assigning all missing values a random number from a
+        # N(0, 1) distribution
+        masked_features = np.ma.array(
+            data=cl_features,
+            mask=~np.isfinite(cl_features))
+        cl_features[masked_features.mask] = np.random.normal(
+            0, 1, np.sum(masked_features.mask))
+
+        clf = train_classifier_on_all_cell_lines(save=False)
+        if return_probs:
+            out_vec.append(clf[0].predict_proba(cl_features))
+        else:
+            out_vec.append(clf[0].predict(cl_features))
+
+    out_vec = np.concatenate(out_vec, axis=0)
+    return out_vec
+
+
 def train_classifier_on_all_cell_lines(save=True):
     """
     This version of the function trains a classifier on all cell lines rather
@@ -657,10 +672,14 @@ def classify_organoids_with_full_classifier(plate):
     dead_percentage = []
     for well in wells:
         well_fn = os.path.join(well_dir, well)
+
         with h5py.File(well_fn, "r") as h5handle:
             features = np.transpose(
                 h5handle["features_%s" % Config.FEATURETYPE][()])
             feature_names = h5handle["feature_names_%s" % Config.FEATURETYPE][()]
+            object_types = h5handle["object_type_%s" % Config.FEATURETYPE][()]
+
+        features = features[object_types != "BLURRY", :]
 
         # Remove bad organoids
         bad_organoids = np.sum(np.isfinite(features), axis=1)
