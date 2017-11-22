@@ -11,3 +11,8 @@ methods/coculture
 **/*.h5
 **/*.pkl
 .DS_Store
+**/*.rds
+**/*.rda
+**/*.pyc
+**/*.DS_Store
+

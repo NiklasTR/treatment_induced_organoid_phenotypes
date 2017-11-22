@@ -1,0 +1,2 @@
+This package contains the functions required to preprocess the organoid data,
+both on a well level and an individual organoid level.
