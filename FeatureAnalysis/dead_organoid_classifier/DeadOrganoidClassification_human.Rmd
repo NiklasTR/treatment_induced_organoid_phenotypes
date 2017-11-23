@@ -176,6 +176,44 @@ ggplot(data = mortality_agg) + geom_violin(aes(x = variable, y = value)) +
   ggtitle("Between-Replicate Difference of Killing Percentage") + ylab("") + xlab("")
 ```
 
+## Classifier Certainty
+
+Another measure for how good the classifier is its certainty. For this, I looked at the median certainty in each well. For example, if a hypothetical well has 3 dead organoids that a classifier labeled as such with probabilities of 70%, 85%, and 92%, and 2 live organoids that it labeled as such with a probabilities of 95% and 88%, then its median certainties for classifying dead and live organoids in that well are 85% and 91.5%, respectively. The distribution for the training wells and the whole data set is shown below. The distribution of certainties indicates that while the classifier is extremely confident about classifying "live" organoids (i.e. similar to DMSO controls), it is quite uncertain about dead organoids. Even the training data shows an even distribution of certainties. This can be indicative of an insufficiently large training set or suboptimal features.
+
+```{r}
+well_layout = substr(rownames(mortality), 12, 14)
+dead_certainty_dmso_training = mortality[
+  well_layout == "L08" & mortality$Product.Name == "DMSO", "Median.Certainty.Dead"]
+live_certainty_dmso_training = mortality[
+  well_layout == "L08" & mortality$Product.Name == "DMSO", "Median.Certainty.Live"]
+dead_certainty_posctrl_training = mortality[
+  well_layout == "L08" & mortality$Product.Name %in% c("Bortezomib", "Irinotecan / SN-38"), 
+  "Median.Certainty.Dead"]
+live_certainty_posctrl_training = mortality[
+  well_layout == "L08" & mortality$Product.Name %in% c("Bortezomib", "Irinotecan / SN-38"), 
+  "Median.Certainty.Live"]
+
+ggplotdf = data.frame(
+  "Certainty" = c(
+    mortality$Median.Certainty.Live, mortality$Median.Certainty.Dead, 
+    live_certainty_dmso_training, dead_certainty_dmso_training, 
+    live_certainty_posctrl_training, dead_certainty_posctrl_training),
+  "Type" = rep(
+    c("Median.Certainty.Live", "Median.Certainty.Dead", 
+      "Median.Certainty.Live", "Median.Certainty.Dead", 
+      "Median.Certainty.Live", "Median.Certainty.Dead"), 
+    c(nrow(mortality), nrow(mortality), 
+      length(live_certainty_dmso_training), length(dead_certainty_dmso_training), 
+      length(live_certainty_posctrl_training), 
+      length(dead_certainty_posctrl_training))), 
+  "Dataset" = rep(
+    c("Full.Dataset", "Negative.Control", "Positive.Control"), 
+    c(nrow(mortality)*2, 
+      length(live_certainty_dmso_training) + length(dead_certainty_dmso_training), 
+      length(live_certainty_posctrl_training) + length(dead_certainty_posctrl_training))))
+ggplot(data = ggplotdf) + geom_violin(aes(x = Dataset, y = Certainty, fill = Type))
+```
+
 # Staurosporine Wells
 
 An interesting pseudo-validation of the method is to look at the effect that Staurosporine has on each cell line. We confirmed visually that the Staurosporine concentration was too low and the cell lines reacted to varying degrees to it. The ratios of dead to live organoids as detected by the classifier matches our visual assessment.
@@ -363,24 +401,23 @@ mut_matrix = matrix(
 # }
 ```
 
-```{r}
-drug = profiles_pruned$Drug[1]
-res_cl = profiles_pruned[
-  profiles_pruned$Reaction.Type == "Resistant" &
-  profiles_pruned$Drug == drug, "Cell.Line"]
-mutations_res_group = colMeans(mut_matrix[res_cl, , drop=FALSE])
-sus_cl = profiles_pruned[
-  profiles_pruned$Reaction.Type == "Susceptible" &
-  profiles_pruned$Drug == drug, "Cell.Line"]
-mutations_sus_group = colMeans(mut_matrix[sus_cl, , drop=FALSE])
+<!-- ```{r} -->
+<!-- drug = profiles_pruned$Drug[1] -->
+<!-- res_cl = profiles_pruned[ -->
+<!--   profiles_pruned$Reaction.Type == "Resistant" & -->
+<!--   profiles_pruned$Drug == drug, "Cell.Line"] -->
+<!-- mutations_res_group = colMeans(mut_matrix[res_cl, , drop=FALSE]) -->
+<!-- sus_cl = profiles_pruned[ -->
+<!--   profiles_pruned$Reaction.Type == "Susceptible" & -->
+<!--   profiles_pruned$Drug == drug, "Cell.Line"] -->
+<!-- mutations_sus_group = colMeans(mut_matrix[sus_cl, , drop=FALSE]) -->
+<!-- ``` -->
 
-```
-
-```{r}
-tmp = aggregate(profiles_pruned$Reaction.Type, list(profiles_pruned$Drug), table)
+<!-- ```{r} -->
+<!-- tmp = aggregate(profiles_pruned$Reaction.Type, list(profiles_pruned$Drug), table) -->
 
 
-```
+<!-- ``` -->
 
 ## Drug Target Enrichment
 
