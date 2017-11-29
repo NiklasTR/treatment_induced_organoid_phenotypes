@@ -1,0 +1,37 @@
+---
+title: "dgidb_access"
+author: "Niklas Rindtorff"
+date: "11/29/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load requiered packages
+```{r}
+library(tidyverse)
+library(stringr)
+library(jsonlite)
+library(httr)
+library(stringr)
+```
+
+#Check amount of interactions
+```{r}
+number <- GET(url = "http://dgidb.genome.wustl.edu", path = "api/v2/interactions") %>% .$content %>% rawToChar() %>% fromJSON() %>% .$`_meta` %>% .$total_count
+
+number
+```
+
+#Access all interactions
+```{r}
+dgidb_expt <- GET(url = "http://dgidb.genome.wustl.edu", path = paste0("api/v2/interactions?count=", number, "&page=1")) %>% .$content %>% rawToChar() %>% fromJSON() %>% .$records %>% as.tibble()
+```
+
+#Save data
+```{r}
+save(dgidb_expt, file = "dgidb_export.Rdata")
+```
+
