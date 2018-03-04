@@ -45,8 +45,9 @@ library(openxlsx)
 To systematically link compounds to a molecular target the DGIDB database is used. Library compounds are linked to affected genes. The result table is manually curated and subsequently loaded. 
 ```{r access-dgidb-database, eval=FALSE, message=FALSE}
 return_dgidb <- function(input, type = "genes"){
+  require(stringr)
 url = "http://dgidb.genome.wustl.edu"
-path = paste0("/api/v1/interactions.json",
+path = paste0("/api/v2/interactions.json",
               "?", type,"=",input %>% str_replace_all(., " ", ""))
 
 response <- GET(url = url, path = path)
