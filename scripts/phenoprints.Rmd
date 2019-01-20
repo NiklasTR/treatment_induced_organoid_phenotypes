@@ -1,0 +1,94 @@
+---
+title: "phenoprints"
+author: "Niklas Rindtorff"
+date: "3/27/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+load libs 
+
+```{r}
+library(tidyverse)
+```
+
+Load data
+
+```{r}
+load("~/promise/local_data/observation/Phenoprints_human.rda")
+phenoprints
+```
+
+I also load a list of organoids I specially interested in 
+
+```{r}
+library(readxl)
+lines_of_interest <- read_excel("local_data/observation/lines_of_interest.xlsx", col_names = FALSE)$X__1 %>% 
+  paste0(., "01")
+```
+
+
+
+I list the relevant channels 
+
+```{r}
+phenoprints %>% 
+  .$Feature %>%unique()
+```
+
+I only want to keep the first 6 feature for now.
+
+Plot
+
+First I plot an overview for all lines
+
+```{r}
+foi <- c(phenoprints$Feature %>% unique())[rev(c(1,2,4,3,5,6))]
+
+phenoprints %>% 
+  filter(Feature %in% foi) %>%
+  #filter(Line %in% lines_of_interest) %>%
+  mutate(Feature = factor(Feature, levels = foi)) %>%
+  #filter(Line == "D004T01") %>%
+  ggplot(aes(Feature, Value)) + 
+  facet_wrap(~ Line) + 
+  geom_bar(stat = "identity", fill = "grey") + 
+  coord_flip() + 
+  theme_classic(base_size = 11) + 
+  geom_hline(yintercept = 0) +
+  theme(axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 11),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) 
+```
+
+
+Now I plot a showcase for represenatitive phenotypes 
+
+```{r}
+foi <- c(phenoprints$Feature %>% unique())[rev(c(1,2,4,3,5,6))]
+
+phenoprints %>% 
+  filter(Feature %in% foi) %>%
+  filter(Line %in% lines_of_interest) %>%
+  mutate(Feature = factor(Feature, levels = foi)) %>%
+  #filter(Line == "D004T01") %>%
+  ggplot(aes(Feature, Value)) + 
+  facet_wrap(~ Line) + 
+  geom_bar(stat = "identity", fill = "grey") + 
+  coord_flip() + 
+  theme_classic(base_size = 11) + 
+  geom_hline(yintercept = 0) +
+  theme(axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 11),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) 
+
+## axis.text.x for x axis only
+```
+

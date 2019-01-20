@@ -22,12 +22,16 @@ library(abind)
 library(EBImage)
 
 # Directories and files
-config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
-feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+# config_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir"
+# feature_dir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/features"
+config_dir = "/Volumes/collab/PROMISE/data-10x-4t-c-16z/configdir"
+feature_dir = "/Volumes/collab/PROMISE/data-10x-4t-c-16z/features"
 source(file.path(config_dir, "watchdogConfig.R"))
 
 # Parameters
 feature_type = "organoids"
+
+
 ```
 
 # Clustering of Organoids in well D004T01P005L08_A_09
@@ -66,6 +70,11 @@ Remove features with any NA's and with constant values
 # Remove NA features
 na_feature_counts = colSums(!is.finite(features))
 features = features[, na_feature_counts == 0]
+```
+
+I want to visualize the distribution of features and look for features that are bimodal
+```{r}
+
 ```
 
 Discretize the features by rounding to the nearest 0.5

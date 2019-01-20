@@ -1,0 +1,53 @@
+.clickable {
+  cursor: pointer;
+  text-decoration: none;
+  color: #99ccff;
+}
+
+.pseudolink {
+  cursor: pointer;
+  color: #005500; 
+  text-decoration: none;
+  font-size: 10pt;
+  font-weight: bold;
+}
+.pseudolink:focus, .pseudolink:hover, .pseudolink:active{
+  color:#00ad00;
+}
+
+
+.cpdbutton {
+  border: 1px solid #000000;
+  color:  black;
+  background-color: #cde8cd;
+  padding-left:  2ex;
+  padding-right:  2ex;
+  text-decoration: none;
+}
+
+.cpdbutton:hover {
+  border: 1px solid #000000;
+  color:  black;
+  background-color: #bbd4bb;
+  padding-left:  2ex;
+  padding-right:  2ex;
+  text-decoration: none;
+}
+
+/* tooltip stuff */
+
+.dhtmltooltip {
+        position: absolute;
+        border: 1px solid green;
+        padding: 2px;
+        visibility: hidden;
+        text-align: left;
+        color: #000000;
+        z-index: 100;
+        background: #DCDCDC;
+        filter: alpha(opacity=95);
+        moz-opacity: 0.95;
+        -khtml-opacity: 0.95;
+        opacity: 0.95;
+}
+

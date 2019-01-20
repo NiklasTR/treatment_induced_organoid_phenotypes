@@ -1,0 +1,147 @@
+﻿ID,Description,n
+R-HSA-109581,Apoptosis,2
+R-HSA-112314,Neurotransmitter receptors and postsynaptic signal transmission,2
+R-HSA-112315,Transmission across Chemical Synapses,2
+R-HSA-112316,Neuronal System,2
+R-HSA-1168372,Downstream signaling events of B Cell Receptor (BCR),3
+R-HSA-1169091,Activation of NF-kappaB in B cells,3
+R-HSA-1234176,Oxygen-dependent proline hydroxylation of Hypoxia-inducible Factor Alpha,2
+R-HSA-1236974,ER-Phagosome pathway,5
+R-HSA-1236975,Antigen processing-Cross presentation,3
+R-HSA-1236978,Cross-presentation of soluble exogenous antigens (endosomes),2
+R-HSA-1268020,Mitochondrial protein import,2
+R-HSA-162906,HIV Infection,2
+R-HSA-162909,Host Interactions of HIV factors,2
+R-HSA-166658,Complement cascade,2
+R-HSA-167172,Transcription of the HIV genome,2
+R-HSA-168254,Influenza Infection,2
+R-HSA-168255,Influenza Life Cycle,2
+R-HSA-168273,Influenza Viral RNA Transcription and Replication,2
+R-HSA-169911,Regulation of Apoptosis,3
+R-HSA-174084,Autodegradation of Cdh1 by Cdh1:APC/C,4
+R-HSA-174113,SCF-beta-TrCP mediated degradation of Emi1,3
+R-HSA-174154,APC/C:Cdc20 mediated degradation of Securin,3
+R-HSA-174178,APC/C:Cdh1 mediated degradation of Cdc20 and other APC/C:Cdh1 targeted proteins in late mitosis/early G1,3
+R-HSA-174184,Cdc20:Phospho-APC/C mediated degradation of Cyclin A,3
+R-HSA-176408,Regulation of APC/C activators between G1/S and early anaphase,3
+R-HSA-176409,APC/C:Cdc20 mediated degradation of mitotic proteins,3
+R-HSA-176814,Activation of APC/C and APC/C:Cdc20 mediated degradation of mitotic proteins,3
+R-HSA-179419,APC:Cdc20 mediated degradation of cell cycle proteins prior to satisfation of the cell cycle checkpoint,3
+R-HSA-1799339,SRP-dependent cotranslational protein targeting to membrane,2
+R-HSA-180534,Vpu mediated degradation of CD4,3
+R-HSA-180585,Vif-mediated degradation of APOBEC3G,3
+R-HSA-187577,SCF(Skp2)-mediated degradation of p27/p21,5
+R-HSA-195253,Degradation of beta-catenin by the destruction complex,3
+R-HSA-199977,ER to Golgi Anterograde Transport,4
+R-HSA-211733,Regulation of activated PAK-2p34 by proteasome mediated degradation,3
+R-HSA-2187338,Visual phototransduction,2
+R-HSA-2262752,Cellular responses to stress,2
+R-HSA-2467813,Separation of Sister Chromatids,3
+R-HSA-2555396,Mitotic Metaphase and Anaphase,3
+R-HSA-3371497,HSP90 chaperone cycle for steroid hormone receptors (SHR),3
+R-HSA-349425,Autodegradation of the E3 ubiquitin ligase COP1,2
+R-HSA-350562,Regulation of ornithine decarboxylase (ODC),3
+R-HSA-3700989,Transcriptional Regulation by TP53,2
+R-HSA-373076,Class A/1 (Rhodopsin-like receptors),2
+R-HSA-375276,Peptide ligand-binding receptors,2
+R-HSA-375280,Amine ligand-binding receptors,2
+R-HSA-376176,Signaling by ROBO receptors,2
+R-HSA-379716,Cytosolic tRNA aminoacylation,2
+R-HSA-379724,tRNA Aminoacylation,2
+R-HSA-380270,Recruitment of mitotic centrosome proteins and complexes,2
+R-HSA-380287,Centrosome maturation,2
+R-HSA-380320,Recruitment of NuMA to mitotic centrosomes,2
+R-HSA-381038,XBP1(S) activates chaperone genes,2
+R-HSA-382556,ABC-family proteins mediated transport,2
+R-HSA-389957,Prefoldin mediated transfer of substrate  to CCT/TriC,2
+R-HSA-389958,Cooperation of Prefoldin and TriC/CCT  in actin and tubulin folding,2
+R-HSA-389960,Formation of tubulin folding intermediates by CCT/TriC,3
+R-HSA-390450,Folding of actin by CCT/TriC,2
+R-HSA-4086400,PCP/CE pathway,2
+R-HSA-416476,G alpha (q) signalling events,2
+R-HSA-418594,G alpha (i) signalling events,2
+R-HSA-446203,Asparagine N-linked glycosylation,6
+R-HSA-450408,AUF1 (hnRNP D0) binds and destabilizes mRNA,4
+R-HSA-450531,Regulation of mRNA stability by proteins that bind AU-rich elements,4
+R-HSA-453274,Mitotic G2-G2/M phases,4
+R-HSA-453279,Mitotic G1-G1/S phases,3
+R-HSA-4641257,Degradation of AXIN,3
+R-HSA-4641258,Degradation of DVL,3
+R-HSA-500792,GPCR ligand binding,2
+R-HSA-5357801,Programmed Cell Death,2
+R-HSA-5362768,Hh mutants that don't undergo autocatalytic processing are degraded by ERAD,3
+R-HSA-5368286,Mitochondrial translation initiation,2
+R-HSA-5368287,Mitochondrial translation,2
+R-HSA-5387390,Hh mutants abrogate ligand secretion,2
+R-HSA-5389840,Mitochondrial translation elongation,2
+R-HSA-5419276,Mitochondrial translation termination,2
+R-HSA-5576891,Cardiac conduction,2
+R-HSA-5607761,Dectin-1 mediated noncanonical NF-kB signaling,3
+R-HSA-5607764,CLEC7A (Dectin-1) signaling,2
+R-HSA-5610780,Degradation of GLI1 by the proteasome,2
+R-HSA-5610783,Degradation of GLI2 by the proteasome,2
+R-HSA-5610785,GLI3 is processed to GLI3R by the proteasome,2
+R-HSA-5619084,ABC transporter disorders,3
+R-HSA-5619115,Disorders of transmembrane transporters,2
+R-HSA-5620912,Anchoring of the basal body to the plasma membrane,2
+R-HSA-5632684,Hedgehog 'on' state,2
+R-HSA-5663205,Infectious disease,2
+R-HSA-5663220,RHO GTPases Activate Formins,2
+R-HSA-5668541,TNFR2 non-canonical NF-kB pathway,3
+R-HSA-5676590,NIK-->noncanonical NF-kB signaling,3
+R-HSA-5678895,Defective CFTR causes cystic fibrosis,4
+R-HSA-5689603,UCH proteinases,2
+R-HSA-6790901,rRNA modification in the nucleus and cytosol,6
+R-HSA-6791226,Major pathway of rRNA processing in the nucleolus and cytosol,4
+R-HSA-6798695,Neutrophil degranulation,3
+R-HSA-6807070,PTEN Regulation,2
+R-HSA-6807878,COPI-mediated anterograde transport,3
+R-HSA-6811442,Intra-Golgi and retrograde Golgi-to-ER traffic,2
+R-HSA-68827,CDT1 association with the CDC6:ORC:origin complex,3
+R-HSA-68882,Mitotic Anaphase,3
+R-HSA-68886,M Phase,2
+R-HSA-69017,CDK-mediated phosphorylation and removal of Cdc6,3
+R-HSA-69052,Switching of origins to a post-replicative state,2
+R-HSA-69202,Cyclin E associated events during G1/S transition ,4
+R-HSA-69206,G1/S Transition,3
+R-HSA-69229,Ubiquitin-dependent degradation of Cyclin D1,3
+R-HSA-69239,Synthesis of DNA,2
+R-HSA-69242,S Phase,3
+R-HSA-69275,G2/M Transition,4
+R-HSA-69306,DNA Replication,2
+R-HSA-69541,Stabilization of p53,2
+R-HSA-69563,p53-Dependent G1 DNA Damage Response,2
+R-HSA-69580,p53-Dependent G1/S DNA damage checkpoint,2
+R-HSA-69601,Ubiquitin Mediated Degradation of Phosphorylated Cdc25A,2
+R-HSA-69610,p53-Independent DNA Damage Response,2
+R-HSA-69613,p53-Independent G1/S DNA damage checkpoint,2
+R-HSA-69615,G1/S DNA Damage Checkpoints,2
+R-HSA-69656,Cyclin A:Cdk2-associated events at S phase entry,4
+R-HSA-71387,Metabolism of carbohydrates,2
+R-HSA-72163,mRNA Splicing - Major Pathway,3
+R-HSA-72165,mRNA Splicing - Minor Pathway,2
+R-HSA-72172,mRNA Splicing,3
+R-HSA-72202,Transport of Mature Transcript to Cytoplasm,2
+R-HSA-72203,Processing of Capped Intron-Containing Pre-mRNA,3
+R-HSA-72306,tRNA processing,4
+R-HSA-72312,rRNA processing,5
+R-HSA-72649,Translation initiation complex formation,2
+R-HSA-72662,"Activation of the mRNA upon binding of the cap-binding complex and eIFs, and subsequent binding to 43S",2
+R-HSA-72702,Ribosomal scanning and start codon recognition,2
+R-HSA-72766,Translation,4
+R-HSA-75815,Ubiquitin-dependent degradation of Cyclin D,3
+R-HSA-8852276,The role of GTSE1 in G2/M progression after G2 checkpoint,3
+R-HSA-8854050,FBXL7 down-regulates AURKA during mitotic entry and in early mitosis,3
+R-HSA-8856688,Golgi-to-ER retrograde transport,4
+R-HSA-8868773,rRNA processing in the nucleus and cytosol,5
+R-HSA-8878159,Transcriptional regulation by RUNX3,2
+R-HSA-8878166,Transcriptional regulation by RUNX2,2
+R-HSA-8939902,Regulation of RUNX2 expression and activity,2
+R-HSA-8941858,Regulation of RUNX3 expression and activity,3
+R-HSA-9006934,Signaling by Receptor Tyrosine Kinases,2
+R-HSA-9010553,Regulation of expression of SLITs and ROBOs,2
+R-HSA-9020702,Interleukin-1 signaling,2
+R-HSA-912694,Regulation of IFNA signaling,2
+R-HSA-917977,Transferrin endocytosis and recycling,2
+R-HSA-948021,Transport to the Golgi and subsequent modification,4
+R-HSA-983705,Signaling by the B Cell Receptor (BCR),3

@@ -1,0 +1,94 @@
+﻿Cell iname	Cell lineage	Primary disease	Collection
+ATRFLOX	large_intestine	colon cancer	
+CACO2	large_intestine	colon cancer	
+CAR1	large_intestine	colon cancer	
+CCK81	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR300
+CL11	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR300
+CL14	large_intestine	colon cancer	CCLE
+CL34	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+CL40	large_intestine	colon cancer	ACHILLES, CCLE
+COLOF	large_intestine	colon cancer	
+COLO201	large_intestine	colon cancer	ACHILLES, CCLE
+COLO205	large_intestine	colon cancer	CCLE
+COLO206F	large_intestine	colon cancer	
+COLO320	large_intestine	colon cancer	CCLE, PRISM-PR300, PRISM-SUSP
+COLO320DM	large_intestine	colon cancer	
+COLO678	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR300
+COLO741	large_intestine	colon cancer, skin cancer	CCLE, PRISM-HURON, PRISM-PR500
+CW2	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR300
+CX1	large_intestine	colon cancer	
+C170	large_intestine	colon cancer	
+C2BBE1	large_intestine	colon cancer	ACHILLES, CCLE
+DLD1	large_intestine	colon cancer	ACHILLES, CCLE
+ECC4	large_intestine	colon cancer	
+GP2D	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+GP5D	large_intestine	colon cancer	
+HCA7	large_intestine	colon cancer	
+HCC1263	large_intestine	colon cancer	
+HCC2998	large_intestine	colon cancer	
+HCC56	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+HCT116	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+HCT15	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+HCT8	large_intestine	colon cancer	CCLE
+HCT8HRT18	large_intestine	colon cancer	
+HM7	large_intestine	colon cancer	
+HRT18	large_intestine	colon cancer	CCLE
+HS200T	large_intestine	colon cancer	
+HS219T	large_intestine	colon cancer	
+HS255T	large_intestine	colon cancer	CCLE
+HS257T	large_intestine	colon cancer	
+HS587INT	large_intestine	colon cancer	
+HS675T	large_intestine	colon cancer	CCLE
+HS692AT	large_intestine	colon cancer	
+HS698T	large_intestine	colon cancer	CCLE
+HS722T	large_intestine	colon cancer	
+HT115	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR300
+HT29	large_intestine	colon cancer	ACHILLES, CCLE, CMAP, L10, PRISM-HURON, PRISM-PR500
+HT29GLUCC1	large_intestine	colon cancer	
+HT29219	large_intestine	colon cancer	
+HT55	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+KM12	large_intestine	colon cancer	ACHILLES, CCLE
+LOVO	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+LS1034	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+LS123	large_intestine	colon cancer	CCLE
+LS174T	large_intestine	colon cancer	
+LS180	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+LS411N	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+LS513	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+MDST8	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-PR300, PRISM-SUSP
+NCIH498	large_intestine	colon cancer	
+NCIH508	large_intestine	colon cancer	CCLE, PRISM-PR300, PRISM-SUSP
+NCIH548	large_intestine	colon cancer	
+NCIH716	large_intestine	colon cancer	ACHILLES, CCLE
+NCIH747	large_intestine	colon cancer	ACHILLES, CCLE, CMAP, PRISM-HURON, PRISM-PR500
+OUMS23	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+RCM1	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+RKO	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+RKOE6	large_intestine	colon cancer	
+SKCO1	large_intestine	colon cancer	CCLE, CMAP, PRISM-HURON
+SNUC1	large_intestine	colon cancer	CCLE
+SNUC2A	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SNUC2B	large_intestine	colon cancer	
+SNUC4	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SNUC5	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SNU1033	large_intestine	colon cancer	CCLE
+SNU1040	large_intestine	colon cancer	CCLE
+SNU1197	large_intestine	colon cancer	CCLE
+SNU175	large_intestine	colon cancer	CCLE
+SNU283	large_intestine	colon cancer	CCLE
+SNU407	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SNU503	large_intestine	colon cancer	ACHILLES, CCLE
+SNU61	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SNU81	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SW1116	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR300
+SW1417	large_intestine	colon cancer	CCLE
+SW1463	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR300
+SW403	large_intestine	colon cancer	ACHILLES, CCLE
+SW48	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+SW480	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+SW620	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+SW626	large_intestine	colon cancer	
+SW837	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-HURON, PRISM-PR500
+SW948	large_intestine	colon cancer	CCLE, PRISM-HURON, PRISM-PR500
+T84	large_intestine	colon cancer	ACHILLES, CCLE, PRISM-PR300
+WIDR	large_intestine	colon cancer	

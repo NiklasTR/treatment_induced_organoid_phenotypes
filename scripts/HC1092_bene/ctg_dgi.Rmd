@@ -1,0 +1,954 @@
+---
+title: "Drug-genotype interactions in the PROMISE CTG data"
+author: "Benedikt Rauscher"
+date: "11/22/2017"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, results='hide', warning=F, echo=F, message=F}
+library(tidyverse)
+library(preprocessCore)
+library(pheatmap)
+library(PharmacoGx)
+library(openxlsx)
+library(betareg)
+library(lmtest)
+library(MASS)
+library(readr)
+```
+
+# Calculation of normalized viability phenotypes
+
+The first step of the analysis of CTG drug screening data is to convert luminescence signals to viability as fraction of the DMSO control signal. This involves normalization of the signal to remove technical artefacts and subsequent normalization of the signal to the control to achieve a viability phenotype.
+
+## Loading the data
+
+### Batch 1: 2017
+
+```{r, results='hide', warning=F, message=F}
+##read ctg data files
+
+ctg_data <- lapply(list.files('~/promise/scripts/HC1092_bene/HC1092/', full.names=T), 
+                   function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
+                     `colnames<-`(c('screen', 'well', 'pcount'))) %>% bind_rows()
+```
+
+### Batch 2: early 2018
+
+```{r, results='hide', warning=F, message=F}
+##read ctg data batch 2
+ctg_data_b2 <- lapply(list.files('~/promise/scripts/HC1092_bene/Batch2_Feb2018/', full.names=T), 
+                   function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
+                     `colnames<-`(c('screen', 'well', 'pcount'))) %>% bind_rows()
+```
+
+### Plate annotation
+
+For now we load again the plate annotation and merge that to the data to know which drug at which concentration went where.
+
+```{r, results='hide', warning=F, message=F}
+## read excel file, convert to tibble
+plate_anno <- tbl_df(openxlsx::read.xlsx('~/promise/rsync_data/layouts/raw_layout_files/Clin_Cancer_Panel_V170511.xlsx'))
+## rename drug and well columns
+colnames(plate_anno)[c(1, 6)] <- c('drug', 'well')
+## join with ctg data
+ctg_data <- ctg_data %>% mutate(batch = '2017') %>% 
+  bind_rows(ctg_data_b2 %>% mutate(batch = '2018')) %>% 
+  inner_join(plate_anno) %>% 
+  extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
+  mutate(row=match(row, LETTERS), col=as.integer(col))
+```
+
+There was a technical issue with one of the plates. Wells have to be flagged accordingly.
+
+```{r, results='hide', warning=F, message=F}
+ctg_data <- ctg_data %>% 
+  mutate(pcount = ifelse(screen == '170502_NR_M2_D004T01P006L08' & 
+                         (row %in% seq(1, 15, by=2)) & 
+                         (col %in% 1:13), NA, pcount))
+```
+
+## Examination of the raw data
+
+Now we can get an idea of what the data looks like. First we look at only one plate at a time and look at the photon counts of DMSO controls to see how they vary and if there might be a positional bias that needs correction.
+
+```{r, results='hide', warning=F, message=F}
+## colour palette for drawing
+colpal <- colorRampPalette(rev(c('#b2182b','#d6604d','#f4a582',
+                                  '#fddbc7','#f7f7f7','#d1e5f0',
+                                  '#92c5de','#4393c3','#2166ac')))(150)
+
+## box plot of DMSO photon counts
+ctg_data %>% filter(drug == 'DMSO') %>% 
+  ggplot(aes(rack.concentration, pcount, colour=batch)) + 
+  geom_jitter(width=0.2) + 
+  facet_wrap(~screen) + geom_boxplot(alpha=0) + 
+  theme_bw() + theme(panel.grid=element_blank())
+
+## heat map of DMSO photon counts, ignoring other values
+ctg_data %>% mutate(pcount = ifelse(drug != 'DMSO', -1000, pcount)) %>% 
+  ggplot(aes(row, col, fill = pcount)) + geom_raster() +
+  facet_wrap(~screen) + theme_bw() +
+  theme(panel.grid=element_blank()) +
+  scale_fill_gradientn(colors=colpal)
+
+## heat map of all photon counts
+ctg_data %>% filter(batch == '2017') %>%
+  ggplot(aes(row, col, fill = pcount)) + geom_raster() +
+  facet_wrap(~screen) + theme_bw() +
+  theme(panel.grid=element_blank()) +
+  scale_fill_gradientn(colors=colpal)
+
+ctg_data %>% filter(batch == '2018') %>%
+  ggplot(aes(row, col, fill = pcount)) + geom_raster() +
+  facet_wrap(~screen) + theme_bw() +
+  theme(panel.grid=element_blank()) +
+  scale_fill_gradientn(colors=colpal)
+```
+
+I would say that there is definitely a spacial bias where photon counts get higher towards the bottom and the maybe edges of the plate.
+
+```{r, results='hide', warning=F, message=F}
+## scatter plot with robust loess fit for rows.
+ctg_data %>% filter(drug == 'DMSO') %>% 
+  ggplot(aes(row, pcount)) + geom_point() + 
+  geom_smooth() +
+  facet_wrap(~screen) + theme_classic()
+
+## scatter plot with robust loess fit for columns
+ctg_data %>% filter(drug == 'DMSO') %>%
+  ggplot(aes(col, pcount)) + geom_point() + 
+  geom_smooth() +
+  facet_wrap(~screen) + theme_classic()
+```
+
+## Normalization of photon counts
+
+Looking at above plots there seem to be row and column effects that we want to correct for. Hence, in order we correct for row-wise spacial bias we apply a loess-normalization to the data.
+
+```{r, results='hide', warning=F, message=F} 
+## split data by plate and apply loess normalization
+ctg_loess <- ctg_data %>% split(.$screen) %>% lapply(function(s){
+  ## loess fit. include row and column effects, fit only on DMSO
+  fit <- loess(pcount ~ 0 + row + col, data=filter(s, drug=='DMSO'),
+               surface = 'direct')
+  ## apply normalization
+  s %>% mutate(norm_fac = predict(fit, data.frame(row=row, col=col)),
+               pcount_norm = pcount - (norm_fac - median(norm_fac)))
+}) %>% bind_rows()
+```
+
+After the loess-normalization some photon count values become negative which of course does not make any sense. We hence center the distribution of phenotypes such that the lowest photon count becomes 0.
+
+```{r, results='hide', warning=F, message=F}
+ctg_loess <- ctg_loess %>% 
+  mutate(pcount_norm = ifelse(pcount_norm < 0, 0, pcount_norm),
+         screen = gsub('HCO_', 'HCO-', screen)) %>%
+  separate(screen, c('date', 'tag1', 'tag2', 'plate'), sep='_', remove=F) %>% 
+  mutate(date = as.Date(paste0('20', date), format='%Y%m%d'))
+```
+
+Next we can normalize the photon counts to the median of the DMSO control on each plate.
+
+```{r, results='hide', warning=F, message=F}
+## median of dmso controls
+ctrls_med <- ctg_loess %>% filter(drug == 'DMSO') %>%
+  group_by(screen) %>% 
+  summarise(med_ctrl = median(pcount_norm, na.rm=T)) %>% 
+  ungroup() 
+
+## normalize to median of DMSO
+ctg_norm <- ctg_loess %>% inner_join(ctrls_med) %>%
+  group_by(screen) %>% 
+  mutate(viability = pcount_norm/med_ctrl) %>% ungroup() %>%
+  extract(screen, 'line', regex = '.+(D0.+T01)', remove=F)
+```
+
+## Quality control of normalized viability measurements
+
+We first check if DMSO controls across all plates have a median of 1 and are comparable. We further investigate the noise that is observed for these controls. Additionally we make a plot for Bortezomib which can function as negative control.
+
+```{r, results='hide', warning=F, message=F}
+ctg_norm %>% filter(drug == 'DMSO') %>% 
+  ggplot(aes(plate, viability, fill=line)) + geom_boxplot() +
+  facet_wrap(~batch, scales='free') + theme_classic()
+
+ctg_norm %>% filter(drug == 'Bortezomib') %>% 
+  ggplot(aes(plate, viability, fill=line)) + geom_boxplot() +
+  facet_wrap(~batch, scales='free') + theme_classic()
+
+ctg_norm %>% mutate(type = ifelse(drug == 'DMSO', 'control', 'other')) %>% 
+  ggplot(aes(pcount_norm, fill=type)) + geom_histogram(bins=40) + 
+  facet_wrap(~batch, scales='free') +
+  theme_classic() + scale_fill_manual(values=c('#4285f4', '#dddddd'))
+```
+
+We next plot the determined viability phenotypes for each plate in its original layout to examine whether spatial effects are gone and whether replicates of the same line expose similar response patterns.
+
+```{r, results='hide', warning=F, message=F}
+ctg_norm %>% ggplot(aes(row, col, fill=viability)) +
+  geom_raster(hjust=0, vjust=0) + 
+  facet_wrap(~plate) + theme_bw() + 
+  theme(panel.grid=element_blank()) + 
+  scale_fill_gradientn(colors=colpal)
+```
+
+This looks reasonable. We next investigate if we can observe strong bias across batches (defined by screening date).
+
+```{r, results='hide', warning=F, message=F}
+## only mean
+ctg_norm %>% group_by(line, plate, date) %>% 
+  summarise(viability=mean(viability, na.rm=T)) %>% ungroup() %>% 
+  ggplot(aes(date, viability)) + 
+  geom_point(aes(colour=line), size=2) + 
+  # stat_summary(fun.y = 'mean', fun.ymin='mean', fun.ymax='mean', 
+  #              colour='black', geom='crossbar') + 
+  theme_classic() + ylim(c(0,1))
+```
+
+A principle component analysis (PCA) shows clustering of drug phenotypes.
+
+```{r, results='hide', warning=F, message=F}
+pca_res <- ctg_norm %>% dplyr::select(screen, well, viability) %>% 
+  spread(screen, viability) %>% drop_na() %>% 
+  data.frame() %>% `rownames<-`(.$well) %>% dplyr::select(-well) %>% 
+  prcomp()
+
+## visualize
+ctg_norm %>% distinct(screen, line, batch) %>% 
+  inner_join(pca_res$rotation %>% as.data.frame() %>% 
+               rownames_to_column('screen') %>% tbl_df %>% 
+               dplyr::select(screen, PC1, PC2) %>% 
+               mutate(screen = gsub('^X', '', gsub('\\.', '-', screen)))) %>%
+  ggplot(aes(PC1, PC2)) + geom_point(aes(colour=line, shape=batch)) + 
+  theme_classic()
+```
+
+## Reproducibility
+
+We show scatter plots that illustrate reproducibility of phenotypes across replicates. 
+
+```{r, results='hide', warning=F, message=F}
+## replicate annotation
+reps <- ctg_norm %>% distinct(screen, batch, line) %>% 
+  arrange(batch, screen, line) %>% 
+  group_by(batch, line) %>% mutate(rep=paste0('rep', 1:n())) %>% ungroup()
+
+ctg_norm <- ctg_norm %>% inner_join(reps)
+
+## global batch 2017
+ctg_norm %>% filter(batch == '2017') %>% 
+  unite(barcode, batch, line, well, sep='_') %>% 
+  dplyr::select(barcode, rep, viability) %>% 
+  spread(rep, viability) %>% drop_na() %>% 
+  ggplot(aes(rep1, rep2)) + geom_point(alpha=0.4, stroke=0) + 
+  geom_hline(yintercept = 1, linetype=2) + 
+  geom_vline(xintercept = 1, linetype=2) + 
+  geom_abline(slope = 1) + xlim(c(0,1.5)) + ylim(c(0,1.5)) +
+  annotate('text', x=0.1, y=1.4, label='r = 0.86') +
+  theme_classic() + xlab('replicate 1') + ylab('replicate 2') + 
+  ggtitle('Replicate correlation batch 1 (2017)')
+
+## global batch 2018
+ctg_norm %>% filter(batch == '2018') %>% 
+  unite(barcode, batch, line, well, sep='_') %>% 
+  dplyr::select(barcode, rep, viability) %>% 
+  spread(rep, viability) %>% drop_na() %>% 
+  ggplot(aes(rep1, rep2)) + geom_point(alpha=0.4, stroke=0) + 
+  geom_hline(yintercept = 1, linetype=2) + 
+  geom_vline(xintercept = 1, linetype=2) + 
+  geom_abline(slope = 1) + xlim(c(0,1.5)) + ylim(c(0,1.5)) +
+  annotate('text', x=0.1, y=1.4, label='r = 0.89') +
+  theme_classic() + xlab('replicate 1') + ylab('replicate 2') + 
+  ggtitle('Replicate correlation batch 2 (2018)')
+
+## for individual oragnoid lines
+ctg_norm %>% unite(barcode, batch, line, well, sep='_', remove=F) %>% 
+  dplyr::select(line, barcode, rep, viability) %>% 
+  spread(rep, viability) %>% drop_na() %>% 
+  ggplot(aes(rep1, rep2)) + geom_point(alpha=0.2, stroke=0) + 
+  geom_hline(yintercept = 1, linetype=2) + 
+  geom_vline(xintercept = 1, linetype=2) + 
+  geom_abline(slope = 1) + xlim(c(0,1.5)) + ylim(c(0,1.5)) +
+  facet_wrap(~line) + theme_bw() + theme(panel.grid=element_blank())
+
+## correlation coefficients
+ctg_norm %>% unite(barcode, batch, line, well, sep='_', remove=F) %>% 
+  dplyr::select(line, barcode, rep, viability) %>% 
+  spread(rep, viability) %>% drop_na() %>% 
+  group_by(line) %>% summarise(cor = cor(rep1, rep2)) %>% ungroup() %>% 
+  arrange(desc(cor)) %>% mutate(line = factor(line, levels=line)) %>% 
+  ggplot(aes(line, cor)) + geom_bar(stat='identity') + 
+  theme_classic() + ylim(c(0,1)) +
+  ylab('Pearson correlation') + xlab('organoid line') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+## Removing cross-contaminated lines
+
+```{r, results='hide', warning=F, message=F}
+## contaminated lines in batch 1
+cont <- ctg_norm %>% distinct(line, batch) %>% 
+  group_by(line) %>% mutate(count = n()) %>% ungroup() %>% 
+  filter(count == 2, batch == '2017') %>%
+  dplyr::select(-count)
+
+## remove these from the data
+ctg_norm <- ctg_norm %>% anti_join(cont)
+```
+
+We save the final normalized CTG data to an Rdata file.
+
+```{r, results='hide', warning=F, message=F}
+save(ctg_norm, file = '../rsync_data/ctg_data/PROMISE_CTG_normalized_26021028.rda')
+```
+
+## Discrepancies between CTG and imaging phenotypes
+
+The drugs Napabucasin, Nutlin 3, Sorafenib and Sutinib showed some inconsistensie in terms of phenotypes determined by CTG and phenotypes determined by the imaging life-death-classifier. We plot dose-response-curves for these drugs observing reproducibility across replicates.
+
+```{r, results='hide', warning=F, message=F}
+var_drugs <- c('Napabucasin', 'Nutlin3a', 'Sorafenib', 'Sunitinib')
+
+discrepant_drc <- map(var_drugs, function(dr){
+  ctg_norm %>% filter(drug == dr) %>% 
+  ggplot(aes(factor(rack.concentration, 
+                    levels=c('0.0016', '0.008', '0.04', '0.2', '1')), 
+             viability, colour=rep, group=rep)) + 
+  geom_point() + geom_line() + facet_wrap(~line) + 
+  theme_bw() + theme(panel.grid=element_blank()) + 
+  ggtitle(dr) + xlab('concentration')
+})
+names(discrepant_drc) <- var_drugs
+```
+
+### Napabucasin
+
+```{r, results='hide', warning=F, message=F}
+discrepant_drc$Napabucasin
+```
+
+### Nutlin3a
+
+```{r, results='hide', warning=F, message=F}
+discrepant_drc$Nutlin3a
+```
+
+### Sorafenib
+
+```{r, results='hide', warning=F, message=F}
+discrepant_drc$Sorafenib
+```
+
+### Sunitinib
+
+```{r, results='hide', warning=F, message=F}
+discrepant_drc$Sunitinib
+```
+
+# Unsupervised analysis of drug response
+
+## Correlation of drug phenotypes across screens
+
+First we want to cluster the different drugs by their correlation. To find out which concentrations might yield the most specific signal we compare a number of examples to see where they agree.
+
+```{r, results='hide', warning=F, message=F}
+for_comparison <- ctg_norm %>% group_by(screen, drug, rack.concentration) %>% 
+  summarise(viability = mean(viability, na.rm=T)) %>% ungroup()
+
+## Erlotinib/Gefitinib
+for_comparison %>% filter(drug %in% c('Erlotinib', 'Gefitinib')) %>%
+  group_by(rack.concentration) %>% spread(drug, viability) %>% ungroup() %>% 
+  ggplot(aes(Erlotinib, Gefitinib)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_bw() + 
+  geom_smooth(method='lm') + theme(panel.grid=element_blank())
+
+## Erlotinib/Afatinib
+for_comparison %>% filter(drug %in% c('Erlotinib', 'Afatinib')) %>%
+  group_by(rack.concentration) %>% spread(drug, viability) %>% ungroup() %>% 
+  ggplot(aes(Erlotinib, Afatinib)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_bw() + 
+  geom_smooth(method='lm') + theme(panel.grid=element_blank())
+```
+
+Based on what we learned from these comparisons we can cluster all drugs into a heat map.
+
+```{r, results='hide', warning=F, message=F}
+## colour palette for drawing
+colpal2 <- colorRampPalette(rev(c('#b2182b','#d6604d','#f4a582',
+                                  '#f7f7f7',
+                                  '#92c5de',
+                                  '#4393c3','#2166ac')))(150)
+
+## only red and white, showing only high effects
+colpalrw <- colorRampPalette(rev(c('#b2182b','#d6604d','#f4a582',
+                                  '#f7f7f7','#f7f7f7', '#f7f7f7', 
+                                  '#f7f7f7', '#f7f7f7')))(150)
+
+ctg_norm %>% filter(rack.concentration %in% c('0.04', '0.2', '1')) %>% 
+  ## no DMSO, no combinations
+  filter(drug != 'DMSO', !grepl('with|mit', drug)) %>%
+  group_by(screen, drug) %>% 
+  summarise(viability = mean(viability, na.rm=T)) %>%
+  ungroup() %>% spread(drug, viability) %>% 
+  data.frame() %>% `rownames<-`(NULL) %>% 
+  column_to_rownames('screen') %>% cor(use='pairwise.complete.obs') %>% 
+  pheatmap(color=colpalrw, border_color = NA)
+```
+
+I guess this looks reasonable as I see a number of clusters that make sense. As we needed the higher concentrations to really see the effects might suggest that the concentrations selected were a bit on the mild side.
+
+## Landscape of drug response in patient derived organoids
+
+Instead of averaging concentrations we plot a field for each unique drug-concentration pair.
+
+```{r, results='hide', warning=F, message=F}
+ctg_norm %>% filter(!grepl('with|mit', drug)) %>%
+  filter(rack.concentration %in% c('0.04', '0.2')) %>%
+  unite(treatment, drug, rack.concentration, sep='_') %>%
+  unite(experiment, line, rep, sep='_') %>% 
+  dplyr::select(treatment, experiment, viability) %>% 
+  group_by(experiment, treatment) %>% 
+  summarise(viability = mean(viability, na.rm=T)) %>% ungroup() %>% 
+  mutate(viability = scale(ifelse(is.nan(viability), NA, viability))[,1]) %>%
+  filter(experiment != 'D004T01_rep1') %>%
+  spread(treatment, viability) %>% data.frame() %>% 
+  `rownames<-`(NULL) %>% column_to_rownames('experiment') %>% 
+  pheatmap(scale='none', color=colpal2, clustering_method = 'ward.D2',
+           cutree_cols = 4, border_color = NA)
+```
+
+# Differential gene expression between groups of organoid lines
+
+In the global heat map of drug response we can see certain response patterns that group together different organoid lines. We want to see if differential expression between groups lines can put these observations into context.
+
+## Increased resistance to broadly cytotoxic agents
+
+Organoid lines 18, 7, 10 and 46 seem to show increase resistance to broadly cytotoxic agents such as Docetaxel. Do the share any gene expression traits that might explain this?
+
+```{r, results='hide', warning=F, message=F}
+
+```
+
+# Calculation of AUC and IC50
+
+We use the PharmacoGx package to calculate AUC and IC50 values for drug-response curves.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+## non-normalized data
+drug_response <- ctg_norm %>% 
+  mutate(rack.concentration = as.numeric(rack.concentration),
+         viability = ifelse(viability > 1, 1, viability)) %>%
+  group_by(line, drug) %>% arrange(rack.concentration) %>% 
+  mutate(AUC = computeAUC(rack.concentration, viability, verbose=F, 
+                          viability_as_pct =F, area.type = 'Fitted'), 
+         IC50 = computeIC50(rack.concentration, viability, verbose=F, 
+                            viability_as_pct = F)) %>% 
+  ungroup()
+
+## 1 - AUC
+drug_response <- drug_response %>% mutate(AUC = 1-AUC)
+
+# save(drug_response, file='../bene_tmp/drug_response.rda')
+```
+
+```{r, eval=T, echo=F}
+load('../bene_tmp/drug_response.rda')
+```
+
+## Quality control
+
+We observe the AUCs of DMSO (positive control) and Bortezomib (negative control) across organoid lines.
+
+```{r, results='hide', warning=F, message=F}
+## based on AUCs
+drug_response %>% filter(drug %in% c('DMSO', 'Bortezomib')) %>% 
+  distinct(line, drug, AUC) %>% 
+  ggplot(aes(line, AUC, colour=drug)) + geom_point() + theme_classic()
+```
+
+This seems to make good sense.
+
+In general there are drugs where the IC50 cannot be determined as the the organoids do not at all respond to the drugs at the concentrations used.
+
+```{r, warning=F, message=F}
+drug_response %>% distinct(line, drug, AUC, IC50) %>% 
+  mutate(AUC = 1-AUC) %>% arrange(desc(IC50))
+```
+
+### IC50 outliers
+
+For Irinotecan / SN-38 the IC50 was estimated as infinite in the D015T01 line. Also the Staurosporine and Oxaliplatin/5FU/Gefitinib IC50s for lines D010T01 and D015T01, respectively, are surprisingly large. We plot drog response curves for these drug-line-combinations hoping that they will shed some light on what went wrong.
+
+```{r, results='hide', warning=F, message=F}
+drc <- function(d, l){
+  ## get data
+  data <- filter(drug_response, drug == d, line == l) %>% 
+    mutate(rack.concentration = as.numeric(rack.concentration)) %>%
+    arrange(rack.concentration)
+  ## plot curve
+  drugDoseResponseCurve(
+    drug=d, 
+    cellline=l, 
+    concentrations = data$rack.concentration, 
+    viabilities = data$viability, 
+    viability_as_pct=F, trunc=T, plot.type='Fitted',
+    lwd=2, verbose=F
+  ) 
+}
+
+drc('Irinotecan / SN-38', 'D015T01')
+drc('Staurosporine_500nM', 'D019T01')
+drc('Oxaliplatin mit 5-FU + Gefitinib', 'D015T01')
+## 'positive control'
+drc('Bortezomib', 'D019T01')
+## from the case study
+drc('Gefitinib', 'D027T01')
+drc('Erlotinib', 'D027T01')
+```
+
+
+### Comparison of AUC and IC50
+
+To understand whether to continue with AUC or IC50 values for further analyses we compare the two variables.
+
+```{r, results='hide', warning=F, message=F}
+## data frame for plotting / stats
+aucic50cor <- drug_response %>% distinct(drug, line, AUC, IC50) %>% 
+  drop_na() %>% arrange(desc(IC50)) %>% dplyr::slice(4:n()) %>% 
+  mutate(AUC = 1-AUC, IC50 = log(IC50))
+
+## spearman correlation (AUC are not normal)
+rsp <- cor(aucic50cor$AUC, aucic50cor$IC50, method='spearman')
+## plot scatter plot
+ggplot(aucic50cor, aes(AUC, IC50)) + geom_point() + 
+  geom_smooth(method='lm') + theme_classic() + 
+  annotate('text', x = 0.2, y=10, label=paste0('rSCC=', round(rsp, 2))) + 
+  ylab('log(IC50)')
+```
+
+### Correlation between drug response and organoid line growth rate
+
+We load the organoid growth rates that were determined for each line and plot them against the drug response, examining whethere there are correlations and, if yes, how these behave across drugs and concentrations.
+
+```{r, results='hide', warning=F, message=F}
+## load the growth rates
+load('../bene_tmp/proliferation_calc.rdata')
+
+c## annotate data
+drug_response <- drug_response %>% 
+  inner_join(calc %>% group_by(line) %>% 
+               summarise(gr=mean(gr), dt=mean(dt)) %>% 
+               ungroup())
+
+## do growth rates and doubling time (negatively) correlate?
+drug_response %>% distinct(line, gr, dt) %>% 
+  ggplot(aes(gr, dt)) + geom_point() + theme_classic() + 
+  geom_smooth(method='loess') + 
+  xlab('growth rate') + ylab('doubling time')
+```
+
+Yes they do correlate very well. We plot the drug response under different conditions against the estimated doubling time and growth rate.
+
+```{r, results='hide', warning=F, message=F}
+## plot staurosporine across concentrations
+dr_aggregated <- drug_response %>% group_by(screen, line, gr, drug) %>% 
+  summarise(mean_viability = mean(viability, na.rm=T), 
+            sd_viability = sd(viability, na.rm=T)) %>% ungroup()
+
+dr_aggregated %>% filter(drug == 'Staurosporine_500nM') %>%
+  ggplot(aes(mean_viability, gr)) + geom_point(aes(colour=line), size=2) + 
+  stat_smooth(method=function(formula,data,weights=weight) 
+    rlm(formula, data, weights=weight,method="MM"), fullrange=TRUE) + 
+  theme_classic() +
+  ggtitle('Staurosporine: effect vs doubling time (average across concentrations') + 
+  xlab('% viability') + ylab('growth rate')
+
+## global robust correlations between growth rate and viability
+res <- dr_aggregated %>% group_by(drug) %>% 
+  summarise(robcor = cov.rob(cbind(mean_viability, gr), cor=T)$cor[1,2]) %>% 
+  ungroup() %>% arrange(robcor)
+
+## don't plot drugs where there is basically no phenotype
+res <- res %>% 
+  left_join(drug_response %>% group_by(drug) %>% 
+              summarise(minauc = round(min(AUC, na.rm=T), 2)) %>% 
+              ungroup()) %>% 
+  filter(minauc < 0.5)
+
+## plot top .. 4?
+dr_aggregated %>% filter(drug %in% c('Staurosporine_500nM', 'Vinblastin', 
+                                     'Paclitaxel', 'Methotrexate')) %>% 
+  ggplot(aes(mean_viability, gr)) + geom_point(aes(colour=line), size=2) + 
+  stat_smooth(method=function(formula,data,weights=weight) 
+    rlm(formula, data, weights=weight,method="MM"), fullrange=TRUE) + 
+  facet_wrap(~drug, scales = 'free') + 
+  theme_bw() + theme(panel.grid=element_blank())
+```
+
+A robust fit explains a clear trend where increased growth rate suggests increased sensitivity to Staurosporine treatment. There are however two outlier lines D021T01 and D004T01 which seem to be quite sensitive despite low growth rate. It can however definitely make sense to include this as a paramter into the drug-genotype modelling, I think.
+
+## Unsupervised analysis
+
+### Correlation of drugs based on AUC values
+
+What happens if we again plot drug correlations based on the AUC values? Do they yield similar results compared to the viability based analysis? We need to use the Spearman correlations as AUC values are beta-distributed.
+
+```{r, results='hide', warning=F, message=F}
+drug_response %>% distinct(line, drug, AUC) %>% 
+  filter(!drug %in% c('DMSO', 'Staurosporine_500nM')) %>% 
+  spread(drug, AUC) %>% data.frame() %>% 
+  `rownames<-`(NULL) %>% column_to_rownames('line') %>% 
+  cor(method='spearman') %>% pheatmap(color=colpal2, border=NA)
+```
+
+This looks slightly different to before. Needs some more attention to check that everything makes sense.
+
+# Characterization of drug response clusters
+
+In the heat map we drew in previous steps we identified four cluster. One cluster (1) with generally highly toxic substances, (2) one cluster where none of the substances showed a strong effect, (3) one cluster consisting of generally toxic substances where, however, four lines seem to be more resistant than the others and (4) a finaly cluster where drug response is more heterogenous.
+
+```{r, results='hide', warning=F, message=F}
+## resistant organoids
+resistent_orgas <- c('D010T01', 'D015T01', 'D018T01', 'D007T01')
+
+## draw plto comparing growth rate of resistant and sensitive
+calc %>% mutate(group = ifelse(line %in% resistent_orgas, 
+                               'resistant', 'sensitive')) %>%
+  ggplot(aes(as.factor(group), gr)) + 
+  geom_jitter(width = 0.2) + 
+  stat_summary(fun.y = 'mean', fun.ymin = 'mean', 
+               fun.ymax = 'mean', geom = 'crossbar', 
+               color = 'red', width = 0.5) +
+  theme_classic() + ylab('growth rate') + xlab('') +
+  geom_signif(comparisons = list(c('resistant', 'sensitive')), 
+              method='t.test') 
+```
+
+# Modelling drug-gene interactions
+
+We want to know if we can find some well-known drug gene interactions using the AUC data and molecular profiles based on amplicon sequencing. Hence we first load the amplicon sequencing data.
+
+```{r, results='hide', warning=F, message=F}
+## load mutations
+mutations <- read.xlsx('../data/genotype/171114_Mutations_Organoids.xlsx') %>% 
+  tbl_df %>% dplyr::rename(COSMIC_id = X1)
+
+## binary mutation profile
+mut_profile <- mutations %>% dplyr::select(sample, GENE) %>% 
+  mutate(mut = as.factor(1))  %>% distinct() %>% dplyr::rename(line=sample) %>% 
+  spread(GENE, mut) %>% mutate_all(funs(ifelse(is.na(.), 0, .))) %>%
+  mutate(line = paste0(gsub('P', 'D', line), '01'))
+```
+
+## Pariwise interactions between drug response and mutations
+
+### Beta-regression on AUC values
+
+We can scan all possible combinations of drugs and mutations to scan for pharmacogenomic interactions. Here we use beta-regression to model the drug response as i) a function of some general characteristics of the line, eg growth rate (null model) or ii) a function of these general characteristics and the mutation status (interaction model). We then perform a likelihood ratio test to examine whether the interaction model explains the data significantly better as the null model.
+
+First we define a convience function that can plot drug response by mutation status. To further confine AUCs to the (0,1) interval (note that currently they are in [0,1]) we transform the values like so: $AUC′=\frac{AUC(N−1)+s}N$ where $N$ is the sample size and $s$ is a constant that we set to $s=0.5$
+
+```{r, results='hide', warning=F, message=F}
+## annotate mutation status
+drugmut <- distinct(drug_response, line, drug, AUC) %>% 
+  left_join(mut_profile) %>% mutate_at(vars(AMER1:TP53), 'as.factor') %>%
+  ## add growth rate / doubling time
+  left_join(calc %>% dplyr::select(line, gr, dt) %>% 
+              group_by(line) %>% summarise(gr=mean(gr), 
+                                           dt=mean(dt)) %>% 
+              ungroup()) %>%
+  mutate(AUC = (AUC*(n()-1) + 0.5)/n())
+
+## a function for interaction plotting
+plot_interaction <- function(d, g){
+  ## d = drug, g = gene
+  data <- drugmut %>% filter(drug == d) %>% 
+    dplyr::select(line, drug, AUC, contains(g), gr) 
+  colnames(data)[colnames(data) == g] <- 'mutation'
+  p <- data %>% 
+    ggplot(aes(mutation, log(AUC/(1-AUC)))) + geom_jitter(aes(size= gr), width = 0.1) + 
+    stat_summary(fun.data = 'mean_cl_boot', colour='red', size=1) + 
+    theme_classic() + xlab(paste(g, 'mutated'))
+  return(list(data=data, plot=p))
+}
+```
+
+Now we form all pairwise combinations of drugs and mutations and perform the linear modelling and LRT testing.
+
+```{r, results='hide', warning=F, message=F}
+## form combinations
+dm_combis <- expand.grid(
+    unique(drugmut$drug[!drugmut$drug %in% c('Staurosporine_500nM', 'DMSO')]),
+    colnames(mut_profile)[-1]
+) %>% tbl_df %>% `colnames<-`(c('drug', 'genotype'))
+
+## function for modelling/testing
+test_druggene <- function(df){
+  d <- as.character(df$drug[1])
+  m <- as.character(df$genotype[1])
+  
+  ## get the right data
+  data <- drugmut %>% filter(drug == d) %>% 
+    dplyr::select(line, AUC, gr, contains(m))
+  colnames(data)[4] <- 'mut'
+  
+  
+  if(sum(as.numeric(as.character(data$mut))) == 0){
+    return(NA)
+  } else {
+    ## models 
+    mnull <- betareg(AUC ~ gr, data=data)
+    mint <- betareg(AUC ~ gr + mut, data=data)
+    lrt_res <- lrtest(mnull, mint)
+    
+    return(tibble(
+      drug = d,
+      mutation = m,
+      p.value = lrt_res$`Pr(>Chisq)`[2],
+      dAUC = data %>% group_by(mut) %>% 
+        summarise(AUC=mean(AUC)) %>% 
+        summarise(AUC[2]-AUC[1]) %>% as.numeric() 
+    ))
+  }
+}
+
+dgi <- dm_combis %>% rowwise() %>% do(results=test_druggene(.)) %>%
+  unnest(results) %>% mutate(padj = p.adjust(p.value, method='BH')) %>%
+  arrange(p.value)
+```
+
+#### Visualization of the results
+
+We draw a D x M heat map where D are the drugs and M are mutated genes. The heat map will visualize the drug-genotype interactions by their p-value. Negative interactions will be shown in blue, positive interactions in yellow.
+
+```{r, results='hide', warning=F, message=F}
+## blue/yellow colour-pallette
+dgi_palette <- colorRampPalette(c('#2b8cbe', '#f7f7f7', '#f7f7f7', '#fed98e'))(7)
+
+dgi %>% mutate(visval = ifelse(dAUC < 0, (-1) * (-log10(p.value)), -log10(p.value))) %>%
+  dplyr::select(drug, mutation, visval) %>% 
+  spread(drug, visval) %>% data.frame() %>% `rownames<-`(NULL) %>% 
+  column_to_rownames('mutation') %>% 
+  pheatmap(color=dgi_palette, border_color = '#ffffff')
+```
+
+#### Comparison to SANGER DGI data
+
+We want to find a few examples, that are confirmed by previous data. Hence we first need to load these data.
+
+```{r, results='hide', warning=F, message=F}
+sanger_coread <- tbl_df(read.xlsx('../data/cancerxgene/ANOVA_OUTPUT.xlsx', sheet=1))
+sanger_coread <- sanger_coread %>% filter(grepl('mut', feature_name)) %>% 
+  separate(feature_name, c('mutation', 'tag'), sep='_') %>% 
+  dplyr::select(drug_name, mutation, ic50_effect_size, 
+                feature_pval, msi_pval, fdr) %>% 
+  arrange(feature_pval)
+```
+
+### Alternative proposal: multilevel model on viability data
+
+Our dataset is quite underpowered for the purpose of mining pharmacogenomic interactions. Therefore it might be desireable to take every measured data point into account in this analysis to have more statistical power (in comparison: to compute 1 AUC values 10 (5 conc., 2 reps) datapoints are aggregated). This might be achieved using a linear mixed effects model where random effects are assigned to similar concentrations and replicates in the same line.
+
+#### Data assembly
+
+First we need to merge some data to generate the required data set.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+lme_data <- ctg_norm %>% distinct(line, date, rep, drug, 
+                                  rack.concentration, viability) %>%
+  inner_join(drug_response %>% distinct(line, date, gr, dt)) %>%
+  inner_join(mut_profile %>% gather(mutation, status, -line)) %>%
+  mutate(status=as.factor(status),
+         rack.concentration = as.factor(rack.concentration))
+```
+
+We further define a plotting function that might be useful to understand what the model is fitting.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+plot_lmer_interaction <- function(d, m){
+  lme_data %>% filter(drug == d, mutation == m) %>% 
+  filter(!is.na(viability)) %>%
+  ggplot(aes(as.numeric(as.character(status)), viability, 
+             colour = as.factor(rack.concentration))) +
+  geom_jitter(aes(size=gr), width = 0.2) +
+  geom_smooth(aes(colour=as.factor(rack.concentration)), 
+              method='lm', se = F) + 
+  theme_classic() + xlab(m)
+}
+```
+
+#### Model fitting and testing
+
+We next fit a null model (no mutation information) and an alternative model (including information abou the mutation status) and compare them using an F-test. We further report the mutation coefficient of the alternative model to get an understanding of the effect strength.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+test_interaction_lme <- function(df){
+  ## null model - no mutation status
+  # m0 <- lmer(viability ~ gr + 
+  #              (1|line) + (1|rack.concentration), 
+  #            data=df, REML=F)
+  ## alternative model - with mutation status
+  m1 <- lmer(viability ~ gr + status + 
+               (1|line) + (1+status|rack.concentration), 
+             data=df, REML=T) %>% summary()
+  ## beta for the mutation status
+  if(ncol(coef(m1)) < 5){
+    beta_mut <- NA
+    pval_mut <- NA
+  } else{
+    beta_mut <- coef(m1)[3,1]
+    pval_mut <- coef(m1)[3,5]
+  }
+  ## F test null vs alternative model
+  # pval <- anova(m0, m1)$`Pr(>Chisq)`[2]
+  return(tibble(
+    drug = df$drug[1],
+    mutation = df$mutation[1],
+    beta_mut = beta_mut,
+    p.value = pval_mut
+  ))
+}
+
+## run modelling/testing
+lme_results <- lme_data %>% group_by(drug, mutation) %>% 
+  do(result = test_interaction_lme(.)) %>% ungroup() %>%
+  unnest(result) %>% arrange(p.value) %>% 
+  mutate(padj = p.adjust(p.value, method='BH'))
+```
+
+#### Visualization
+
+We first define a function that can plot dose response curves (without sigmoidal fit - just connecting the dots) comparing curves of mutated and non-mutated lines.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+drc_compare <- function(d, m) {
+  testdata <- lme_results %>% filter(drug == d, mutation == m)
+  beta <- round(testdata$beta_mut, 2)
+  pval <- round(testdata$p.value, 2)
+  fdr <- round(testdata$padj, 2)
+  
+  lme_data %>% filter(mutation == m, drug == d) %>% 
+    group_by(line, rack.concentration, status) %>% 
+    summarise(viability=mean(viability, na.rm=T)) %>% ungroup() %>%
+    ggplot(aes(rack.concentration, viability, group=line, colour=status)) +
+    geom_point() + geom_line() + theme_classic() +
+    ggtitle(paste('P-value:', pval, '(FDR:', fdr, ')', 'Beta:', beta)) + 
+    scale_colour_manual(values=c('#cccccc', '#e41a1c'), name=m)
+}
+```
+
+We draw some of the top results to see if these make sense. We further look into some highly significant results with very small betas to understand if the results are reasonable.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+## strong interactions
+drc_compare('Methotrexate', 'AMER1')
+drc_compare('Vinblastin', 'AMER1')
+drc_compare('Methotrexate', 'APC')
+
+## highly significant but small beta
+drc_compare('Olaparib', 'AMER1')
+drc_compare('Everolimus', 'SMAD4')
+drc_compare('Docetaxel', 'KRAS')
+
+## some known interactions
+drc_compare('Nutlin3a', 'TP53')
+```
+
+Some of the bottom ones are a bit funky. However, we do not look at this in the context of the growth rate which adds another layer of complexity that the model actually accounts for.
+
+#### Comparing the results to the beta-regression
+
+We first compare p-values.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+lme_results %>% dplyr::select(drug, mutation, p.value) %>% 
+  dplyr::rename(pval_lme = p.value) %>% 
+  inner_join(dgi %>% dplyr::select(drug, mutation, p.value) %>%
+               dplyr::rename(pval_betareg = p.value)) %>%
+  ggplot(aes(-log10(pval_lme), -log10(pval_betareg))) + 
+  geom_point() + geom_smooth(method='lm') + theme_classic()
+```
+
+These don't actually agree so well. It seems that the lme-approach under-estimates the p-values. Maybe the hypothesis test applied to the lmer-model is not appropriate. We next plot the predicted interaction phenotype.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+lme_results %>% dplyr::select(drug, mutation, beta_mut) %>% 
+  inner_join(dgi %>% dplyr::select(drug, mutation, dAUC)) %>% 
+  ggplot(aes(dAUC, beta_mut)) + geom_point() + 
+  geom_smooth(method='lm') + theme_classic()
+```
+
+These agree pretty well. We observe how well the p-values correlate with the phenotype of the interaction.
+
+```{r, results='hide', warning=F, message=F, eval=F}
+## lme
+lme_results %>% ggplot(aes(-log10(p.value), abs(beta_mut))) + 
+  geom_point() + geom_smooth(method='lm') + theme_classic()
+cor(-log10(lme_results$p.value), abs(lme_results$beta_mut),
+    use='pairwise.complete.obs')
+
+## beta regression
+dgi %>% ggplot(aes(-log10(p.value), abs(dAUC))) + 
+  geom_point() + geom_smooth(method='lm') + theme_classic()
+cor(-log10(dgi$p.value), abs(dgi$dAUC))
+```
+
+Both don't correlate super well.
+
+# Patient case - response to radiotherapy + 5-FU
+
+We have some cases where patients received radiotherapy in combination with 5-FU treatment. Despite the same treatment regime, the response to these therapies varied among the patients. We want to know if a differential response to 5-FU can explain the difference in response.
+
+We first load a small table with treatment response annotations.
+
+```{r, results='hide', warning=F, message=F}
+therapy_response <- read.xlsx('../data/meta/RectalCancers_histol-RCTX-response.xlsx', 
+                              rows = 1:7) %>% tbl_df
+
+## select relevant line, annotate regression grading
+radio_lines <- ctg_norm %>% 
+  inner_join(therapy_response %>% mutate(ID = paste0(gsub('P', 'D', ID), 'T01')) %>% 
+               dplyr::select(line = ID, grade = `Regression.Grading.(Histology).Dworak`))
+
+## compare 5-FU
+radio_lines %>% filter(drug == '5-FU') %>% 
+  group_by(grade, line, rack.concentration) %>% 
+  summarise(viability = min(viability, na.rm=T)) %>% ungroup() %>% 
+  ggplot(aes(rack.concentration, viability, group=line, colour=grade)) + 
+  geom_point() + geom_line() + theme_classic() + 
+  xlab('concentration') + ggtitle('Response to 5-FU treatment')
+
+## sanity check
+ctg_norm %>% filter(drug %in% c('5-FU', 'Bortezomib')) %>% 
+  ggplot(aes(rack.concentration, viability)) + geom_boxplot() + 
+  facet_wrap(~drug, ncol=1) + theme_bw() + 
+  theme(panel.grid = element_blank())
+
+radio_lines %>% filter(line == 'D046T01', drug == '5-FU')  %>% 
+  ggplot(aes(rack.concentration, viability))  + 
+  geom_point(aes(colour=rep)) + 
+  geom_line(aes(colour=rep, group=rep)) + theme_classic()
+
+## what's the main difference between grad II and grade IV
+g24_auc <- radio_lines %>% 
+  mutate(rack.concentration = factor(rack.concentration, 
+                                     levels = sort(unique(rack.concentration)))) %>% 
+  filter(grade %in% c('Grad II', 'Grad IV')) %>% 
+  group_by(grade, line, drug, rack.concentration) %>% summarise(viability = mean(viability)) %>% ungroup() %>%
+  group_by(grade, line, drug) %>% arrange(rack.concentration) %>% 
+  mutate(rank = 1:n()) %>% summarise(AUC = pracma::trapz(rank, viability)) %>% 
+  ungroup()
+
+g24_auc %>%
+  group_by(grade, drug) %>% summarise(AUC = mean(AUC)) %>% ungroup() %>% 
+  spread(grade, AUC) %>% arrange(desc(`Grad II` - `Grad IV`))
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```

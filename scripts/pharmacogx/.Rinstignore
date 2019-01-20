@@ -1,0 +1,8 @@
+inst/doc/.*[.]bib$
+TODO
+REVISIONS
+.DS_Store
+.git/*
+.docker/*
+.travis.yml
+codecover.R

@@ -1,0 +1,399 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r packages, include = FALSE}
+library(tidyverse)
+library(readr)
+library(SummarizedExperiment)
+library(DEP)
+library(eulerr)
+library(patchwork)
+library(readxl)
+library(fgsea)
+library(clusterProfiler)
+library(ReactomePA)
+library(org.Hs.eg.db)
+```
+
+```{r, message=FALSE}
+colon_selu <- read_delim("~/promise/colon_selu.gct", 
+    "\t", escape_double = FALSE, trim_ws = TRUE, 
+    skip = 2) %>% 
+  as.data.frame() 
+
+
+anno_exp <- colon_selu[c(1:8),-c(2:9)] %>% 
+  remove_rownames() %>% column_to_rownames("id")
+anno_gene <- colon_selu[-c(1:8),c(1:9)] %>% 
+  remove_rownames() %>% column_to_rownames("id")
+exp_set <- colon_selu[-c(1:8),-c(2:9)] %>% 
+  mutate_all(funs(as.numeric)) %>%
+  remove_rownames() %>% column_to_rownames("id")
+```
+
+```{r}
+exp_design <- mco_lipids %>% dplyr::select(condition = sample, label = sample_replicate) %>%
+  mutate(replicate = substr(label, nchar(label), nchar(label))) %>% 
+  distinct()
+
+# lipid_info <- mco_lipids %>% dplyr::select(-sample, -sample_replicate, -value, ) %>% 
+#   mutate(col = lipid) %>% 
+#   distinct() %>%
+#   as.data.frame() %>% 
+#   column_to_rownames("col")
+
+index_col <- grep(" - ", colnames(data)) # get column numbers
+
+mcolipids_se <- make_se(data, index_col, exp_design)
+```
+
+
+
+```{r}
+exp_set %>% pheatmap::pheatmap(show_colnames = FALSE, scale = "column")
+```
+
+```{r}
+anno_gene %>% 
+  mutate(p_value = as.numeric(p_value)) %>%
+  ggplot(aes(p_value)) + 
+  geom_histogram() + 
+  theme_classic()
+
+
+
+```
+
+```{r}
+exp_set %>%
+  rownames_to_column("id") %>%
+  gather(experiment, value, -id) %>% 
+  separate(experiment, c("exp", "line", "time_drug"), sep = "_") %>% 
+  separate(time_drug, c("time", "drug", "conc"), sep = ":") %>%
+  ggplot(aes(value, ..density..)) +
+  geom_freqpoly() + 
+  theme_classic() + 
+  facet_grid(time ~ line) +
+  NULL
+```
+
+I Remove 24h data
+
+```{r}
+exp_set %>%
+  rownames_to_column("id") %>%
+  gather(experiment, value, -id) %>% 
+  separate(experiment, c("exp", "line", "time_drug"), sep = "_") %>% 
+  separate(time_drug, c("time", "drug", "conc"), sep = ":") %>% 
+  filter(time == "6H") %>% 
+  ggplot(aes(value, ..density..)) +
+  geom_freqpoly() + 
+  theme_classic() + 
+  facet_grid(conc ~ line) +
+  NULL
+```
+
+80 is the only concentration used. 
+
+```{r}
+exp_set_fil <- exp_set %>%
+  rownames_to_column("id") %>%
+  gather(experiment, value, -id) %>% 
+  separate(experiment, c("exp", "line", "time_drug"), sep = "_") %>% 
+  separate(time_drug, c("time", "drug", "conc"), sep = ":") %>% 
+  filter(time == "6H")
+```
+
+```{r}
+p <- exp_set_fil %>% 
+  filter(value > -2) %>% 
+  as.tibble() %>%
+   select(line, id) %>%
+  mutate(logic = TRUE) %>%
+  spread(line, logic) %>% 
+  dplyr::select(-id) %>% 
+  euler()
+```
+
+```{r}
+enriched <- exp_set_fil %>% 
+  filter(value > 1) %>% 
+  group_by(id) %>% 
+  summarise(n = n(),
+            n_na = sum(is.na(.))) %>% 
+  arrange(desc(n)) %>%
+  filter(n >= 6) %>% 
+  left_join(anno_gene %>% rownames_to_column("id"))
+
+enriched_strict <- exp_set_fil %>% 
+  filter(value > 2) %>% 
+  group_by(id) %>% 
+  summarise(n = n(),
+            n_na = sum(is.na(.))) %>% 
+  arrange(desc(n)) %>%
+  filter(n >= 3) %>% 
+  left_join(anno_gene %>% rownames_to_column("id"))
+
+enriched$pr_gene_symbol %>% write.csv("z1.csv")
+enriched_strict$pr_gene_symbol %>% write.csv("z2.csv")
+```
+
+Defining a threshold based gene set is not a successful approach. Perhaps I have to use the full spectrum of expression values and perform a GSEA of published stem cell signatures. 
+I could potentially add/ avergage z-scores from different lines to generate a non scaled integrated value that I could then use to enrich signatures.
+
+Therfore, I calculate a summarized z-score for all cell lines 
+
+```{r}
+library(patchwork)
+
+exp_set_sum <- exp_set_fil %>% as.tibble() %>% 
+  group_by(id, drug, conc) %>% 
+  summarise(mean = mean(value),
+            sum = sum(value)) %>% 
+  left_join(anno_gene %>% rownames_to_column("id"))
+  
+
+exp_set_sum %>% 
+  ggplot(aes(mean)) +
+  geom_density(fill = "grey") + 
+  theme_classic() + 
+exp_set_sum %>% 
+  ggplot(aes(sum)) +
+  geom_density(fill = "black") + 
+  theme_classic()  
+```
+
+##GSEA for validation  
+Using a published stem cell signature I want to identify differential expression of these target genes. 
+First I load the signature dataset and clean it up. 
+
+```{r signatures, message=FALSE}
+signatures <- lapply(c("ISC genes", "Proliferation genes", "Late TA genes", "Lgr5 genes"), function(t) read_excel("~/mco/local_data/expression/array_annotation/1-s2.0-S193459091100110X-mmc2_bettle.xls", 
+    sheet = t, skip = 3) %>% .[,c(1:3)] %>% mutate(signature = t)) %>%
+  bind_rows() %>%
+  mutate_all(~gsub('\\*', '', .)) %>% 
+  filter(!grepl(.$Gene,pattern = "NA")) %>%
+  filter(!grepl(.$Gene,pattern = "includes")) %>% #I just kick out genes which include this phrase for now
+  split(., .$signature) %>%
+  map(~ .$Gene)
+
+signatures <- append(signatures, list.files(path = "~/mco/local_data/expression/reference_gene_sets/gsea", full.names = TRUE) %>%
+  map(function(p) read_csv(p, col_names = FALSE, skip = 2)) %>%
+  map(~ .$X1) %>%
+  `names<-`(c(list.files(path = "~/mco/local_data/expression/reference_gene_sets/gsea")) %>% substr(., 1, nchar(.)-4) %>% tolower())
+)
+```
+
+Next I implement a function written by B. Rauscher to create pretty GSEA plots. 
+
+```{r barcode_plot}
+custom_barcode_plot <- function(df, sig){
+  ## named vector of gene-level stats
+  stat_vector <- setNames(df$t, df$symbol_hs) #The GSEA will run on mouse genes
+  ## genes in signature
+  sig_genes <- signatures[[sig]]
+  
+  ## generate barcode plot
+  bc_plot <- plotEnrichment(sig_genes, stat_vector)
+  
+  ## remove unwanted layers
+  bc_plot$layers <- list()
+  
+  ## add barcode at the bottom
+  lowest_pos <- min(bc_plot$data[,2])
+  dash_length <- abs(purrr::reduce(range(bc_plot$data[,2]), `-`)*0.1)
+  middle <- which.min(abs(sort(df$t, decreasing=T)))
+  
+  bc_plot_custom <- bc_plot + geom_segment(aes(x=x, xend=x), y=lowest_pos,
+                           yend=lowest_pos-dash_length) + 
+    geom_line(colour='#4daf4a', size = 1.5) + 
+    geom_hline(yintercept=lowest_pos, colour='#cccccc') + 
+    geom_hline(yintercept=0, colour='#cccccc') + xlab('') +
+    theme_classic() +
+    geom_tile(data=tibble(rank=1:length(stat_vector), 
+                          y=lowest_pos-(1.25*dash_length)), 
+              aes(x=rank, y=y, fill=rank),
+                  width=1,
+                  height=0.5*dash_length) +
+    scale_fill_gradient2(low ='#b2182b', high='#2166ac', 
+                         mid='#f7f7f7', midpoint = middle) + 
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme(panel.grid=element_blank(), 
+          axis.text.x=element_blank(),
+          axis.ticks.x = element_blank(),
+          legend.position = 'none') + 
+    ggtitle(paste(sig, 'signature')) +
+    ylab('Enrichment score')
+  
+  return(bc_plot_custom)
+}
+```
+
+Now I run a GSEA for my summarized z-score.
+
+```{r}
+gsea_out <- exp_set_sum %>% 
+  ungroup() %>%
+  mutate(mean_named = setNames(.$mean, .$pr_gene_symbol),
+         sum_named = setNames(.$sum, .$pr_gene_symbol)) %>% 
+  .$mean_named %>% fgsea(signatures, ., nperm = 10000)
+
+gsea_out %>% as.tibble() %>% arrange(padj) %>% select(pathway, padj, NES) %>% head(10)
+
+gsea_out_line <- exp_set_fil %>%
+  ungroup() %>%
+  left_join(anno_gene %>% rownames_to_column("id")) %>%
+  as.data.frame() %>%
+  #as.tibble() %>%
+  mutate(value_named = setNames(.$value, .$pr_gene_symbol)) %>%
+  dplyr::select(line, value_named) %>%
+  nest(-line) %>%
+  mutate(signature = map(data, ~ fgsea(signatures, .x$value_named, nperm = 10000))) %>%
+  # mutate(signature = lapply(data, function(x) x$value_named  %>% fgsea(., pathways = signatures, nperm = 10000)))
+  unnest(signature)
+
+
+ gsea_out_line %>% as.tibble() %>% 
+  filter(padj < 0.05) %>%
+semi_join(., gsea_out_line %>% as.tibble() %>% 
+  filter(padj < 0.05) %>% group_by(pathway) %>% 
+  summarise(n = n(),
+            mNES = mean(NES)) %>% 
+  arrange(desc(n)) %>% filter(n >1) %>% ungroup %>% dplyr::select(pathway)) %>%
+   dplyr::select(-leadingEdge) %>%
+    write_excel_csv("signature_l1000_celllines_selumetinib.csv")
+```
+
+I see a clear downregulation of MAPK signaling related signatures under MEK inhibition. I also see a significant downregulation of APC-loss targetgenes.
+In case on HCT116 cells I can see an upregulation of cell cycle related genes. 
+
+#Import GSK inhibitors 
+
+We saw a strong phenotype in GSK inhibitor treated organoids. I am wondering if we can see cell morphology related signatures in the GSKi treated cell lines. I downloaded data for multiple inhibitors and now have to filter for relevent cell lines. 
+
+```{r load_gsk, message=FALSE}
+colon_gsk <- list.files("~/promise/l1000_gsk/", full.names = TRUE) %>% 
+  map(~ read_delim(.x, 
+    "\t", escape_double = FALSE, trim_ws = TRUE, 
+    skip = 2) %>% 
+  as.data.frame() %>% .[-c(1:8),-c(2:9)] %>% 
+  mutate_all(funs(as.numeric))) %>% bind_cols()
+
+anno_gsk <- list.files("~/promise/l1000_gsk/", full.names = TRUE) %>% 
+  map(~ read_delim(.x, 
+    "\t", escape_double = FALSE, trim_ws = TRUE, 
+    skip = 2) %>% 
+  as.data.frame() %>% .[-c(1:8),c(1:9)]) %>% bind_rows() %>% 
+  distinct()
+
+# anno_exp <- colon_selu[c(1:8),-c(2:9)] %>% 
+#   remove_rownames() %>% column_to_rownames("id")
+# anno_gene <- colon_selu[-c(1:8),c(1:9)] %>% 
+#   remove_rownames() %>% column_to_rownames("id")
+# exp_set <- colon_selu[-c(1:8),-c(2:9)] %>% 
+#   mutate_all(funs(as.numeric)) %>%
+#   remove_rownames() %>% column_to_rownames("id")
+```
+
+```{r}
+colon_gsk[,-1] %>% pheatmap::pheatmap(show_colnames = FALSE, scale = "column")
+```
+
+I tidy the dataframe and filter for colorectal cancer cell lines. 
+
+```{r}
+colon_gsk_fil <-  colon_gsk %>%
+  gather(experiment, value, -id) %>% 
+  separate(experiment, c("exp", "line", "time_drug"), sep = "_") %>% 
+  separate(time_drug, c("time", "drug", "conc"), sep = ":") %>% 
+  dplyr::filter(line %in% c(exp_set_fil$line %>% unique())) %>% # I keep only colorectal cancer cell lines.
+  dplyr::filter(time == "6H")
+
+
+```
+
+```{r}
+colon_gsk_sig <- colon_gsk_fil %>%
+  mutate(id = as.character(id)) %>%
+  ungroup() %>%
+  as.tibble %>%
+  left_join(anno_gsk) %>%
+  #as.data.frame() %>%
+  mutate(value_named = setNames(.$value, .$pr_gene_symbol)) %>%
+  dplyr::select(line, value_named, drug) %>%
+  nest(-line, -drug) %>%
+  mutate(signature = map(data, ~ fgsea(signatures, .x$value_named, nperm = 10000))) %>%
+  # mutate(signature = lapply(data, function(x) x$value_named  %>% fgsea(., pathways = signatures, nperm = 10000)))
+  unnest(signature)
+```
+
+Now I filter for significant signature in these examples. I expect to see an upregulation of Wnt related pathways.  
+
+```{r}
+colon_gsk_sigfil <- colon_gsk_sig %>% 
+  filter(padj < 0.05) %>% 
+  filter(grepl("wnt", x = pathway))
+
+colon_gsk_sigfil %>% 
+  dplyr::select(line, pathway, NES, drug)
+```
+
+```{r}
+colon_gsk_fil %>% 
+  ggplot(aes(value, ..density..)) +
+  geom_freqpoly() + 
+  theme_classic() + 
+  facet_grid(drug ~ line) +
+  NULL
+```
+
+Now I want to apply the same approach on the Reactome function set. 
+
+```{r}
+
+
+reactome_out <- lapply(mco_diff_expr %>% .$contrast %>% unique %>% as.list, 
+                   function(c) mco_diff_expr %>% 
+                     filter(contrast == c) %>%
+                     filter(adj.P.Val < 0.1 & logFC > 0) %>% #calculate up
+                     dplyr::select(entrez_hs) %>% drop_na() %>% .$entrez_hs %>% enrichPathway(gene= .,pvalueCutoff=0.05,  readable=T, organism = "human", minGSSize = 10, maxGSSize = 500))
+
+colon_gsk_fil_reactome <- colon_gsk_fil %>%
+  mutate(id = as.character(id)) %>%
+  ungroup() %>%
+  as.tibble %>%
+  left_join(anno_gsk %>% dplyr::select(id, pr_gene_symbol, pr_gene_title)) %>% 
+  
+  #the probe ids are entrez values! 
+  # full_join(., .$pr_gene_symbol %>% 
+  #           bitr(., fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Hs.eg.db") %>% 
+  #           `colnames<-`(c("pr_gene_symbol", "entrez_hs")))
+  filter(value > 1) %>% 
+ 
+  nest(-line, -drug) %>%
+  #sample_frac(0.1) %>%
+  mutate(reactome = map(data, ~ enrichPathway(gene= .$id,pvalueCutoff=0.05,  readable=T, organism = "human", minGSSize = 10, maxGSSize = 500) %>% .@result)) %>%
+  # mutate(signature = lapply(data, function(x) x$value_named  %>% fgsea(., pathways = signatures, nperm = 10000)))
+  unnest(reactome)
+```
+
+The number of resulting terms is extremely high. I am interested in recurring terms for the most popular GSK inhibitor. 
+
+```{r}
+colon_gsk_fil_reactome %>% 
+  filter(drug == "BRD-K59184148-001-04-2") %>% 
+  #I set my p-value threshold 
+  filter(p.adjust < 0.05) %>% 
+  group_by(ID, Description) %>% 
+  summarise(n = n()) %>% 
+  filter(n > 1) %>% 
+  write_excel_csv("colorectal_cancer_celllines_reactome_gsk3b_inhibitor_sb216763.csv")
+  
+```
+
+

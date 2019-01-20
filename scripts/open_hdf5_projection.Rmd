@@ -59,8 +59,8 @@ compounds
 
 #Define filenames and applicable organoid lines 
 ```{r}
-destination = "~/promise/results/tianzuo_meki/"
-dir = "/Volumes/collab-bernd-fischer/PROMISE/data-10x-4t-c-16z/hdf5projection/"
+destination = "~/Desktop/"
+dir = "/Volumes/collab/PROMISE/data-10x-4t-c-16z/hdf5projection/"
 
 organoids <- list.files(dir, pattern = "D0") %>%
   substr(., 1, 14) %>%

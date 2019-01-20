@@ -1,6 +1,6 @@
 ---
 title: "incell6000_setup_final"
-author: "Niklas R"
+author: "Niklas Rindtorff"
 date: "22 2 2017"
 output: html_document
 ---
@@ -9,26 +9,23 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Check profiles of imaged plates
+#Load packages
 ```{r}
-library(readr)
-library(tibble)
-library(dplyr)
-library(magrittr)
-library(ggplot2)
-library(lazyeval)
-library(tidyr)
+library(tidyverse)
 library(platetools)
 library(viridis)
+```
 
-ID = "D0"
+#Check profiles of imaged plates
+```{r}
+id = "D0"
+dir = "PROMISE-10x-4t-c-16z"
 
-setwd("/Volumes/collab-bernd-fischer/PROMISE/incoming/PROMISE-10x-4t-c-16z/")
-temp <- list.files(pattern = ID) %>%
+temp <- list.files(path = paste0("/Volumes/collab/PROMISE/incoming/", dir), pattern = id, full.names = TRUE) %>%
   as_tibble() %>%
   mutate(time = file.info(.$value)$atime < Sys.time()-180,
          complete = !grepl("incomplete", .$value),
-         csv = paste0(.$value, "/", .$value, "_optimize_intensity.csv")) %>%
+         csv = paste0(.$value, "_optimize_intensity.csv")) %>%
   filter(time == TRUE & complete == TRUE) 
 
 
