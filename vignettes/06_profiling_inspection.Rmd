@@ -1,0 +1,377 @@
+---
+title: "Profiling Data Inspection and QC"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev="CairoPNG")
+```
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(here)
+library(feather)
+library(monocle3)
+library(ggrastr)
+library(cowplot)
+library(platetools)
+library(OutlierDetection)
+#library(princurve)
+
+# local data access
+library(rhdf5) #needed for local data access
+library(furrr) #needed for local data access
+
+# install.packages('devtools')
+# devtools::install_github('VPetukhov/ggrastr')
+mco_colors <- c("#52bde0", "#629d85", "#ffb54d" ,"#cccccc")
+here()
+```
+
+
+```{r, eval = FALSE}
+#Legacy chunk for raw feature calculation
+
+# feature_path <- here::here("/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features") #"/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features"
+# 
+# hdf5_path_df <- tibble(path = list.files(feature_path, full.name = TRUE),
+#        bc = list.files(feature_path, full.name = FALSE)) %>%
+#   filter((grepl(x = path, pattern = "D0"))) %>% 
+#   mutate(hdf5_path = paste0(path, "/", bc, "_processedFeatures.h5")) %>% 
+#   # I remove every file that does not exist 
+#   mutate(exist = furrr::future_map(hdf5_path, ~ .x %>% file.exists)) %>% 
+#   unnest()
+# 
+# # only execute with access to large dataset
+# df <- hdf5_path_df[1,]
+# 
+# poi <- df$hdf5_path
+# h5ls(poi)
+```
+
+
+I load the profiling dataset. 
+
+```{r, eval = TRUE}
+pca_path <- here::here("data/profiling/TransformedFeatures_mouse_25components.h5")
+h5ls(pca_path)
+
+hdf5_pca <- h5read(pca_path, "features_organoids") %>% as_tibble()
+hdf5_pca_meta <- h5read(pca_path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>% magrittr::set_colnames(h5read(pca_path, "metadata_names_organoids"))
+
+
+hdf5_pca <- cbind(hdf5_pca_meta, hdf5_pca) %>% 
+  arrange(Line, Plate, Well)
+
+saveRDS(hdf5_pca, here("vignettes/06_profiling_inspection/hdf5_pca.Rds"))
+```
+
+
+```{r, eval = TRUE}
+pca_raw <- readRDS(here("vignettes/06_profiling_inspection/hdf5_pca.Rds"))
+```
+
+I give a short overview of the dataset. 
+
+```{r, eval = TRUE}
+pca_raw %>% 
+  sample_n(10000) %>%
+  ggplot(aes(V1, V2, color = Line)) + 
+  geom_point() + 
+  theme_classic() + 
+  scale_color_viridis_d()
+  
+```
+
+# Segmentation outliers
+
+```{r}
+segmentation_metrics <- pca_raw %>% group_by(Plate, Well, Line, Replicate) %>% 
+  mutate(Size = as.numeric(Size)) %>%
+  summarise_at(vars(contains("Size")), funs(mean)) %>% 
+  ungroup() %>%
+  left_join(pca_raw %>% 
+  dplyr::count(Line, Plate, Well) %>% ungroup()) %>%
+  mutate(Plate = if_else(Plate == "M001W01P908L07", "M001W01P008L07", Plate))
+
+df <- segmentation_metrics
+
+pca_raw %>% 
+  dplyr::count(Line, Plate, Well) %>% 
+  ggplot(aes(n, fill = Line)) + 
+  geom_histogram() + 
+  scale_fill_manual(values = mco_colors) + 
+  theme_classic()
+```
+
+```{r}
+df <- segmentation_metrics
+
+platetools::raw_grid(data = df$n, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+
+There is a systematic deviation in terms of object count. 
+
+```{r}
+df <- segmentation_metrics
+
+platetools::raw_grid(data = df$Size, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+
+
+```{r}
+segmentation_metrics_field <- pca_raw %>% 
+  group_by(Plate, Well, Line, Replicate, Field) %>% 
+  mutate(Size = as.numeric(Size)) %>%
+  summarise_at(vars(contains("Size")), funs(mean)) %>% 
+  ungroup() %>%
+  left_join(pca_raw %>% 
+  dplyr::count(Line, Plate, Well, Field) %>% ungroup()) %>%
+  mutate(Plate = if_else(Plate == "M001W01P908L07", "M001W01P008L07", Plate))
+
+# Switched back as most artefacts visible by human eye are well-wise, not tile-wise.
+
+segmentation_metrics %>% 
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = Line)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_manual(values = mco_colors) + 
+  labs(title = "Field Segmentation Metrics",
+       subtitle = "Strong outliers persist in the primary data that was used for all downstream analyses",
+       x = "Object Size",
+       y = "Number of objects per field")
+```
+
+```{r, eval = FALSE}
+set.seed(213124)
+segmentation_outlier <- segmentation_metrics %>%
+  nest(-Line) %>%
+  mutate(outlier_detect = furrr::future_map(data, ~ .x %>% 
+                                       dplyr::select(Size, n) %>%
+                                       OutlierDetection(depth = FALSE, 
+                                                        dense = TRUE, 
+                                                        distance = TRUE, 
+                                                        dispersion = TRUE)))
+
+saveRDS(segmentation_outlier, here("vignettes/06_profiling_inspection/segmentation_outlier.Rds"))
+```
+
+```{r}
+segmentation_outlier <- readRDS(here("vignettes/06_profiling_inspection/segmentation_outlier.Rds"))
+```
+
+The number of automatically excluded points decreases the more methods I am adding to the function. My greatest fear is to jeopardize signal by using this method, so I accept the reduced number of excluded samples.
+
+Alternatively, I manually inspected plate plots and annotated the out-of-focus images. 
+
+```{r}
+out_of_focus_wells <- read_csv(here::here("data/profiling/out_of_focus_wells"), 
+    col_names = FALSE) %>%
+  janitor::clean_names() %>% 
+  mutate(id = str_extract(x1, pattern = "M001*...P*...L*.._*._*.._.")) %>%
+  separate(id, c("Plate", "row", "col", "junk"), sep = "_") %>%
+  mutate(Well = paste0(row, col)) %>%
+  dplyr::select(Well, Plate) %>%
+  distinct()
+
+segmentation_outlier_manual <- segmentation_metrics %>% 
+  left_join(out_of_focus_wells %>% 
+              mutate(status = "out_of_focus")) %>% 
+  mutate(status = if_else(is.na(status), "in_focus", status)) %>%
+  mutate(status = if_else(Plate == "M001W01P908L07", "out_of_focus", status)) 
+
+segmentation_outlier_manual %>%
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = status)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_brewer(type = "qual") + 
+  labs(title = "Field Segmentation Metrics",
+       subtitle = "Strong outliers persist in the primary data that was used for all downstream analyses",
+       x = "Object Size",
+       y = "Number of objects per field")
+  
+  
+  
+```
+
+
+```{r}
+segmentation_outlier_index <- segmentation_outlier %>%
+  mutate(index = purrr::map2(outlier_detect, 
+                             data,  ~ .y[.x$`Location of Outlier`,])) %>%
+  dplyr::select(-data, -outlier_detect) %>%
+  unnest(index)
+  
+segmentation_outlier_well <- segmentation_outlier_index %>%
+  mutate(outlier = 1) %>%
+  left_join(segmentation_metrics, .) %>%
+  mutate(outlier = if_else(is.na(outlier), 0, outlier))
+
+df <- segmentation_outlier_well %>%
+  group_by(Plate, Well, Line, Replicate) %>%
+  summarise(outlier = sum(outlier))
+
+df$outlier %>% table()
+
+platetools::raw_grid(data = df$outlier, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+
+```{r}
+segmentation_outlier_index %>%
+  ggplot(aes(n)) + 
+  geom_histogram()
+```
+
+
+
+```{r}
+segmentation_outlier %>% filter(outlier == 0) %>% 
+  semi_join(segmentation_metrics_field, .) %>%
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = Line)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_manual(values = mco_colors) + 
+  labs(title = "Field Segmentation Metrics",
+       subtitle = "Segmentation metrics after removing outliers",
+       x = "Object Size",
+       y = "Number of objects per field")
+```
+
+
+I also assess the effect after removing manually removed wells. 
+
+```{r}
+segmentation_outlier_manual %>% filter(status == "in_focus") %>% 
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = Line)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_manual(values = mco_colors) + 
+  labs(title = "Field Segmentation Metrics",
+       subtitle = "Segmentation metrics after removing outliers",
+       x = "Object Size",
+       y = "Number of objects per field")
+```
+
+I check the overlap of manual and model based outlier detection. 
+
+```{r}
+segmentation_outlier_manual %>%
+  left_join(segmentation_outlier_well) %>%
+  dplyr::count(status, outlier)
+
+```
+
+```{r}
+segmentation_outlier_manual %>%
+  left_join(segmentation_outlier_well) %>%
+  filter(status == "in_focus" & outlier == 0) %>%
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = Line)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_manual(values = mco_colors) + 
+  labs(title = "Field Segmentation Metrics",
+       subtitle = "Segmentation metrics after removing outliers",
+       x = "Object Size",
+       y = "Number of objects per field")
+```
+
+
+I am interested in the wells that are dropped and the associated drugs that these wells were treated with. I expecte them to be randomly distributed.
+
+```{r, eval = FALSE}
+segmentation_outlier_well %>% 
+  group_by(Plate, Well, Line, Replicate) %>%
+  summarise(outlier = sum(outlier)) %>% 
+  filter(outlier != 0) %>% arrange(Plate, Well)
+
+
+segmentation_outlier_well %>% filter(outlier != 0)
+
+source(here::here("organoidexplorer/R/get_img_path_treatment.R"))
+
+get_img_path_exact(path_to_images = path_to_images_dir,
+                   anno = anno_df)
+
+```
+
+
+After removing segmentation outliers on a field-level basis, I check the number of dropped organoids per replicate and line. 
+
+```{r}
+pca_raw_filtered <- segmentation_outlier_manual %>%
+  left_join(segmentation_outlier_well) %>%
+  filter(status == "in_focus" & outlier == 0) %>%
+  select(Plate, Well, Line) %>%
+  semi_join(pca_raw %>% mutate(Size = as.numeric(Size)), .)
+
+pca_raw_filtered %>%
+  group_by(Line) %>%
+  dplyr::count(Replicate) %>%
+  mutate(status = "filtered") %>% 
+  rbind(pca_raw %>%
+  group_by(Line) %>%
+  dplyr::count(Replicate) %>%
+  mutate(status = "unfiltered")) %>% 
+  ggplot(aes(Line, n, color = status)) + 
+  geom_point() + 
+  facet_wrap(~ Replicate) + 
+  theme_bw() + 
+  scale_color_brewer(type = "qual")
+```
+ 
+```{r}
+pca_raw_filtered %>% 
+  dplyr::count(Drug, Line, Replicate) %>%
+  dplyr::count(Drug) %>%
+  dplyr::count(n)
+
+pca_raw %>% 
+  dplyr::count(Drug, Line, Replicate) %>%
+  dplyr::count(Drug) %>%
+  dplyr::count(n)
+```
+ 
+Given the new distribution of plates, I have to train a DMSO-based genotype classificator and a general lethaltiy classificator. If the latter was only focused on WT samples, I have no ability to evaluate it for both replicates in situations in which the second WT replicate is missing (M001W01P908L07).
+
+```{r}
+saveRDS(pca_raw_filtered, here("vignettes/06_profiling_inspection/hdf5_pca_filtered.Rds"))
+```
+

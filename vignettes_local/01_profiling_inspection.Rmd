@@ -1,0 +1,186 @@
+---
+title: "Profiling Data Inspection and QC"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(here)
+library(feather)
+library(monocle3)
+library(ggrastr)
+library(cowplot)
+library(platetools)
+#library(princurve)
+
+# local data access
+library(rhdf5) #needed for local data access
+library(furrr) #needed for local data access
+
+# install.packages('devtools')
+# devtools::install_github('VPetukhov/ggrastr')
+pdo_colors <- rev(c("#A2549B", "#D80D12", "#6E1614","#69B563", "#A9CEE1","#1E3B87"))
+here()
+```
+
+
+```{r, eval = FALSE}
+#Legacy chunk for raw feature calculation
+
+# feature_path <- here::here("/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features") #"/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features"
+# 
+# hdf5_path_df <- tibble(path = list.files(feature_path, full.name = TRUE),
+#        bc = list.files(feature_path, full.name = FALSE)) %>%
+#   filter((grepl(x = path, pattern = "D0"))) %>% 
+#   mutate(hdf5_path = paste0(path, "/", bc, "_processedFeatures.h5")) %>% 
+#   # I remove every file that does not exist 
+#   mutate(exist = furrr::future_map(hdf5_path, ~ .x %>% file.exists)) %>% 
+#   unnest()
+# 
+# # only execute with access to large dataset
+# df <- hdf5_path_df[1,]
+# 
+# poi <- df$hdf5_path
+# h5ls(poi)
+```
+
+
+I load the profiling dataset. 
+
+```{r, eval = FALSE}
+pca_path <- here::here("../data/profiling/TransformedFeatures_human_25components.h5")
+h5ls(pca_path)
+
+hdf5_pca <- h5read(pca_path, "features_organoids") %>% as_tibble()
+hdf5_pca_meta <- h5read(pca_path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>% magrittr::set_colnames(h5read(pca_path, "metadata_names_organoids"))
+
+
+hdf5_pca <- cbind(hdf5_pca_meta, hdf5_pca) %>% 
+  arrange(Line, Plate, Well) %>%
+  mutate(morphological_class = case_when(Line %in% c("D046T01",
+                                                     "D054T01",
+                                                     "D055T01") ~ "disorganized",
+                                         Line %in% c("D018T01") ~ "organized",
+                                         Line %in% c("D027T01",
+                                                     "D013T01",
+                                                     "D030T01") ~ "weakly organized",
+                                         Line %in% c("D010T01",
+                                                     "D007T01") ~ "weakly disorganized",
+                                         Line %in% c("D004T01",
+                                                     "D019T01",
+                                                     "D020T01",
+                                                     "D022T01") ~ "intermediate",
+                                         Line %in% c("D018T01") ~ "organized",
+                                         TRUE ~ "other") %>% factor(levels = c("organized", "weakly organized",
+                                                                               "intermediate", "weakly disorganized",
+                                                                               "disorganized", "other")))
+
+saveRDS(hdf5_pca, here("phenotypespectrum/vignettes/01_profiling_inspection/hdf5_pca.Rds"))
+```
+
+
+```{r, eval = TRUE}
+pca_raw <- readRDS(here("phenotypespectrum/vignettes/organoid_pseudotime/embeddings/hdf5_pca.Rds"))
+# read feather export 
+pca_raw <- read_feather(here("../phenotypespectrum/vignettes/01_profiling_inspection/human_pca_feather"))
+```
+
+I give a short overview of the dataset. 
+
+```{r, eval = TRUE}
+pca_raw %>% 
+  sample_n(10000) %>%
+  ggplot(aes(V1, V2, color = morphological_class)) + 
+  geom_point() + 
+  theme_classic() + 
+  scale_color_manual(values = pdo_colors) 
+  
+```
+
+# Segmentation outliers
+
+```{r}
+segmentation_metrics <- pca_raw %>% group_by(Plate, Well, Line, Replicate, morphological_class) %>% 
+  mutate(Size = as.numeric(Size)) %>%
+  summarise_at(vars(contains("Size")), funs(mean)) %>% 
+  ungroup() %>%
+  left_join(pca_raw %>% 
+  dplyr::count(Line, Plate, Well) %>% ungroup())
+
+df <- segmentation_metrics
+
+df %>% 
+  ggplot(aes(n, fill = morphological_class)) + 
+  geom_histogram() + 
+  scale_fill_manual(values = pdo_colors) +
+  theme_classic()
+```
+
+```{r}
+df <- segmentation_metrics
+
+platetools::raw_grid(data = df$n, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+
+There is a systematic deviation in terms of object count. 
+
+```{r}
+df <- segmentation_metrics
+
+platetools::raw_grid(data = df$Size, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+
+
+
+```{r}
+segmentation_metrics %>% 
+  mutate(Replicate = if_else(Replicate == 1, "Replicate 1", "Replicate 2")) %>%
+  ggplot(aes(Size, n, color = morphological_class)) + 
+  geom_point(alpha = 0.2) + 
+  geom_density2d(color = "black") +
+  facet_grid(Line ~ Replicate) + 
+  scale_y_log10() + 
+  theme_bw() + 
+  scale_color_manual(values = pdo_colors) + 
+  labs(title = "Well Segmentation Metrics",
+       subtitle = "Strong outliers persist in the primary data that was used for all downstream analyses",
+       x = "Object Size",
+       y = "Number of objects per well")
+```
+
+
+# Plate-level effects
+
+After accounting for batch effects on the single-organoid feature level, no plate-level differences of well-aggregated principle components are visible.
+
+```{r}
+pca_raw_well <- pca_raw %>% group_by(Plate, Well, Line, Replicate) %>% 
+  summarise_at(vars(contains("V")), funs(mean))
+
+df <- pca_raw_well %>% 
+  ungroup()
+
+platetools::raw_grid(data = df$V1, 
+                     well = df$Well,
+                     ncols = 12,
+                     plate_id = df$Plate,
+                     plate = 384) + 
+  scale_fill_viridis_c()
+```
+

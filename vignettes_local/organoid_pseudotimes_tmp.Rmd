@@ -1,0 +1,2577 @@
+---
+title: "Organoid Pseudotime"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+```
+
+I use this notebook to analyze phenotypic differences in mouse colon organoids.
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(here)
+library(feather)
+library(monocle3)
+library(ggrastr)
+library(cowplot)
+library(princurve)
+
+# local data access
+library(rhdf5) #needed for local data access
+library(furrr) #needed for local data access
+
+# install.packages('devtools')
+# devtools::install_github('VPetukhov/ggrastr')
+```
+
+I create a name vector for features 
+
+```{r, eval = FALSE}
+feature_path <- c("/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features")
+
+hdf5_path_df <- tibble(path = list.files(feature_path, full.name = TRUE),
+       bc = list.files(feature_path, full.name = FALSE)) %>%
+  filter((grepl(x = path, pattern = "D0"))) %>% 
+  mutate(hdf5_path = paste0(path, "/", bc, "_processedFeatures.h5")) %>% 
+  # I remove every file that does not exist 
+  mutate(exist = furrr::future_map(hdf5_path, ~ .x %>% file.exists)) %>% 
+  unnest()
+
+# only execute with access to large dataset
+df <- hdf5_path_df[1,]
+
+poi <- df$hdf5_path
+h5ls(poi)
+```
+
+
+I load the dataset in question. 
+
+```{r, eval = FALSE}
+pca_path <- "/home/rindtorf/data/rauscher/promise/PROMISE/FeatureAnalysis/drug_effects/mouse/TransformedFeatures_mouse_25components.h5"
+h5ls(pca_path)
+
+hdf5_pca <- h5read(pca_path, "features_organoids") %>% as_tibble()
+hdf5_pca_meta <- h5read(pca_path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>% magrittr::set_colnames(h5read(poi, "metadata_names_organoids"))
+
+
+
+# hdf5_pca_meta <- hdf5_pca_meta %>% mutate(mutation_class = case_when(Line %in% c("M00101",
+#                                                     
+#                                          TRUE ~ "other") %>% factor(levels = c("organized", "weakly organized",
+#                                                                                "intermediate", "weakly disorganized",
+#                                                                                "disorganized", "other")))
+
+hdf5_pca <- cbind(hdf5_pca, hdf5_pca_meta)
+saveRDS(hdf5_pca, here("data/embeddings/hdf5_pca.Rds"))
+```
+
+
+```{r, eval = TRUE}
+pca_raw <- readRDS(here("data/embeddings/hdf5_pca.Rds"))
+#pca_raw <- pca_raw_store
+```
+
+I give a short overview of the dataset. 
+
+```{r, eval = FALSE}
+pca_raw %>% 
+  sample_n(10000) %>%
+  ggplot(aes(V1, V2, color = Line)) + 
+  geom_point() + 
+  theme_classic() + 
+  scale_color_viridis_d()
+  
+```
+
+
+
+```{r, eval = FALSE}
+# for demo: subsample the original dataset
+set.seed(123)
+
+pca_raw_store <- pca_raw
+pca_raw <- pca_raw %>% 
+  sample_n(100000)
+```
+
+
+# Import into Monocle 3
+
+I continue importing the dataset into Monoocle3 
+
+```{r, eval = TRUE}
+# generating metadata objects
+pca_anno_df <- pca_raw %>% dplyr::select(-(V1:V25)) %>% 
+  mutate(uuid = paste(Plate, Well, Field, ObjectID, sep = "_")) %>% 
+  mutate(uuid2 = uuid) %>% 
+  mutate(Size = as.numeric(Size)) %>%
+  mutate(Size_log = log(Size)) %>%
+  as.data.frame() %>% 
+  column_to_rownames("uuid2")
+
+pca_matrix <- pca_raw %>% dplyr::select((V1:V25)) %>% as.data.frame() %>% magrittr::set_rownames(pca_anno_df$uuid) %>% magrittr::set_colnames(c(paste0("PC", c(1:25)))) %>% as.matrix()
+
+
+ods <- new_cell_data_set(pca_matrix %>% t(),
+                         cell_metadata = pca_anno_df)
+```
+
+I manually inject the PCA compression of the data into the object
+
+```{r, eval = TRUE}
+reducedDims(ods)$PCA <- pca_matrix
+```
+
+I run the dim reduction methods
+
+```{r, eval = FALSE}
+set.seed(123)
+ods <- reduce_dimension(ods,
+                        reduction_method = "UMAP",
+                        umap.n_neighbors = 15L,
+                        umap.fast_sgd=TRUE, 
+                        cores = parallel::detectCores(),
+                        verbose = TRUE)
+
+saveRDS(ods, here("data/monocle/bulk_pca_cluster.Rds"))
+```
+
+I load the UMAP embedding of the organoid dataset. 
+
+```{r}
+ods <- readRDS(here("data/monocle/bulk_pca_cluster.Rds"))
+```
+
+I plot a size-distribution. 
+
+```{r, eval = FALSE}
+gg_size_dist <- colData(ods) %>% as_tibble() %>% 
+  ggplot(aes(Size)) + 
+  geom_histogram() + 
+  theme_classic() + 
+  scale_x_log10()
+
+gg_size_dist + ggsave(here("figures/gg_size_dist.pdf"))
+```
+
+
+I plot the cells by size
+
+```{r, eval = FALSE}
+gg_size <- plot_cells(ods, color_cells_by="Size", 
+           alpha = 0.1,
+           rasterize= TRUE) + 
+  scale_color_viridis_c() + 
+  theme(legend.position = "bottom")
+```
+
+I use an alterantive, manual, plotting method. 
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  sample_frac(.1)
+
+gg_size <- df %>%
+  #filter(Size < 1000) %>%
+  ggplot(aes(V1, V2, color = Size_log)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8))
+
+```
+
+
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  sample_frac(0.1)
+
+gg_size_supp <- df %>%
+  mutate(drug = if_else(Drug == "DMSO", "DMSO", "other")) %>%
+  ggplot(aes(V1, V2, color = Size_log)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom") +
+  facet_wrap(~ drug)
+
+gg_size_supp + ggsave(here("figures/gg_size_all.pdf"))
+```
+
+I create a single plot showing the two extreme organoid lines and their distribution within the embedding. 
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  filter(Drug == "DMSO") 
+
+gg_line <- df %>% dplyr::select(-Line) %>%
+  ggplot(aes(V1, V2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df,
+    #mutate(Line = factor(Line, levels = c("D021T01"))),
+  aes(color = Line),alpha = .2, size = 0.35, shape=16) + 
+  facet_grid(Replicate ~ Line) + 
+  scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F"))) + 	
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+```
+
+
+
+```{r}
+gg_line_overview <- plot_cells(ods, color_cells_by="morphological_class",
+           alpha = 0.05, label_cell_groups = FALSE,
+           rasterize = TRUE) + 
+  facet_wrap(~ Line) + 
+  theme(legend.position = "nothing") + 
+  scale_color_manual(values = rev(c("#A2549B", "#D80D12", "#6E1614","#69B563", "#A9CEE1","#1E3B87"))) 
+```
+
+I directly write this supplementary plot to disc. 
+
+```{r, eval = FALSE}
+gg_line_overview + 
+  ggsave(here("line.pdf"), height = 8, width = 8)
+```
+
+
+# CLust
+
+```{r}
+clust <- readRDS(here("data/mclust/umap_mclust_k6.Rds"))
+clust_predict  <- readRDS(here("data/mclust/umap_mclust_predict_k6.Rds")) # initially with 15 clusters
+
+centers <- t(clust$parameters$mean)
+
+milestone_ids <- paste0("M", seq_len(nrow(centers)))
+rownames(centers) <- milestone_ids
+
+# convert distance to similarity
+dis <- as.matrix(dist(centers))
+rownames(dis) <- colnames(dis) <- milestone_ids
+
+disdf <- dis %>%
+  reshape2::melt(varnames = c("from", "to"), value.name = "weight") %>%
+  na.omit()
+
+# calculate mst
+gr <- igraph::graph_from_data_frame(disdf, directed = FALSE, vertices = milestone_ids)
+mst <- igraph::minimum.spanning.tree(gr, weights = igraph::E(gr)$weight)
+
+milestone_network <-
+  igraph::as_data_frame(mst) %>%
+  transmute(from, to, length = weight, directed = FALSE)
+
+milestone_location <- centers %>% 
+  as.data.frame() %>%
+  rownames_to_column("milestone") %>% 
+  janitor::clean_names()
+
+milestone_network_ggplot <- milestone_network %>% 
+  dplyr::select(milestone = from, -length, -directed) %>% 
+  left_join(milestone_location, by = "milestone") %>% 
+  dplyr::select(-milestone) %>% 
+  cbind(milestone_network %>% 
+  dplyr::select(milestone = to, -length, -directed) %>%
+  left_join(milestone_location, by = "milestone") %>% 
+    dplyr::select(v1_to = v1, v2_to = v2))
+  
+
+```
+
+I plot the milestones on the previosly generated embedding. 
+
+```{r}
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% cbind(clust_predict$classification) %>% as_tibble()
+
+mclust_complete <- clust_predict
+
+milestone_order <- c(1:15)
+#milestone_order <- c(4,6,8,12,3,10,15,2,11,7,9,13,1,14,5)
+
+gg_path <- clust$data %>%
+  as.data.frame() %>%
+  cbind(clust$classification) %>% 
+  cbind(clust$uncertainty) %>% 
+  janitor::clean_names() %>% 
+  mutate(clust_uncertainty = (1-clust_uncertainty)*0.1,
+         clust_classification = factor(clust_classification, levels = milestone_order)) %>%
+  ggplot(aes(v1, v2, color = clust_classification)) + 
+  geom_point_rast(size = 0.35, alpha = 0.1) + 
+  # geom_segment(data = milestone_network_ggplot, aes(x = v1, y = v2, xend = v1_to, yend = v2_to), size = 0.7, color = "black") +
+  # geom_point(data = milestone_location %>%
+  #              mutate(x = substr(milestone, 2,2) %>% as.numeric()) %>%
+  #              mutate(clust_classification = factor(x, levels = milestone_order)), alpha = 1,
+  #            size = 1.3,
+  #            color = "black") +
+  
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  #theme(legend.position = "bottom") +
+  theme(legend.position = "None") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  scale_color_manual(values = c("#6c80cc",
+                                #"#6db13c", 
+                                "#945fce",
+                                #"#59c377", 
+                                "#d34394",
+                                #"#4a9e75", 
+                                "#d0493a",
+                                #"#45b0cf", 
+                                "#db8f33",
+                                #"#b76dac", 
+                                "#b9af49"#,
+                                #"#c05b6d", "#6f7a31",
+                                #"#e0946e", "#9b5f2c"
+                                )) 
+  #scale_color_viridis_d() + 
+  #scale_color_manual(values = scico::scico(15, palette = 'berlin')) + 
+  #scale_color_manual(values = scico::scico(15, palette = 'roma')) 
+
+#gg_path
+```
+
+I am interested in the names of the clusters 
+
+```{r}
+milestone_location %>%
+               mutate(x = substr(milestone, 2,2) %>% as.numeric()) %>%
+               mutate(clust_classification = factor(x, levels = milestone_order)) %>%
+  ggplot(aes(v1,v2)) +
+  geom_point(alpha = 1,
+             size = 1.3,
+             color = "black") + 
+  
+  
+  geom_label(aes(label = milestone)) + 
+  geom_segment(data = milestone_network_ggplot, aes(x = v1, y = v2, xend = v1_to, yend = v2_to), size = 0.7, color = "black") + 
+  theme_classic()
+```
+
+
+It is hard to interpret the tree of clusters. For the following analysis I am going to use the clustering results and will create a barcode plot for each line and treatment. As the number of clusters is large (n > 15) I will introduce an order of clusters. 
+
+```{r}
+df_cluster <-reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% cbind(mclust_complete$classification) %>% as_tibble() %>% janitor::clean_names() %>% mutate(mclust_complete_classification = mclust_complete_classification %>% paste0("M", .) %>% factor(., levels = milestone_order %>% paste0("M", .)))
+```
+
+Now I have to validate how the predicted clusters look like for these maps. 
+
+```{r}
+gg_clust_predict <- df_cluster %>% 
+  group_by(mclust_complete_classification) %>% 
+  sample_n(100) %>% 
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(size = 1, alpha = 1) + 
+  theme_cowplot() + 
+  facet_wrap(~ mclust_complete_classification)
+```
+
+
+I visualize the proportion of clusters in a heatmap to identify similarities
+
+```{r}
+df_cluster %>% 
+  group_by(line, replicate, mclust_complete_classification) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>%
+  mutate(line = paste0(line, "_", replicate)) %>%
+  dplyr::select(-replicate) %>%
+  spread(mclust_complete_classification, n) %>% 
+  as.data.frame() %>%
+  column_to_rownames("line") %>% 
+  pheatmap::pheatmap(scale = "row")
+```
+
+# Removing not reproducible organoid phenotypes using an empirical Bayesian approach
+
+I do not trust my embedding, because certain areas of the embedding are populated exclusively by one replicate of one sample. In order to estimate the reproducibility of certain organoid phenotypes, I estimate the proportion of replicates.
+
+I start out setting an arbitrary number of clusters.
+
+```{r}
+kmeans <- df_cluster %>% 
+  select(v1, v2) %>% 
+  kmeans(centers = 100)
+
+kmeans$size %>% hist(main = "Size of clusters")
+```
+
+Now I assess the composition of the kmeans clusters. 
+
+```{r}
+df_cluster_km <- df_cluster %>% cbind(kmeans = kmeans$cluster)
+
+km_lr <- df_cluster_km %>% 
+  group_by(line, replicate, kmeans) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>%
+  complete(line, replicate, kmeans, fill = list(n  = 0))
+```
+
+I define a prior poportion of replicates. 
+
+Next I use the tidy empirical bayes package by Dave robinson to define certaint estimates that a given proportion is a deviation of my null hypothesis, which states a equal distribution between replicates.
+
+```{r}
+km_lr_prop_tidy <- km_lr %>% 
+  mutate(replicate = paste0("R", replicate)) %>% 
+  spread(replicate, n) %>% 
+  mutate(total = R1 + R2) %>% 
+  ungroup() %>% 
+  group_by(line) %>% 
+  mutate(prop_r1 = sum(R1)/(sum(R1)+sum(R2)),
+         prop_r2 = sum(R2)/(sum(R1)+sum(R2)))
+
+km_lr_prop_tidy %>%
+  ggplot(aes(total, R1/total)) + 
+  geom_hline(aes(yintercept = (prop_r1), color = line), linetype = "dashed", alpha= 0.5) + 
+  geom_hline(aes(yintercept = (prop_r2), color = line), linetype = "dashed", alpha= 0.5) +
+  geom_point(aes(color = line)) + 
+  scale_x_log10() + 
+  theme_cowplot() 
+  
+```
+
+I visualize the distrubtions and priors. 
+
+```{r}
+km_lr_prop_tidy %>% 
+  ggplot(aes(R1/total)) + 
+  geom_histogram() + 
+  facet_grid(~ line) + 
+  theme_cowplot() + 
+  geom_vline(aes(xintercept = prop_r1))
+```
+
+Given the histograms, I proceed without a mixture model.
+
+I start with a simple model. 
+
+```{r}
+km_shrunken <- km_lr_prop_tidy %>% add_ebb_estimate(R1, total+1)
+```
+
+I plot the shrinked values. 
+
+```{r}
+ggplot(km_shrunken, aes(.raw, .fitted, color = log10(total))) +
+  
+  geom_abline(color = "red") + 
+  geom_point() +
+  theme_cowplot() + 
+  geom_hline(yintercept = 0.5)
+```
+
+
+And their consequence with 20% credible intervals.
+
+```{r}
+km_shrunken %>% 
+ggplot(aes(total, .fitted)) + 
+  geom_hline(aes(yintercept = (prop_r1), color = line), linetype = "dashed", alpha= 0.5) + 
+  geom_hline(aes(yintercept = (prop_r2), color = line), linetype = "dashed", alpha= 0.5) +
+  geom_point(aes(color = line)) + 
+  scale_x_log10() +
+  geom_hline(aes(yintercept = 0.8), linetype = "dashed", alpha= 1) +
+  geom_hline(aes(yintercept = 0.2), linetype = "dashed", alpha= 1) +
+  theme_cowplot() 
+```
+
+
+I define a hierarchical model which considers both the number of observations and the line of the organoids. 
+
+```{r, eval = FALSE}
+library(ebbr)
+library(gamlss)
+fit <- gamlss(cbind(R1, total - R1) ~ log(total + 1) + line,
+               data = km_lr_prop_tidy,
+               family = BB(mu.link = "identity"))
+
+tidy(fit)
+```
+
+I identify the clusters in question and highlight them. 
+
+```{r}
+volatile_clusters <- km_shrunken %>% filter(.fitted < 0.1 | .fitted > 0.9) %>% group_by(kmeans) %>% summarize(n = n()) %>% .$kmeans
+```
+
+I remove these clusters from the dataset and plot the initial line plot again. 
+
+```{r}
+df_cluster_km %>% 
+  filter(!kmeans %in% volatile_clusters) %>%
+  group_by(line, replicate, mclust_complete_classification) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>%
+  mutate(line = paste0(line, "_", replicate)) %>%
+  dplyr::select(-replicate) %>%
+  spread(mclust_complete_classification, n) %>% 
+  as.data.frame() %>%
+  column_to_rownames("line") %>% 
+  pheatmap::pheatmap(scale = "row")
+```
+
+I also create the classic line plots. 
+
+```{r}
+df <- df_cluster_km %>% 
+  filter(!kmeans %in% volatile_clusters) %>%
+  filter(drug == "DMSO") 
+
+gg_line_trim <- df %>% dplyr::select(-line) %>%
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df,
+    #mutate(Line = factor(Line, levels = c("D021T01"))),
+  aes(color = line),alpha = .2, size = 0.35, shape=16) + 
+  facet_grid(replicate ~ line) + 
+  scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F"))) + 	
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+```
+
+I create a function to iterate over different numbers of k and return the ids of filtered organoids. 
+
+```{r}
+bayes_proportion_test <- function(df, k){
+  kmeans <- df %>% 
+  dplyr::select(v1, v2) %>% 
+  kmeans(centers = k)
+  
+  df_cluster_km <- df %>% cbind(kmeans = kmeans$cluster)
+
+  km_lr <- df_cluster_km %>% 
+  group_by(line, replicate, kmeans) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>%
+  complete(line, replicate, kmeans, fill = list(n  = 0))
+  
+  km_lr_prop_tidy <- km_lr %>% 
+  mutate(replicate = paste0("R", replicate)) %>% 
+  spread(replicate, n) %>% 
+  mutate(total = R1 + R2) %>% 
+  ungroup() %>% 
+  group_by(line) %>% 
+  mutate(prop_r1 = sum(R1)/(sum(R1)+sum(R2)),
+         prop_r2 = sum(R2)/(sum(R1)+sum(R2)))
+  
+  km_shrunken <- km_lr_prop_tidy %>% add_ebb_estimate(R1, total+1)
+  
+  return(km_shrunken)
+}
+```
+
+Let's run this for up to k=10000
+
+```{r}
+set.seed(48574)
+
+bpk_df <- tibble(k = seq(10,500,10)) %>% 
+  mutate(km = map(k, ~ bayes_proportion_test(df_cluster, .x)))
+
+saveRDS(bpk_df, here("data/kmeans/bpk_1_200.Rds"))
+```
+
+I plot the number of organoids removed for each k and a threshold of 90% disbalance. 
+
+```{r}
+bpk_df %>% 
+  unnest(km) %>% 
+  filter(.fitted < 0.1 | .fitted > 0.9) %>% 
+  group_by(line, k) %>% 
+  summarize(total = sum(total)) %>%
+  ggplot(aes(k, total, color = line)) + 
+  geom_point()  + 
+  geom_vline(xintercept = 200) +
+#  scale_y_log10() +
+  theme_cowplot() + 
+  geom_smooth(se = FALSE, linetype = "dashed") 
+```
+
+I set k=200, repeat the procedure and remove datapoints that belong to irreproducible clusters.
+
+```{r}
+df <- df_cluster
+k <- 200
+
+set.seed(48574)
+
+kmeans <- df %>% 
+dplyr::select(v1, v2) %>% 
+kmeans(centers = k)
+
+df_cluster_km <- df %>% cbind(kmeans = kmeans$cluster)
+
+km_lr <- df_cluster_km %>% 
+group_by(line, replicate, kmeans) %>% 
+summarise(n = n()) %>% 
+ungroup() %>%
+complete(line, replicate, kmeans, fill = list(n  = 0))
+
+km_lr_prop_tidy <- km_lr %>% 
+mutate(replicate = paste0("R", replicate)) %>% 
+spread(replicate, n) %>% 
+mutate(total = R1 + R2) %>% 
+ungroup() %>% 
+group_by(line) %>% 
+mutate(prop_r1 = sum(R1)/(sum(R1)+sum(R2)),
+       prop_r2 = sum(R2)/(sum(R1)+sum(R2)))
+
+km_shrunken <- km_lr_prop_tidy %>% add_ebb_estimate(R1, total+1)
+
+```
+
+I identify clusters that are not reproducible and subsample overrepresented organoids. 
+
+```{r}
+set.seed(1231)
+
+index <- km_shrunken %>% filter(.fitted < 0.1 | .fitted > 0.9) %>% 
+  dplyr::select(line:R2) %>% 
+  gather(replicate, n, -line, -kmeans) %>% 
+  mutate(replicate = substr(replicate, 2,2)) %>% 
+  group_by(line, kmeans) %>% 
+  do(arrange(., n) %>% head(1)) %>% 
+  # now I know the cluster that is underrepresented and their counts from the underrepresented replicate. I now turn to the corresponding replicate to downsample from.
+  mutate(replicate = if_else(replicate == "1", "2", "1")) 
+
+df_cluster_strat <- index %>% 
+  right_join(df_cluster_km, .) %>% 
+  group_by(line, kmeans) %>%
+  sample_n(n) %>% 
+  ungroup() %>%
+  dplyr::select(-n) %>%
+  rbind(df_cluster_km %>% anti_join(index %>% dplyr::select(-n)) %>% as_tibble()) %>% as_tibble()
+
+```
+
+```{r}
+df <- df_cluster_strat %>% 
+  filter(drug == "DMSO") 
+
+gg_line_strat <- df %>% dplyr::select(-line) %>%
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df,
+    #mutate(Line = factor(Line, levels = c("D021T01"))),
+  aes(color = line),alpha = .2, size = 0.35, shape=16) + 
+  facet_grid(replicate ~ line) + 
+  scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F"))) + 	
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+
+gg_line_strat
+```
+
+
+Once I have subsampled labile clusters I continue by reembedding the whole dataset. I do so by creating a new object and re-running the whole pipeline. For subsampling, I set n to be number of organoids in the cluster from the underrepresented replicate. 
+
+First I define a modified version of the pca raw object that I can use for object creation. 
+
+```{r}
+pca_raw_strat <- df_cluster_strat %>% 
+  dplyr::select(Plate = plate, 
+                Replicate = replicate, 
+                OriginalX = original_x, 
+                OriginalY = original_y) %>% 
+  semi_join(pca_raw, .)
+```
+
+
+```{r, eval = TRUE}
+# generating metadata objects
+pca_anno_df <- pca_raw_strat %>% dplyr::select(-(V1:V25)) %>% 
+  mutate(uuid = paste(Plate, Well, Field, ObjectID, sep = "_")) %>% 
+  mutate(uuid2 = uuid) %>% 
+  mutate(Size = as.numeric(Size)) %>%
+  mutate(Size_log = log(Size)) %>%
+  as.data.frame() %>% 
+  column_to_rownames("uuid2")
+
+pca_matrix <- pca_raw_strat %>% dplyr::select((V1:V25)) %>% as.data.frame() %>% magrittr::set_rownames(pca_anno_df$uuid) %>% magrittr::set_colnames(c(paste0("PC", c(1:25)))) %>% as.matrix()
+
+
+ods <- new_cell_data_set(pca_matrix %>% t(),
+                         cell_metadata = pca_anno_df)
+
+# Again, I manually inject the PCA compression of the data into the object
+reducedDims(ods)$PCA <- pca_matrix
+```
+
+I run the dim reduction methods
+
+```{r, eval = FALSE}
+set.seed(123)
+ods <- reduce_dimension(ods,
+                        reduction_method = "UMAP",
+                        umap.n_neighbors = 15L,
+                        umap.fast_sgd=TRUE, 
+                        cores = parallel::detectCores(),
+                        verbose = TRUE)
+
+saveRDS(ods, here("data/monocle/bulk_pca_cluster_strat.Rds"))
+```
+
+I plot a size-distribution. 
+
+```{r, eval = FALSE}
+gg_size_dist <- colData(ods) %>% as_tibble() %>% 
+  ggplot(aes(Size)) + 
+  geom_histogram() + 
+  theme_classic() + 
+  scale_x_log10()
+
+gg_size_dist + ggsave(here("figures/gg_size_dist.pdf"))
+```
+
+
+I plot the cells by size
+
+```{r, eval = FALSE}
+gg_size <- plot_cells(ods, color_cells_by="Size", 
+           alpha = 0.1,
+           rasterize= TRUE) + 
+  scale_color_viridis_c() + 
+  theme(legend.position = "bottom")
+```
+
+I use an alterantive, manual, plotting method. 
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  sample_frac(.1)
+
+gg_size <- df %>%
+  #filter(Size < 1000) %>%
+  ggplot(aes(V1, V2, color = Size_log)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8))
+
+```
+
+
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  sample_frac(0.1)
+
+gg_size_supp <- df %>%
+  mutate(drug = if_else(Drug == "DMSO", "DMSO", "other")) %>%
+  ggplot(aes(V1, V2, color = Size_log)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom") +
+  facet_wrap(~ drug)
+
+gg_size_supp + ggsave(here("figures/gg_size_all.pdf"))
+```
+
+I create a single plot showing the two extreme organoid lines and their distribution within the embedding. 
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  filter(Drug == "DMSO") %>% 
+  sample_frac(0.1)
+
+gg_line <- df %>% dplyr::select(-Line) %>%
+  ggplot(aes(V1, V2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df,
+    #mutate(Line = factor(Line, levels = c("D021T01"))),
+  aes(color = Line),alpha = .2, size = 0.35, shape=16) + 
+  facet_wrap( ~ Line) + 
+  scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F"))) + 	
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+```
+
+
+
+```{r}
+gg_line_overview <- plot_cells(ods, color_cells_by="morphological_class",
+           alpha = 0.05, label_cell_groups = FALSE,
+           rasterize = TRUE) + 
+  facet_wrap(~ Line) + 
+  theme(legend.position = "nothing") + 
+  scale_color_manual(values = rev(c("#A2549B", "#D80D12", "#6E1614","#69B563"))) 
+```
+
+I directly write this supplementary plot to disc. 
+
+```{r, eval = FALSE}
+gg_line_overview + 
+  ggsave(here("line.pdf"), height = 8, width = 8)
+```
+
+
+## Regions of the embedding
+
+## Information gain for distributions
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  filter(Drug == "DMSO")
+
+kl_frac <- function(frac, df){
+  X <- df %>% filter(Line == "M001B04", Replicate == "1") %>% sample_frac(frac) %>% dplyr::select(V1, V2) %>% as.matrix()
+  Y <- df %>% filter(Line == "M001B04", Replicate == "2") %>% sample_frac(frac) %>% dplyr::select(V1, V2)%>% as.matrix()
+kl = mean(KL.divergence(X,Y, k = 10))
+return(kl)
+}
+
+kl_frac_inv <- function(frac, df){
+  Y <- df %>% filter(Line == "M001B04", Replicate == "1") %>% sample_frac(frac) %>% dplyr::select(V1, V2) %>% as.matrix()
+  X <- df %>% filter(Line == "M001B04", Replicate == "2") %>% sample_frac(frac) %>% dplyr::select(V1, V2)%>% as.matrix()
+kl = mean(KL.divergence(X,Y, k = 10))
+return(kl)
+}
+
+
+kl_frac_benchmark <- tibble(frac = seq(0.05, 1, 0.01)) %>% 
+  mutate(KL = map(frac, ~ kl_frac(.x, df))) %>%
+  mutate(KL_inv = map(frac, ~ kl_frac_inv(.x, df)))
+
+kl_frac_benchmark %>% unnest() %>%
+  gather(div, value, -frac) %>%
+  ggplot(aes(frac, value, color = div)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  scale_color_brewer(type = "qual")+ 
+  ggtitle("Distributions of same size")
+```
+
+Comparing samples of different sizes
+
+```{r}
+set.seed(123)
+
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  filter(Drug == "DMSO")
+
+kl_frac <- function(frac, df){
+  X <- df %>% filter(Line == "M001B04", Replicate == "1") %>% sample_frac(frac) %>% dplyr::select(V1, V2) %>% as.matrix()
+  Y <- df %>% filter(Line == "M001B04", Replicate == "2") %>% sample_frac(frac) %>% sample_frac(0.1) %>% dplyr::select(V1, V2)%>% as.matrix()
+kl = mean(KL.divergence(X,Y, k = 10))
+return(kl)
+}
+
+kl_frac_inv <- function(frac, df){
+  Y <- df %>% filter(Line == "M001B04", Replicate == "1") %>% sample_frac(frac) %>% dplyr::select(V1, V2) %>% as.matrix()
+  X <- df %>% filter(Line == "M001B04", Replicate == "2") %>% sample_frac(frac) %>% sample_frac(0.1) %>% dplyr::select(V1, V2)%>% as.matrix()
+kl = mean(KL.divergence(X,Y, k = 10))
+return(kl)
+}
+
+
+kl_frac_benchmark <- tibble(frac = seq(0.05, 1, 0.01)) %>% 
+  mutate(KL = map(frac, ~ kl_frac(.x, df))) %>%
+  mutate(KL_inv = map(frac, ~ kl_frac_inv(.x, df)))
+
+kl_frac_benchmark %>% unnest() %>%
+  gather(div, value, -frac) %>%
+  ggplot(aes(frac, value, color = div)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  scale_color_brewer(type = "qual") + 
+  ggtitle("Minor Distribution of 10%")
+```
+
+
+What is the average number of observations per treatment in the dataset? 
+
+First I simplify my dataset.
+
+```{r}
+ods_df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble()
+```
+
+Now I move on. 
+
+```{r}
+median <- ods_df %>% group_by(Line, Drug) %>% summarise(n = n()) %>% 
+  filter(Drug != "Drug") %>% .$n %>% median()
+
+ods_df %>% group_by(Line, Drug) %>% summarise(n = n()) %>% 
+  filter(Drug != "Drug") %>%
+  ggplot(aes(n)) + 
+  geom_histogram() + 
+  scale_x_log10() + 
+  #scale_y_log10() + 
+  theme_cowplot() + 
+  geom_vline(xintercept = median)
+```
+
+
+Now I calculate the KLD for every APC treatment and the joined distribution of WT organoids. 
+
+```{r}
+KLD_revert_wt <- ods_df %>% 
+  nest(-Drug, -Line) %>%
+  #head(10) %>%
+  mutate(kl = map(data, ~ mean(KL.divergence(.x %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             ods_df %>% filter(Line == "M001W01" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             k = 10)))) %>% 
+  unnest(kl)
+
+KLD_revert_apc <- ods_df %>% 
+  nest(-Drug, -Line) %>%
+  #head(10) %>%
+  mutate(kl = map(data, ~ mean(KL.divergence(.x %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             ods_df %>% filter(Line == "M001A03" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             k = 10)))) %>% 
+  unnest(kl)
+
+KLD_revert_kras <- ods_df %>% 
+  nest(-Drug, -Line) %>%
+  #head(10) %>%
+  mutate(kl = map(data, ~ mean(KL.divergence(.x %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             ods_df %>% filter(Line == "M001K02" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             k = 10)))) %>% 
+  unnest(kl)
+
+KLD_revert_ak <- ods_df %>% 
+  nest(-Drug, -Line) %>%
+  #head(10) %>%
+  mutate(kl = map(data, ~ mean(KL.divergence(.x %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             ods_df %>% filter(Line == "M001B04" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             k = 10)))) %>% 
+  unnest(kl)
+
+```
+
+Now I plot the distribution of KLDs. 
+
+
+```{r}
+KLD_revert_wt %>% 
+  ggplot(aes(kl, fill = Line)) + 
+  geom_histogram(alpha = 0.7, position = "identity") + 
+  scale_x_log10() + 
+  theme_cowplot() + 
+  facet_grid(~ Line)
+```
+
+I load the drug anno table 
+
+```{r}
+ccp <- read_delim(here("data/layouts/Clin_Cancer_Panel_V170511.csv"), 
+    ";", escape_double = FALSE, trim_ws = TRUE) %>% .[,-1] %>% 
+  janitor::clean_names()
+
+kistem <- read_delim(here("data/layouts/KiStem_edt_V170125.csv"), 
+    ";", escape_double = FALSE, trim_ws = TRUE) %>% .[,-1] %>% 
+  janitor::clean_names()
+```
+
+
+
+```{r}
+KLD_revert_wt %>% 
+  filter(Line == "M001B04") %>% arrange(kl) %>% 
+  left_join(kistem %>% dplyr::select(Drug = product_name, target, pathway)) %>% distinct()
+```
+
+```{r}
+KLD_revert_wt %>% 
+  filter(Line == "M001A03") %>% arrange(kl)%>% 
+  left_join(kistem %>% dplyr::select(Drug = product_name, target, pathway)) %>% distinct()
+```
+
+
+
+```{r}
+df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% as_tibble() %>%
+  filter(Drug %in% c("DMSO", "CHIR-98014")) %>%
+  group_by(Drug) %>%
+  #sample_frac(0.1) %>% 
+  ungroup()
+
+gg_gsk <- df %>% dplyr::select(-Line, -Drug) %>%
+  ggplot(aes(V1, V2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df,
+  aes(color = Line),alpha = .2, size = 0.7, shape=16) + 
+  facet_grid(Drug ~ Line) + 
+  scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F"))) + 	
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+```
+
+
+```{r}
+KLD_revert_wt %>% 
+  filter(Line != "M001W01") %>%
+  filter(Line != "M001K02") %>%
+  filter(Drug != "DMSO") %>%
+  mutate(n = map(data, ~ nrow(.x))) %>% 
+  unnest(n) %>% 
+  ggplot(aes(n, kl, color = Line)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  #scale_x_log10() + 
+  scale_y_log10() + 
+  facet_wrap(~ Line, ncol =2)
+```
+
+
+```{r}
+KLD_revert_wt <- ods_df %>% 
+  nest(-Drug, -Line) %>%
+  #head(10) %>%
+  mutate(kl = map(data, ~ mean(KL.divergence(.x %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             ods_df %>% filter(Line == "M001W01" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                             k = 10)))) %>% 
+  unnest(kl)
+```
+
+
+```{r}
+KLD_revert_wt %>% 
+    #filter(Line == "M001B04") %>% arrange(kl) %>% 
+    left_join(kistem %>% dplyr::select(Drug = product_name, target, pathway)) %>% distinct() %>% 
+  mutate(target = if_else(target == "GSK-3", TRUE, FALSE)) %>%
+  mutate(target = if_else(is.na(target), FALSE, target)) %>% 
+  filter(Line != "M001W01") %>%
+  filter(Line != "M001K02") %>%
+  filter(Drug != "DMSO") %>%
+  mutate(n = map(data, ~ nrow(.x))) %>% 
+  unnest(n) %>% 
+  ggplot(aes(n, kl, color = target)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  #scale_x_log10() + 
+  scale_y_log10() + 
+  facet_wrap(~ Line, ncol =2)
+```
+
+Permutation test of distribution
+
+```{r}
+KLD_revert_wt_null <- KLD_revert_wt %>% 
+  mutate(n = map(data, ~ nrow(.x))) %>% 
+  unnest(n) %>% 
+  #head(1) %>% 
+  #dplyr::slice(rep(1:n(), each = 2)) %>%
+  dplyr::slice(rep(1:n(), each = 10000)) %>%
+  mutate(kl_null = map2(Line, n, ~ mean(KL.divergence(ods_df %>% filter(Line == .x) %>% sample_n(.y) %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                                  ods_df %>% filter(Line == "M001K02" & Drug == "DMSO") %>% dplyr::select(V1, V2) %>% as.matrix(),
+                                                  k = 10)))) %>% 
+  unnest(kl_null)
+
+saveRDS(KLD_revert_wt_null, "KLD_revert_wt_null.Rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+clust_var <- df_cluster %>% 
+  filter(drug == "DMSO") %>%
+  group_by(line, mclust_complete_classification) %>% 
+  summarize(n = n()) %>%
+  group_by(line) %>% 
+  mutate(prop = n/sum(n)) %>%
+  dplyr::select(-n)  
+
+clust_var_order <- clust_var %>% 
+  group_by(mclust_complete_classification) %>% 
+  summarise(var = var(prop)) %>% 
+  arrange(desc(var)) %>%
+  .$mclust_complete_classification %>% as.character()
+
+clust_var %>% 
+  group_by(mclust_complete_classification) %>% 
+  summarise(var = var(prop)) %>% 
+  arrange(desc(var)) %>% 
+  mutate(mclust_complete_classification = factor(mclust_complete_classification, levels = clust_var_order)) %>%
+  mutate(status = if_else(mclust_complete_classification %in% c("M14", "M13", "M1", "M5"), "dead", "alive")) %>%
+  ggplot(aes(mclust_complete_classification, var, color = status)) + 
+  geom_point() + 
+  theme_cowplot()
+
+# clust_var %>% 
+#   mutate(mclust_complete_classification = factor(mclust_complete_classification, levels = clust_var_order)) %>%
+#   
+#   ggplot(aes(mclust_complete_classification, prop, color = status)) + 
+#   geom_point()
+
+# clust_mu_order <- clust_var %>% 
+#   group_by(mclust_complete_classification) %>% 
+#   summarise(mu = mean(prop)) %>% 
+#   arrange(desc(mu)) %>%
+#   .$mclust_complete_classification %>% as.character()
+# 
+# clust_var %>% 
+#   mutate(mclust_complete_classification = factor(mclust_complete_classification, levels = clust_mu_order)) %>%
+#   ggplot(aes(mclust_complete_classification, prop)) + 
+#   geom_point()
+
+line_order <- clust_var %>% 
+  spread(mclust_complete_classification, prop) %>%
+  janitor::clean_names() %>%
+  arrange(desc(m5)) %>% 
+  .$line
+```
+
+I write a csv with the proportions. 
+
+```{r}
+clust_var %>% 
+  mutate(mclust_complete_classification = as.character(mclust_complete_classification)) %>%
+  spread(mclust_complete_classification, prop) %>%
+  janitor::clean_names() %>% 
+  write_csv(here("data/cluster_proportions.csv"))
+```
+
+
+I associate proportions with a cluster of interest, M4
+
+```{r}
+clust_var %>% 
+  filter(mclust_complete_classification == "M4") %>% 
+  filter(line != "D021T01") %>% 
+  mutate(pi3k_akt = if_else(line %in% c("D007T01", "D004T01",
+                                        "D013T01", "D030T01",
+                                        "D054T01"), TRUE, FALSE)) %>% 
+  ggplot(aes(pi3k_akt, prop)) +
+  geom_jitter(width = 0.2)+ 
+  theme_cowplot() + 
+  ggsignif::geom_signif(comparisons = list(c("TRUE", "FALSE")))
+```
+
+It is hard to define a mutation status as false given the limited coverage of our amplicon library.
+
+```{r, eval = FALSE}
+gg_proportion <- df_cluster %>% 
+  mutate(line = factor(line, levels = line_order)) %>%
+  #filter(!(line %in% c("D054T01", "D021T01", "D020T01", "D010T01"))) %>%
+  filter(!(line %in% c("D020T02", "D010T01"))) %>%
+  filter(drug == "DMSO") %>%
+  ggplot(aes(line, fill = mclust_complete_classification)) + 
+  geom_bar(position = "fill") + 
+  theme_classic() + 
+  coord_flip() + 
+  #theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  scale_fill_manual(values = scico::scico(15, palette = 'roma')) +
+  #facet_wrap(~ Drug)
+  theme(legend.text = element_blank()) + 
+  theme(legend.position = "None")
+
+gg_proportion
+```
+
+Now I am interested how certain drugs and their concentrations shift the composition of morphological phenotypes
+
+```{r, eval = FALSE}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+    filter(line == "D046T01") %>% .$drug %>% unique()
+drug_order <- drug_order[rev(c(3,2,5,4,6,1))]
+
+
+gg_borte_prop <- df_cluster %>% 
+  mutate(line = factor(line, levels = line_order)) %>%
+  #filter(!(line %in% c("D054T01", "D021T01", "D020T01", "D010T01"))) %>%
+  filter(!(line %in% c("D021T01", "D010T01"))) %>%
+  filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(line == "D046T01") %>%
+  mutate(drug = factor(drug, levels =drug_order)) %>%
+  ggplot(aes(drug, fill = mclust_complete_classification)) + 
+  geom_bar(position = "fill") + 
+  theme_classic() + 
+  coord_flip() + 
+  #theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  scale_fill_manual(values = scico::scico(15, palette = 'roma')) +
+  #facet_wrap(~ concentration) +
+  theme(legend.text = element_blank()) + 
+  theme(legend.position = "None")
+```
+
+I visualize this transition in the UMAP.
+
+```{r}
+set.seed(123)
+
+drug_order <- df_cluster %>%
+    #filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+  filter(grepl(drug, pattern = "Bortezomib")) %>%
+    filter(line == "D046T01") %>% .$drug %>% unique()
+drug_order <- drug_order[rev(c(3,2,5,4,6,1))]
+
+gg_bortezomib <- df_cluster %>% sample_frac(0.01) %>%
+  dplyr::select(-line, -concentration) %>%
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = df_cluster %>%
+    #filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+      filter(grepl(drug, pattern = "Bortezomib")) %>%
+  filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+    mutate(concentration = if_else(concentration == "nan", "0", concentration)) %>%
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    
+    group_by(drug) %>% 
+    sample_n(5000, replace = TRUE),
+  aes(color = drug),alpha = 1, size = 1.5, shape=16, color = "black") + 
+  facet_wrap( ~ concentration, ncol = 1) + 
+  #scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "bottom")
+  
+
+
+gg_bortezomib
+```
+
+
+I visualize the location of Bortezomib 
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+    filter(line == "D046T01") %>% .$drug %>% unique()
+drug_order <- drug_order[rev(c(3,2,5,4,6,1))]
+
+
+center_df <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+  # filter(line == "D046T01") %>% 
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    # group_by(drug) %>% 
+    # sample_n(200, replace = FALSE) %>% 
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = mean(v1),
+            v2 = mean(v2))
+
+gg_bortezomib_path <- center_df %>%
+  ggplot(aes(v1, v2, group = line)) + 
+  
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point(aes(color = drug),alpha = 1, size = 3, shape=16) + 
+  geom_path() +
+  facet_wrap(~line ) +
+  #geom_density2d(color = "black") + 
+  theme_bw() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+
+I repeat the same figure with Trametinib
+
+```{r}
+df_cluster %>% 
+  mutate(line = factor(line, levels = line_order)) %>%
+  #filter(!(line %in% c("D054T01", "D021T01", "D020T01", "D010T01"))) %>%
+  filter(!(line %in% c("D021T01", "D010T01"))) %>%
+  filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(!grepl(drug, pattern = "GSK1120212")) %>%
+  filter(line == "D046T01") %>%
+  ggplot(aes(drug, fill = mclust_complete_classification)) + 
+  geom_bar(position = "fill") + 
+  theme_classic() + 
+  coord_flip() + 
+  #theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  scale_fill_manual(values = scico::scico(15, palette = 'roma')) +
+  #facet_wrap(~ concentration) +
+  theme(legend.text = element_blank()) + 
+  theme(legend.position = "None")
+```
+
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(!grepl(drug, pattern = "GSK1120212")) %>% 
+    filter(line == "D046T01") %>% .$drug %>% unique() %>% sort()
+
+
+gg_trametinib <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+      filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+       filter(!grepl(drug, pattern = "GSK1120212")) %>%
+  filter(line == "D046T01") %>% 
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    group_by(drug) %>% 
+    sample_n(200, replace = FALSE) %>%
+  #sample_n(1000, replace = FALSE) %>%
+  ggplot(aes(v1, v2)) + 
+  
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_density2d(aes(color = drug)) +
+  geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16) + 
+  facet_wrap(~ drug) + 
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  #geom_density2d(color = "black") + 
+  theme_bw() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+
+gg_trametinib
+gg_trametinib + ggsave("trametinib.pdf", width = 15, height = 10)
+
+```
+
+```{r}
+gg_trametinib_all <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+      filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+      filter(grepl(drug, pattern = "GSK1120212")) %>%
+  # #filter(line == "D046T01") %>% 
+  #   mutate(drug = factor(drug, levels =drug_order)) %>%
+  #   group_by(drug) %>% 
+  #   sample_n(200, replace = FALSE) %>%
+  #sample_n(1000, replace = FALSE) %>%
+  ggplot(aes(v1, v2)) + 
+  
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_density2d(aes(color = drug)) +
+  geom_point_rast(alpha = 1, size = 0.35, shape=16, color = "black") + 
+  #facet_wrap(~ drug) + 
+  #scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  #geom_density2d(color = "black") + 
+  theme_bw() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot() + theme(legend.position = "nothing")
+
+gg_mtor_all <- df_cluster %>%
+    #filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132") | drug %in% c("PF-04691502", "PP121")) %>%
+  filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
+  filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
+  #filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+  group_by(drug) %>% 
+  sample_n(700) %>%
+  ggplot(aes(v1, v2)) + 
+  
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_density2d(aes(color = drug)) +
+  geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16, color = "black") + 
+  facet_wrap(~ drug) + 
+  #scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  #geom_density2d(color = "black") + 
+  theme_bw() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+
+
+gg_gski_all <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "CHIR-98014")) %>%
+  filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+  group_by(drug) %>% 
+  sample_n(1380) %>%
+  ggplot(aes(v1, v2)) + 
+  
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_density2d(aes(color = drug)) +
+  geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16, color = "black") + 
+  facet_wrap(~ drug) + 
+  #scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  #geom_density2d(color = "black") + 
+  theme_bw() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  theme_cowplot(font_size = 8) + 
+  theme(legend.position = "nothing")
+
+```
+
+
+I need to visulaize these phenotypes in a better way. Thus I calculate the 2D median.
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(!grepl(drug, pattern = "GSK1120212")) %>% 
+    filter(line == "D046T01") %>% .$drug %>% unique() %>% sort()
+
+
+center_df <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>%
+      filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+       filter(!grepl(drug, pattern = "GSK1120212")) %>%
+  #filter(line == "D055T01") %>% 
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    # group_by(drug) %>% 
+    # sample_n(200, replace = FALSE) %>% 
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = mean(v1),
+            v2 = mean(v2))
+
+gg_trametinib_path <- center_df %>%
+  ggplot(aes(v1, v2, group = line)) + 
+  
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point(aes(color = drug),alpha = 1, size = 3, shape=16) + 
+  geom_path() +
+  facet_wrap(~ line) +
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+I want to create smoothed principal curves like in most trajectory inference methods, for example slingshot. 
+This is the trajectory for Bortezomib:
+
+```{r}
+  
+
+
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+ .$drug %>% unique() %>% sort()
+
+df_tmp <- df_cluster %>%
+    filter(drug %in% drug_order) %>% 
+  filter(line == "D055T01") %>%
+  mutate(drug = factor(drug, levels =drug_order)) %>% 
+  arrange((drug)) %>% 
+  group_by(drug) %>%
+  sample_n(1000, replace = TRUE) %>% 
+  ungroup()
+
+df_tmp_init <- df_tmp %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = mean(v1),
+            v2 = mean(v2)) %>% 
+  ungroup()
+
+plot(df_tmp_init%>% dplyr::select(v1, v2) %>% as.matrix())
+plot(df_tmp%>% dplyr::select(v1, v2) %>% as.matrix())
+
+fit <- principal_curve(x = df_tmp %>% dplyr::select(v1, v2) %>% as.matrix(),
+                       start = df_tmp_init %>% dplyr::select(v1, v2) %>% as.matrix(),
+                       approx_points = FALSE, 
+                       trace = TRUE, 
+                       plot_iterations = TRUE, 
+                       maxit = 30,
+                       stretch =0)
+
+plot(fit)
+points(df_tmp_init%>% dplyr::select(v1, v2) %>% as.matrix())
+
+fit$s[fit$ord,] %>% .[c(500:5000),] %>%
+  as_tibble() %>%
+  ggplot(aes(v1, v2)) + 
+  geom_path() + 
+  geom_point(data = df_tmp_init, size = 2)
+
+
+
+```
+
+Now I am building a function to create these tidy path objects.
+
+```{r}
+create_princurve_trace <- function(df){
+  df_tmp_init <- df %>% 
+  group_by(drug) %>% 
+  summarize(v1 = mean(v1),
+            v2 = mean(v2)) %>% 
+  ungroup()
+  
+  fit <- principal_curve(x = df %>% dplyr::select(v1, v2) %>% as.matrix(),
+                       start = df_tmp_init %>% dplyr::select(v1, v2) %>% as.matrix(),
+                       approx_points = FALSE, 
+                       trace = TRUE, 
+                       plot_iterations = TRUE, 
+                       maxit = 30,
+                       stretch =2)
+  
+  plot(fit)
+  points(df_tmp_init%>% dplyr::select(v1, v2) %>% as.matrix())
+
+  result <- list()
+  
+  result$fit <- fit$s[fit$ord,] %>% as_tibble()
+  result$center <- df_tmp_init
+  result$input <- df
+  
+  return(result)
+}
+```
+
+
+```{r}
+gg_bortezomib_path + ggsave("bortezomib_path.pdf", width = 12, height =  7)
+gg_trametinib_path + ggsave("trametininb_path.pdf", width = 12, height =  7)
+```
+
+It becomes clear that compounds have characteristic paths of drug response. 
+To illustrate this, we focus on the organoids that start out with very disorganized archtecture and compare their response to bortezomib vs. trametinib. 
+
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")| grepl(drug, pattern = "Bortezomib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(!grepl(drug, pattern = "GSK1120212")) %>% .$drug %>% unique() %>% sort()
+
+# center_df_mean <- df_cluster %>%
+#     filter(drug %in% drug_order) %>%
+#   filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+#   dplyr::select(v1, v2, drug, line) %>% 
+#   group_by(drug) %>% 
+#   summarize(v1 = mean(v1),
+#             v2 = mean(v2)) %>% 
+#   separate(drug, c("drug", "concentration"), sep = "__") %>% 
+#   mutate(concentration = as.numeric(concentration))
+
+center_df <- df_cluster %>%
+    filter(drug %in% drug_order) %>%
+  filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = mean(v1),
+            v2 = mean(v2)) %>% 
+  separate(drug, c("drug", "concentration"), sep = "__") %>% 
+  mutate(concentration = as.numeric(concentration),
+         drug_line = paste0(drug, "_", line))
+
+gg_trambort <- center_df %>% 
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point(aes(color = drug, group = drug_line),alpha = 1, size = 1.5, shape=16) + 
+  #geom_smooth(aes(group = drug), se = FALSE) + 
+  #geom_path(aes(group = drug, color = drug), arrow = arrow(angle =15, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
+  geom_path(aes(group = drug_line, color = drug)) + 
+  scale_color_manual(values = c("#707070", "#000000", "#4285F4")) +
+  
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+
+I am creating a new version of the plot above
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")| grepl(drug, pattern = "Bortezomib")) %>%
+  filter(!grepl(drug, pattern = "Dabrafenib")) %>% 
+  filter(!grepl(drug, pattern = "GSK1120212")) %>% .$drug %>% unique() %>% sort()
+
+center_df <- df_cluster %>%
+    filter(drug %in% drug_order) %>%
+  filter(line %in% c("D055T01", "D054T01", "D046T01")) %>%
+  mutate(drug = factor(drug, levels =drug_order)) %>% 
+  arrange((drug)) %>% 
+  group_by(drug, line) %>%
+  sample_n(1000, replace = TRUE) %>% ungroup()
+
+plot_df_bort <- center_df %>%
+  filter(drug == "DMSO" | grepl(drug, pattern = "Bortezomib")) %>%
+  filter(grepl(drug, pattern = "Bortezomib")) %>%
+  nest(-line) %>%
+  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
+
+plot_df_tram <- center_df %>%
+  filter(drug == "DMSO" | grepl(drug, pattern = "Trametinib")) %>% 
+  filter(grepl(drug, pattern = "Trametinib")) %>%
+  nest(-line) %>%
+  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
+
+gg_trambort_traj <- plot_df_tram %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[c(300:4500), ])) %>% unnest(plot_trace) %>%
+  mutate(drug = "Trametinib") %>% 
+  rbind(plot_df_bort %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[c(300:4000), ])) %>% unnest(plot_trace) %>%
+  mutate(drug = "Bortezomib")) %>% 
+  mutate(drug_line = paste0(drug, "_", line)) %>%
+  filter(line == "D046T01") %>%
+  ggplot(aes(v1, v2)) + 
+  #geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_point(aes(color = drug, group = drug_line),alpha = 1, size = 1.5, shape=16) + 
+  #geom_smooth(aes(group = drug), se = FALSE) + 
+  geom_point(data = 
+               plot_df_bort %>% unnest(data) %>% 
+               rbind(plot_df_tram %>% unnest(data)) %>% 
+               separate(drug, c("drug", "conc"), sep = "__"),
+             aes(color = drug), alpha = 0.05, size = 0.35) +
+  
+  #geom_path(aes(group = drug, color = drug), arrow = arrow(angle =15, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
+  geom_path(aes(group = drug_line, color = drug), size = 1.5, arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
+  scale_color_manual(values = c("#707070", "#4285F4")) +
+  facet_grid(~ drug) +
+  # geom_point(data = 
+  #              plot_df_bort %>% mutate(center = map(plot, ~ .x$center)) %>% unnest(center) %>% 
+  #              rbind(plot_df_tram %>% mutate(center = map(plot, ~ .x$center)) %>% unnest(center)) %>% 
+  #              separate(drug, c("drug", "conc"), sep = "__"),
+  #            aes(color = drug)) +
+  
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+I create the same figure for Taxanes
+
+```{r}
+set.seed(12312)
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Docetaxel")| grepl(drug, pattern = "Paclitaxel")) %>%
+.$drug %>% unique() %>% sort()
+
+center_df <- df_cluster %>%
+    filter(drug %in% drug_order) %>%
+  filter(line %in% c("D013T01", "D027T01")) %>%
+  mutate(drug = factor(drug, levels =drug_order)) %>% 
+  arrange((drug)) %>% 
+  group_by(drug, line) %>%
+  sample_n(1000, replace = TRUE) %>% ungroup()
+
+plot_df_pacli <- center_df %>%
+  filter(grepl(drug, pattern = "Paclitaxel")) %>%
+  nest(-line) %>%
+  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
+
+plot_df_doce <- center_df %>%
+  filter(grepl(drug, pattern = "Docetaxel")) %>%
+  nest(-line) %>%
+  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
+
+gg_taxane_traj <- plot_df_pacli %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[c(300:4500), ])) %>% unnest(plot_trace) %>%
+  mutate(drug = "Paclitaxel") %>% 
+  rbind(plot_df_doce %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[c(300:4000), ])) %>% unnest(plot_trace) %>%
+  mutate(drug = "Docetaxel")) %>% 
+  mutate(drug_line = paste0(drug, "_", line)) %>%
+  
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_point(aes(color = drug, group = drug_line),alpha = 1, size = 1.5, shape=16) + 
+  #geom_smooth(aes(group = drug), se = FALSE) + 
+  geom_point(data = 
+               plot_df_pacli %>% unnest(data) %>% 
+               rbind(plot_df_doce %>% unnest(data)) %>% 
+               separate(drug, c("drug", "conc"), sep = "__"),
+             aes(color = drug), alpha = 0.05, size = 0.35) +
+  
+  #geom_path(aes(group = drug, color = drug), arrow = arrow(angle =15, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
+  geom_path(aes(group = drug_line, color = drug), size = 1.5, arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
+  scale_color_manual(values = c("#F4B400", "#0F9D58")) +
+  facet_grid(~ drug) +
+  # geom_point(data = 
+  #              plot_df_bort %>% mutate(center = map(plot, ~ .x$center)) %>% unnest(center) %>% 
+  #              rbind(plot_df_tram %>% mutate(center = map(plot, ~ .x$center)) %>% unnest(center)) %>% 
+  #              separate(drug, c("drug", "conc"), sep = "__"),
+  #            aes(color = drug)) +
+  
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+
+
+I am also interested in the OSI induced phenotype 
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Paclitaxel")) %>%
+  #  filter(line == "D046T01") %>%
+  .$drug %>% unique() %>% sort()
+
+center_df <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "Paclitaxel")) %>%
+  #filter(line == "D046T01") %>% 
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    # group_by(drug) %>% 
+    # sample_n(200, replace = FALSE) %>% 
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = median(v1),
+            v2 = median(v2))
+
+center_df %>%
+  ggplot(aes(v1, v2, group = line)) + 
+  
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point(aes(color = drug),alpha = 1, size = 3, shape=16) + 
+  #facet_wrap(~ line) +
+  #geom_path() +
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+I also check out OSI-953
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "ONO-4059")) %>%
+  #  filter(line == "D046T01") %>%
+  .$drug %>% unique() %>% sort()
+
+center_df <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "ONO-4059")) %>%
+  #filter(line == "D046T01") %>% 
+    mutate(drug = factor(drug, levels =drug_order)) %>%
+    # group_by(drug) %>% 
+    # sample_n(200, replace = FALSE) %>% 
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = median(v1),
+            v2 = median(v2))
+
+gg_ono <- center_df %>%
+  filter(!(line %in% c("D021T01", "D010T01", "D018T01"))) %>%
+  ggplot(aes(v1, v2, group = line)) + 
+ 
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_point(aes(color = drug),alpha = 1, size = 3, shape=16) + 
+  # facet_wrap(~ line) +
+  
+  geom_line(aes(group = line), arrow = arrow(angle =15, ends = "first", type = "closed", length = unit(0.1, "inches")), color = "grey") +
+  geom_line(data = center_df %>% filter(line == "D027T01"), aes(group = line), arrow = arrow(angle =15, ends = "first", type = "closed", length = unit(0.15, "inches")), color = "black") +
+  #gghighlight::gghighlight(line == "D027T01") +
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+I also add GSK inhibitors 
+
+```{r}
+drug_order <- df_cluster %>%
+    filter(drug == "DMSO" | grepl(drug, pattern = "CHIR-99021")) %>%
+  #  filter(line == "D046T01") %>%
+  .$drug %>% unique() %>% sort()
+
+center_df <- df_cluster %>%
+    filter(drug %in% drug_order) %>%
+  #filter(line == "D046T01") %>% 
+  mutate(drug = if_else(drug == "DMSO", "DMSO", "Chir")) %>%
+    mutate(drug = factor(drug)) %>%
+    # group_by(drug) %>% 
+    # sample_n(200, replace = FALSE) %>% 
+  dplyr::select(v1, v2, drug, line) %>% 
+  group_by(drug, line) %>% 
+  summarize(v1 = median(v1),
+            v2 = median(v2))
+
+gg_chir <- center_df %>%
+  filter(!(line %in% c("D021T01", "D010T01", "D018T01"))) %>%
+  ggplot(aes(v1, v2, group = line)) + 
+ 
+  scale_color_brewer(type = "seq", palette = "YlOrRd") + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  #geom_point(aes(color = drug),alpha = 1, size = 3, shape=16) + 
+  # facet_wrap(~ line) +
+  
+  geom_line(aes(group = line), arrow = arrow(angle =15, ends = "first", type = "closed", length = unit(0.1, "inches")), color = "grey") +
+  geom_line(data = center_df %>% filter(line == "D027T01"), aes(group = line), arrow = arrow(angle =15, ends = "first", type = "closed", length = unit(0.15, "inches")), color = "black") +
+  #gghighlight::gghighlight(line == "D027T01") +
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+```
+
+# Example image generation. 
+
+Based on the clustering I have produced, I want to visualize example objects belonging to each cluster. 
+
+```{r}
+source(here("R/display_organoid_complete.R"))
+```
+
+Now I create a list of organoids I am interested in. 
+
+```{r}
+
+```
+
+
+# Cluster enrichment 
+
+## Size per cluster 
+
+```{r}
+df_cluster %>% 
+  dplyr::select(mclust_complete_classification, size) %>% 
+  group_by(mclust_complete_classification) %>%
+  summarise(size = mean(size)) %>% 
+  arrange(size) %>% 
+  mutate(mclust_complete_classification = factor(mclust_complete_classification) %>% fct_inorder()) %>% 
+  ggplot(aes(mclust_complete_classification, size)) + 
+  geom_point() + 
+  theme_cowplot()
+```
+
+## Example organoids 
+
+I tidy the membership porbability table. 
+
+```{r, eval = FALSE}
+score_df <- clust_predict$z %>% as.data.frame() %>% 
+  rownames_to_column("id") %>% mutate(id = as.numeric(id)) %>% gather(m, prob, -id) %>% nest(-id) %>% mutate(score = furrr::future_map(data, ~ arrange(.x, desc(prob)) %>% head(1))) %>% 
+  unnest(score) %>% dplyr::select(-data)
+```
+
+
+```{r}
+library(imager)
+html_dir = "/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/htmldir/"
+
+hdf5_all_uwot_stereotypes <- df_cluster%>%
+  mutate(OriginalX = as.numeric(original_x),
+         OriginalY = as.numeric(original_y),
+         Field = field) %>%
+  # I scale the information to the image's size and add 50% of the y-dim to target the first field
+    mutate(ScaleX = round((OriginalX/2035.5)*(514/2)),
+         ScaleY = round((OriginalY/2035.5)*(514/2))) %>%
+  mutate(ScaleX = case_when(Field %in% c("1", "4") ~ ScaleX,
+                            Field %in% c("2", "3") ~ ScaleX + (514/2)),
+         ScaleY = case_when(Field %in% c("1", "2") ~ ScaleY,
+                            Field %in% c("3", "4") ~ ScaleY + (514/2))) %>%
+  mutate(lowerX = ScaleX - round(sqrt(as.numeric(size))/4),
+         upperX = ScaleX + round(sqrt(as.numeric(size))/4), 
+         lowerY = ScaleY - round(sqrt(as.numeric(size))/4), 
+         upperY = ScaleY + round(sqrt(as.numeric(size))/4)) %>%
+  filter(lowerX > 0,
+         lowerY > 0,
+         upperX < 514,
+         upperY < 514) %>%
+  group_by(mclust_complete_classification) %>% 
+  #do(arrange(., desc(prob)) %>% head(10)) %>% 
+    sample_n(10) %>%
+  mutate(path_to_html = paste0(html_dir, bc, "/", bc, "_", substr(Well, 1,1), "_", substr(Well, 2,3), "_1.jpeg")) 
+
+hdf5_all_uwot_stereotypes_img <- hdf5_all_uwot_stereotypes %>% ungroup() %>%
+  #mutate(img_raw = purrr::map(path_to_html, ~ imager::load.image(.x))) %>%
+  # mutate(img = purrr::map(img_raw, ~ .x %>% as.data.frame(wide = "c") %>%
+  #          mutate(rgb.val = rgb(c.1, c.2, c.3))))
+  mutate(img_raw = purrr::pmap(list(p = path_to_html, a =lowerX, b = upperX, c = lowerY, d= upperY, e = bc, f = cluster, g = index, h = score), function(p, a,b,c,d, e,f,g, h) EBImage::readImage(p) %>% 
+                                 .[c(a:b), c(c:d),] %>%
+                                 EBImage::writeImage(., files = here(paste0("data/cluster_tiles/", f, "_", e, "_", g, "_", round(h, 2), ".jpeg")))))
+  
+
+lapply(hdf5_all_uwot_stereotypes_img$img_raw, EBImage::display, method = "raster")
+
+```
+
+
+
+## Drug target
+
+I wonder wether certain drugs are enriched in the 2D space I am observing
+
+First I save my results.
+
+```{r}
+saveRDS(df_cluster, here("data/clustered_umap.Rds"))
+```
+
+Then I execute my contingency analysis
+
+```{r, eval = FALSE}
+chisq_drug <- df_cluster %>% 
+  dplyr::select(mclust_complete_classification, drug) %>%
+  filter(drug != "DMSO") %>%
+  filter(drug != "Staurosporine_500nM") %>%
+  #mutate(mclust_complete_classification = as.numeric(mclust_complete_classification)) %>%
+  group_by(mclust_complete_classification, drug) %>% 
+  summarize(n = n()) %>% 
+  spread(drug, n, fill = 0) %>%
+  as.data.frame() %>%
+  column_to_rownames("mclust_complete_classification") %>% 
+  as.matrix() %>%
+  chisq.test()
+  #stats::fisher.test(simulate.p.value = TRUE)
+```
+
+# Chi-Square 
+
+```{r}
+sd <- chisq_drug$residuals %>% as.matrix() %>% sd()
+
+chi_tidy <- chisq_drug$residuals %>% as.data.frame() %>% 
+  rownames_to_column("cluster") %>% 
+  gather(drug, residual, -cluster)
+
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M1") #dead
+```
+
+```{r}
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M2")
+```
+
+```{r}
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M3") # dead
+```
+
+```{r}
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M4") # dense morphology #PF-04691502 #PP121 
+```
+
+```{r}
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M5") #dead
+```
+
+```{r}
+chi_tidy %>% group_by(cluster) %>% 
+  arrange(desc(residual)) %>% filter(cluster == "M6")
+```
+
+
+# Non- Chi-Sqaure
+
+I explore the distribution of counts for each replicate
+
+```{r}
+df_drug_count <- df_cluster %>% 
+  dplyr::select(mclust_complete_classification, drug, replicate) %>%
+  filter(drug != "DMSO") %>%
+  filter(drug != "Staurosporine_500nM") %>%
+  filter(!grepl(drug, pattern = "__")) %>%
+  group_by(mclust_complete_classification, drug, replicate) %>% 
+  summarize(n = n()) 
+```
+
+I examine the dispersion of count distributions for each cluster across samples. Given the heterogeneity of dispersions, it might be useful to perform differential abundance analysis in a cluster-by-cluster fashion, as qCML assumes multiple small samples with similar dispesion.
+
+```{r}
+df_drug_count %>% 
+  ggplot(aes(n, color = mclust_complete_classification)) + 
+  geom_density() + 
+  scale_x_log10() +
+  theme_cowplot() + 
+  scale_color_viridis_d()
+```
+
+I log transform the count data and plot histograms another time. As this is not sequencing data, there is no need to perform RNA-Seq specific preprocessing steps, such as depth and read-length adjustments. 
+
+```{r}
+df_drug_count %>%
+  mutate(log_n = log(n)) %>% 
+  ggplot(aes(mclust_complete_classification, log_n)) + 
+  geom_boxplot()
+```
+
+Next, I remove drugs with a count below 50, as no statistical test would be useful in this case. It turns out that there are no drugs that do not meet this threshold.
+
+```{r}
+df_drug_count %>%
+  ungroup() %>%
+  group_by(drug) %>% 
+  summarise(n = sum(n)) %>%
+  arrange(n)
+```
+
+I continue to import the data into an biocodnuctor format to perform further processing. 
+
+```{r}
+library(edgeR)
+
+df_drug_count_matrix <- df_drug_count %>%
+  mutate(log_n = log(n)) %>% 
+  ungroup() %>%
+  mutate(cluster_replicate = paste0(as.character(mclust_complete_classification), "_", replicate)) %>%
+  dplyr::select(-log_n, -mclust_complete_classification, -replicate) %>%
+  spread(drug, n, fill = 0) %>% 
+  as.data.frame() %>%
+  column_to_rownames("cluster_replicate") %>% 
+  t() %>% as.matrix()
+  
+dda <- DGEList(df_drug_count_matrix, 
+        lib.size = NULL,
+        group = rep(c(1,10,11,12,13,14,15, 2:9),each=2))
+```
+
+Now I follow thorugh a standard multi-group comparison workflow using edgeR.
+
+```{r}
+dda_norm <- calcNormFactors(dda)  
+dda_norm$samples$norm.factors
+lcpm_norm <- cpm(dda_norm, log=TRUE)
+```
+
+I compare the normalized data to unnormalized data. 
+
+```{r}
+lcpm <- cpm(dda, log=TRUE)
+
+lcpm %>% as_tibble() %>% 
+  gather(cluster, value) %>%
+  mutate(normalization = FALSE) %>% 
+  rbind(lcpm_norm %>% as_tibble() %>%
+  gather(cluster, value) %>%
+  mutate(normalization = TRUE)) %>% 
+  ggplot(aes(value, color = cluster)) + 
+  geom_density() + 
+  facet_wrap(~ normalization) +
+  scale_color_viridis_d() +
+  theme_cowplot()
+```
+
+I create a small overview
+
+```{r}
+plotMDS(lcpm_norm)
+```
+
+Based on perturbations alone, we can identify clusters with similar patterns.
+
+Now I run a test. 
+
+```{r}
+cluster <- factor(paste0("M", rep(c(1,10,11,12,13,14,15, 2:9),each=2)))
+replicate <- factor(rep(c(1:2), times = 15))
+
+design <- model.matrix(~ 0 + cluster + replicate)
+
+colnames(design) <- c(paste0("M", rep(c(1,10,11,12,13,14,15, 2:9),each=1)), "replicate")
+
+contrast_matrix <- makeContrasts(#"m1"=M1-(M2+M3+M4+M5+M6+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                            "m2"=M2-(M1+M3+M4+M5+M6+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                            "m3"=M3-(M1+M2+M4+M5+M6+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                           #"m4"=M4-(M1+M2+M3+M5+M6+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                           #"m5"=M5-(M1+M2+M3+M4+M6+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                           "m6"=M6-(M1+M2+M3+M4+M5+M7+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                           #"m7"=M7-(M1+M2+M3+M4+M5+M6+M8+M9+M10+M11+M12+M13+M14+M15)/14,
+                            "m8"=M8-(M1+M2+M3+M4+M5+M6+M7+M9+M10+M11+M12+M13+M14+M15)/14,
+                           # "m9"=M9-(M1+M2+M3+M4+M5+M6+M7+M8+M10+M11+M12+M13+M14+M15)/14,
+                           "m10"=M10-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M11+M12+M13+M14+M15)/14,
+                           #"m11"=M11-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M10+M12+M13+M14+M15)/14,
+                           "m12"=M12-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M10+M11+M13+M14+M15)/14,
+                           # "m13"=M13-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M10+M11+M12+M14+M15)/14,
+                           # "m14"=M12-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M10+M11+M12+M13+M15)/14,
+                            "m15"=M13-(M1+M2+M3+M4+M5+M6+M7+M8+M9+M10+M11+M12+M13+M14)/14,
+                           levels=design)
+```
+
+I run a test
+
+```{r}
+par(mfrow=c(1,2))
+v <- voom(dda, design, plot=TRUE)
+vfit <- lmFit(v, design)
+vfit <- contrasts.fit(vfit, contrasts=contrast_matrix)
+efit <- eBayes(vfit)
+plotSA(efit, main="Final model: Mean-variance trend")
+```
+
+Now I check the results. 
+
+```{r}
+df <- topTable(efit, number=Inf, coef= "m15") %>% as.data.frame() %>% rownames_to_column("drug")%>% as_tibble() %>% mutate(log_p = log(adj.P.Val))
+
+df %>%
+  ggplot(aes(t, log_p)) + 
+  geom_point()
+```
+
+```{r}
+df <- topTable(efit, number=Inf) %>% as.data.frame() %>% rownames_to_column("drug") %>% filter(adj.P.Val < 0.001) %>% dplyr::select(-(AveExpr:adj.P.Val)) %>% 
+  column_to_rownames("drug") 
+
+df %>%
+  pheatmap::pheatmap(filename = "drug_heatmap.pdf", width = 20, height = 20, scale = "none")
+```
+
+
+```{r}
+df_cluster_drugs <- df %>% rownames_to_column("product_name") %>% 
+  gather(cluster, logFC, -product_name) %>%
+  left_join(kistem %>% select(product_name, target,  pathway)) %>% 
+  distinct()
+  
+```
+
+```{r}
+df_cluster_drugs %>% 
+  arrange(logFC) %>%
+  filter(abs(logFC) > 1) %>%
+  filter(cluster == "m2")
+```
+
+
+I load the results
+
+```{r}
+fisher <- readRDS(here("data/drug_contig/fisher.Rds"))
+```
+
+
+```{r}
+
+
+
+residual_drug_df <- chisq_drug$residuals %>% as.data.frame() %>%
+  rownames_to_column("cluster") %>%
+  as_tibble() %>% 
+  gather(drug, residual, - cluster) %>% 
+  arrange(desc(residual))
+
+df <- residual_drug_df %>% 
+  nest(-cluster) %>% 
+  mutate(cluster = as.numeric(cluster)) %>%
+  arrange(cluster) %>%
+  filter(cluster == 2) %>% #13 Wnt, #11 dead, #12 (not cluster) mTOR
+  .$data %>% 
+  as.data.frame() %>%
+  mutate(drug = factor(drug) %>% fct_inorder()) 
+
+gg_chi <- df %>%
+  ggplot(aes(drug, residual)) + 
+  geom_point() + 
+  theme_classic() +
+  ggrepel::geom_text_repel(data = df %>% head(5) %>% rbind(df %>% tail(5)), aes(label = drug)) +
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_blank(),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) + 
+  geom_hline(yintercept = 0)
+  
+  
+```
+
+```{r}
+df_cluster$mclust_complete_classification %>% table()
+```
+
+
+```{r}
+gg_clust2 <- df_cluster %>% 
+  sample_frac(0.01) %>%
+  filter(mclust_complete_classification == "2") %>%
+  ggplot(aes(v1, v2, color = mclust_complete_classification)) + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") +
+  geom_point_rast(alpha = 1, size = .35, shape=16) + 
+  
+  #facet_wrap(~ mclust_complete_classification) +
+  #geom_path() +
+  #geom_density2d(color = "black") + 
+  theme_classic() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+       #caption = "control treated organoids") + 
+  theme(legend.position = "bottom") +
+  theme(axis.title.x = element_text(color = "black", size = 8),
+        axis.title.y = element_text(color = "black", size = 8),
+        axis.text.y = element_text(color = "black", size = 8),
+        axis.text.x = element_text(color = "black", size = 8),
+        legend.text = element_text(color = "black", size = 8),
+        legend.title = element_text(color = "black", size = 8)) 
+  
+```
+
+
+```{r}
+clust$data %>%
+  as.data.frame() %>%
+  cbind(clust$classification) %>% 
+  cbind(clust$uncertainty) %>% 
+  janitor::clean_names() %>% 
+  mutate(clust_uncertainty = (1-clust_uncertainty)*0.1,
+         clust_classification = factor(clust_classification, levels = milestone_order)) %>%
+  filter(clust_classification == 6) %>%
+  ggplot(aes(v1, v2, color = clust_classification)) + 
+  geom_point_rast(data = df_cluster %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") +
+  geom_point_rast(size = 0.35, alpha = 0.1) + 
+  theme_classic()
+```
+
+
+```{r, eval = FALSE}
+scheme <- rwantshue::iwanthue(seed = 42, force_init = TRUE) # recreate with a seed
+# generate a new color palette (vector of hex values) with presets...
+
+
+gg_cluster <- plot_cells(ods_sub, color_cells_by="cluster",
+           alpha = 0.05) + 
+  scale_color_manual(values = scheme$hex(23))
+```
+
+I load clustering results and plot them. 
+
+```{r}
+ods_sub_clust <- readRDS(here("R/ods_sub_clust_100"))
+gg_cluster <- plot_cells(ods_sub_clust, color_cells_by="cluster", rasterize = TRUE,
+           alpha = 0.5)
+```
+
+I create a graph following the following schema. I run this process in a separate script to speed up processing.
+
+```{r, eval = FALSE}
+ods_sub = learn_graph(ods_sub, verbose = TRUE, 
+                        close_loop = TRUE, 
+                        learn_graph_control = list(minimal_branch_len = 100))
+```
+
+
+```{r}
+ods_sub_graph <- readRDS(here("R/ods_sub_graph_10"))
+gg_path <- plot_cells(ods_sub_graph, rasterize = TRUE)
+```
+
+
+I save my results 
+
+```{r}
+saveRDS(ods_sub, here("data/monocle/bulk_pca_path_subsample.Rds"))
+```
+
+# Plot panel
+
+I create a final graph
+
+```{r}
+# fig5 <- cowplot::plot_grid(gg_size, gg_line, 
+#                    #gg_path, #gg_proportion,
+#           gg_bortezomib,#gg_borte_prop,
+#           cowplot::plot_grid(gg_trambort_traj , gg_taxane_traj,
+#                              NULL, NULL,
+#                            #  gg_ono, gg_chir, 
+#                              align = "h", axis = "bt", labels = "AUTO", ncol = 2),
+#           #gg_chi, gg_clust2,
+#           #gg_path, #gg_proportion,
+#           #gg_shift, gg_ridge, 
+#           NULL, NULL,
+#           align = "h", axis = "bt", labels = c("A", "B"), ncol = 2)
+#   
+
+# fig5 <- plot_grid(
+#             plot_grid(gg_size + theme(legend.position = "nothing"), gg_line,
+#                        ncol = 2,
+#                        labels = c('A', 'B')),
+#             gg_bortezomib + theme(legend.position = "nothing"),
+#             # plot_grid(gg_trambort_traj,
+#             #           gg_taxane_traj,
+#             #           
+#             #           NULL, NULL,
+#             #           ncol = 2,
+#             #           labels = c('D', "E", "F", "G",
+#             #                      "H", "I", "J", "K")),
+#             ncol = 1,
+#             align = "h", axis = "bt", labels = c("", "C", ""))
+
+fig5 <- plot_grid(NULL, 
+                  NULL,
+                  # plot_grid(gg_line, 
+                  #           gg_bortezomib,
+                  #           ncol = 2),
+                  gg_mtor_all,
+                  NULL, # NULL,
+                  ncol = 2)
+
+fig5 + 
+  ggsave(here("panels/figure_5.pdf"), 
+         width = 8.3, 
+         height = 11.7)
+```
+
+```{r}
+gg_trambort_traj + theme_cowplot() theme(legend.position = "none") + ggsave(here("panels/figure_5_aux.pdf"), width = 8, height = )
+```
+
+
+I create a supplemental figure
+
+```{r, eval = TRUE}
+cowplot::plot_grid(cowplot::plot_grid(gg_size_dist,
+                                      NULL,
+                                      ncol = 2),
+                   gg_line_overview,
+                   cowplot::plot_grid(gg_taxane_traj + theme_cowplot() + theme(legend.position = "none"),
+                                      NULL,
+                                      ncol = 2), 
+                   align = "h", axis = "bt", labels = "AUTO", ncol = 1) + 
+  ggsave("figure_S5.pdf", width = 6, height = 12)
+```
+
