@@ -16,5 +16,4 @@ methods/coculture
 **/*.pyc
 **/*.DS_Store
 archive
-
-
+data
