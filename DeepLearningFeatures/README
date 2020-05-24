@@ -1,6 +1,0 @@
-This is a side-project to attempt to learn reasonable features via 
-a deep learning approach. These features should ideally be able to 
-separate individual drugs or categories of drugs.
-
-The first step is to train features that can differentiate positive 
-and negative controls
