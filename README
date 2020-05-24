@@ -1,0 +1,2 @@
+find ./* -size +100M | cat >> .gitignore
+find ./* -size +100M | cat >> transfer_file

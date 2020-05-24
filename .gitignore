@@ -480,3 +480,5 @@ methods/tracers/~$acer_Organoid_mco_validation_2.docx
 methods/tracers/~$acer_Organoid_PROMISE_Alamar.docx
 vignettes_local/01_profiling_inspection/human_pca_feather
 .RDataTmp
+./data/profiling/TransformedFeatures_human_25components.h5
+./vignettes/06_profiling_inspection/hdf5_pca.Rds
