@@ -5,7 +5,7 @@ library(SingleCellExperiment)
 library(mclust)
 
 # load dataset 
-ods <- readRDS(here("data/monocle/bulk_pca_cluster_strat.Rds"))
+ods <- readRDS(here("data/monocle/bulk_pca_cluster.Rds")) #used to be bulk_pca_cluster_strat.Rds
 
 # diagnose clusters
 set.seed(123456)

@@ -56,7 +56,7 @@ here()
 I load the profiling dataset. 
 
 ```{r, eval = TRUE}
-pca_path <- here::here("data/profiling/TransformedFeatures_mouse_25components.h5")
+pca_path <- here::here("data/profiling/TransformedFeatures_human_25components.h5")
 h5ls(pca_path)
 
 hdf5_pca <- h5read(pca_path, "features_organoids") %>% as_tibble()

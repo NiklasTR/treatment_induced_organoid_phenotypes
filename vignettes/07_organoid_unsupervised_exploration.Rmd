@@ -25,14 +25,14 @@ library(princurve)
 
 I load the dataset in question. 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 pca_raw <- feather::read_feather(path = here("vignettes/07_organoid_unsupervised_exploration/embeddings/hdf_pca_feather"))
 #pca_raw <- pca_raw_store
 ```
 
 I give a short overview of the dataset. 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 pca_raw %>% 
   sample_n(10000) %>%
   ggplot(aes(V1, V2, color = morphological_class)) + 
@@ -43,7 +43,7 @@ pca_raw %>%
 ```
 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 # for demo: subsample the original dataset
 set.seed(123)
 
@@ -57,7 +57,7 @@ pca_raw <- pca_raw %>%
 
 I continue importing the dataset into Monoocle3 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 # generating metadata objects
 pca_anno_df <- pca_raw %>% dplyr::select(-(V1:V25)) %>% 
   mutate(uuid = paste(Plate, Well, Field, ObjectID, sep = "_")) %>% 
@@ -76,13 +76,13 @@ ods <- new_cell_data_set(pca_matrix %>% t(),
 
 I manually inject the PCA compression of the data into the object
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 reducedDims(ods)$PCA <- pca_matrix
 ```
 
 I run the dim reduction methods
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 set.seed(123)
 ods <- reduce_dimension(ods,
                         reduction_method = "UMAP",
@@ -244,6 +244,11 @@ To get a general understanding of different phenotypes, I perform k-means cluste
 kmeans clustering on the PCA does not recover complex relationships, such as the leftmost dead cluster, same as model-based clustering. Graph based clustering at the scale presented here did not recover an interpretable number of clusters with the available compute ressources. 
  
 The final clustering method to move forward is the benchmark MST method proposed in "A comparison of single-cell trajectory inference methods" in which a model-based clustering was performed on the UMAP embedding of the dataset. For scalability reasons, the clustering was performend on a random sample of the complete dataset and labels were predicted.
+
+```{r}
+
+```
+
 
 Similar to the previously mentioned study, we next calculated a minimum spanning tree and created a graph of centroids. 
 
