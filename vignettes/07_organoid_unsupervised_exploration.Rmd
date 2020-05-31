@@ -26,7 +26,7 @@ library(princurve)
 I load the dataset in question. 
 
 ```{r, eval = TRUE}
-pca_raw <- feather::read_feather(path = here("vignettes/07_organoid_unsupervised_exploration/embeddings/hdf_pca_feather"))
+pca_raw <- readRDS(here("vignettes/06_profiling_inspection/hdf5_pca.Rds")) # no need to filter
 #pca_raw <- pca_raw_store
 ```
 
@@ -43,7 +43,7 @@ pca_raw %>%
 ```
 
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 # for demo: subsample the original dataset
 set.seed(123)
 
@@ -99,6 +99,8 @@ I load the UMAP embedding of the organoid dataset.
 ```{r}
 ods <- readRDS(here("vignettes/07_organoid_unsupervised_exploration/monocle/bulk_pca_cluster.Rds"))
 ```
+
+# Organoid size
 
 I plot a size-distribution. 
 
@@ -170,6 +172,8 @@ gg_size_supp <- df %>%
 gg_size_supp + ggsave(here("results/figures/single_organoid/gg_size_all.pdf"))
 ```
 
+# Organoid line
+
 I create a single plot showing the two extreme organoid lines and their distribution within the embedding. 
 
 ```{r}
@@ -207,6 +211,8 @@ gg_line <- df %>% dplyr::select(-Line) %>%
         legend.title = element_text(color = "black", size = 8)) + 
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "nothing")
+
+gg_line
 ```
 
 
@@ -246,7 +252,7 @@ kmeans clustering on the PCA does not recover complex relationships, such as the
 The final clustering method to move forward is the benchmark MST method proposed in "A comparison of single-cell trajectory inference methods" in which a model-based clustering was performed on the UMAP embedding of the dataset. For scalability reasons, the clustering was performend on a random sample of the complete dataset and labels were predicted.
 
 ```{r}
-
+source(here::here("R/mclust_predict_cluster_umap.R"))
 ```
 
 
@@ -301,7 +307,7 @@ df <- reducedDims(ods)$UMAP %>% cbind(colData(ods)) %>% cbind(clust_predict$clas
 
 mclust_complete <- clust_predict
 
-milestone_order <- c(1:6)
+milestone_order <- mclust_complete$classification %>% unique() %>% sort()
 #milestone_order <- c(4,6,8,12,3,10,15,2,11,7,9,13,1,14,5)
 
 gg_path <- clust$data %>%
@@ -332,25 +338,25 @@ gg_path <- clust$data %>%
         axis.text.x = element_text(color = "black", size = 8),
         legend.text = element_text(color = "black", size = 8),
         legend.title = element_text(color = "black", size = 8)) + 
-  scale_color_manual(values = c("#6c80cc",
-                                #"#6db13c", 
-                                "#945fce",
-                                #"#59c377", 
-                                "#d34394",
-                                #"#4a9e75", 
-                                "#d0493a",
-                                #"#45b0cf", 
-                                "#db8f33",
-                                #"#b76dac", 
-                                "#b9af49"#,
-                                #"#c05b6d", "#6f7a31",
-                                #"#e0946e", "#9b5f2c"
-                                )) 
+  # scale_color_manual(values = c("#6c80cc",
+  #                               #"#6db13c", 
+  #                               "#945fce",
+  #                               #"#59c377", 
+  #                               "#d34394",
+  #                               #"#4a9e75", 
+  #                               "#d0493a",
+  #                               #"#45b0cf", 
+  #                               "#db8f33",
+  #                               #"#b76dac", 
+  #                               "#b9af49"#,
+  #                               #"#c05b6d", "#6f7a31",
+  #                               #"#e0946e", "#9b5f2c"
+  #                               )) 
   #scale_color_viridis_d() + 
-  #scale_color_manual(values = scico::scico(15, palette = 'berlin')) + 
+  scale_color_manual(values = scico::scico(length(milestone_order), palette = 'berlin')) #+ 
   #scale_color_manual(values = scico::scico(15, palette = 'roma')) 
 
-#gg_path
+gg_path
 ```
 
 I am interested in the names of the clusters 
@@ -404,6 +410,8 @@ df_cluster %>%
 
 
 ```{r}
+dead_clusters = c("M14", "M13", "M1", "M5")
+
 clust_var <- df_cluster %>% 
   filter(drug == "DMSO") %>%
   group_by(line, mclust_complete_classification) %>% 
@@ -423,7 +431,7 @@ clust_var %>%
   summarise(var = var(prop)) %>% 
   arrange(desc(var)) %>% 
   mutate(mclust_complete_classification = factor(mclust_complete_classification, levels = clust_var_order)) %>%
-  mutate(status = if_else(mclust_complete_classification %in% c("M14", "M13", "M1", "M5"), "dead", "alive")) %>%
+  mutate(status = if_else(mclust_complete_classification %in% dead_clusters, "dead", "alive")) %>%
   ggplot(aes(mclust_complete_classification, var, color = status)) + 
   geom_point() + 
   theme_cowplot()
@@ -504,6 +512,8 @@ gg_proportion <- df_cluster %>%
 
 gg_proportion
 ```
+
+# Phenotype Transitions
 
 Now I am interested how certain drugs and their concentrations shift the composition of morphological phenotypes
 
@@ -652,7 +662,7 @@ df_cluster %>%
         axis.text.x = element_text(color = "black", size = 8),
         legend.text = element_text(color = "black", size = 8),
         legend.title = element_text(color = "black", size = 8)) + 
-  scale_fill_manual(values = scico::scico(15, palette = 'roma')) +
+  scale_fill_manual(values = scico::scico(length(milestone_order), palette = 'roma')) +
   #facet_wrap(~ concentration) +
   theme(legend.text = element_blank()) + 
   theme(legend.position = "None")
@@ -684,17 +694,18 @@ gg_trametinib <- df_cluster %>%
   facet_wrap(~ drug) + 
   scale_color_brewer(type = "seq", palette = "YlOrRd") + 
   #geom_density2d(color = "black") + 
-  theme_bw() +
+  #theme_bw() +
   labs(x = "UMAP 1",
        y = "UMAP 2")+
        #caption = "control treated organoids") + 
   theme(legend.position = "bottom") +
-  theme(axis.title.x = element_text(color = "black", size = 8),
-        axis.title.y = element_text(color = "black", size = 8),
-        axis.text.y = element_text(color = "black", size = 8),
-        axis.text.x = element_text(color = "black", size = 8),
-        legend.text = element_text(color = "black", size = 8),
-        legend.title = element_text(color = "black", size = 8)) 
+  theme_cowplot()
+  # theme(axis.title.x = element_text(color = "black", size = 8),
+  #       axis.title.y = element_text(color = "black", size = 8),
+  #       axis.text.y = element_text(color = "black", size = 8),
+  #       axis.text.x = element_text(color = "black", size = 8),
+  #       legend.text = element_text(color = "black", size = 8),
+  #       legend.title = element_text(color = "black", size = 8)) 
 
 gg_trametinib
 gg_trametinib + ggsave("trametinib.pdf", width = 15, height = 10)
@@ -977,7 +988,6 @@ gg_trambort <- center_df %>%
         legend.title = element_text(color = "black", size = 8)) 
 ```
 
-
 I am creating a new version of the plot above
 
 ```{r}
@@ -1109,7 +1119,6 @@ gg_taxane_traj <- plot_df_pacli %>% mutate(plot_trace = purrr::map(plot, ~ .x$fi
         legend.text = element_text(color = "black", size = 8),
         legend.title = element_text(color = "black", size = 8)) 
 ```
-
 
 
 I am also interested in the OSI induced phenotype 
