@@ -77,7 +77,7 @@ pca_metadata <- metadata %>%
               mutate(end = str_sub(end, 2,-1L)) , .) %>% 
   dplyr::select(-start, -end)
 
-stopifnot(pca_metadata %>% count(screen_ID, Line, Plate) %>% naniar::miss_summary() %>% .$miss_df_prop == 0)
+stopifnot(pca_metadata %>% dplyr::count(screen_ID, Line, Plate) %>% naniar::miss_summary() %>% .$miss_df_prop == 0)
 ```
 
 First, I illustrate batch effects and how they are reduced
@@ -102,17 +102,21 @@ umap_post <- uwot::umap(my_harmony_embeddings$Z_corr %>% t() %>% as_tibble(), ve
 
 harmony_effect <- umap_pre %>% as_tibble() %>% mutate(status = "pre") %>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)%>%
   rbind(.,umap_post %>% as_tibble() %>% mutate(status = "post")%>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)) 
+
+harmony_effect %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_effect.Rds"))
 ```
 
 Here we can see the effect of Harmony on batch discordances.
 
 ```{r}
+harmony_effect <- readRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_effect.Rds"))
+
 harmony_effect %>% 
-  sample_frac
   ggplot(aes(V1, V2, color = Line)) + 
   geom_point_rast(alpha = 0.5, size = 0.35) + 
   theme_cowplot() + 
-  facet_wrap( ~ status)
+  facet_wrap( ~ status) + 
+  ggsave(here::here("vignettes/07_organoid_unsupervised_exploration/pre_post_harmony.png"))
 ```
 
 Still, line-specific differences are conserved in this method.
@@ -123,7 +127,8 @@ harmony_effect %>%
   ggplot(aes(V1, V2, color = screen_ID)) + 
   geom_point_rast(alpha = 0.5, size = 0.35) + 
   theme_cowplot() + 
-  facet_wrap( ~ Line)
+  facet_wrap( ~ Line) + 
+  ggsave(here::here("vignettes/07_organoid_unsupervised_exploration/post_harmony_line.png"))
 ```
 
 
@@ -337,7 +342,7 @@ knitr::knit_exit()
 
 ## Running harmony on both line and batch 
 
-```{r}
+```{r, eval = FALSE}
 harmony_id_line <- HarmonyMatrix(
   pca_harmony, metadata_harmony, c("screen_ID", "Line"),
   do_pca = FALSE,
