@@ -19,6 +19,7 @@ library(ggrastr)
 library(cowplot)
 library(princurve)
 library(readxl)
+library(harmony)
 
 # install.packages('devtools')
 # devtools::install_github('VPetukhov/ggrastr')
@@ -52,6 +53,98 @@ pca_raw_store <- pca_raw
 pca_raw <- pca_raw %>% 
   sample_n(100000)
 ```
+
+# Removing batch effects with Harmony
+
+When looking at this data, I see that the regions within the UMAP are only present in a subset of organoid lines. When looking closer and comparing the experimental metadata with this observation, there is a real risk of these differences being batch effect. I load the experimental metadata to correct batch effects.
+
+```{r}
+metadata = read_excel(here::here("data/metadata/Screenings_Imaging_Manuscript.xlsx"))
+
+pca_metadata <- metadata %>% 
+  mutate(Line = paste0(donor, tumor)) %>% 
+  filter(image_CTG == "Imaging") %>%
+  dplyr::select(Line, Plate = barcode, screen_ID) %>% 
+  #cleaning data to harmonize differnt naming schemes
+  mutate(Plate = if_else(Line == "D020T01" & screen_ID %in% c("HC1092-9", "HC1092-10"), str_replace(Plate, "D020T01", "D020T02"), Plate)) %>%
+  mutate(Line = if_else(Line == "D020T01" & screen_ID %in% c("HC1092-9", "HC1092-10"), "D020T02", Line)) %>%
+  #accounting for re-imaging of plates
+  separate(Plate, c("start", "end"), sep = 8, remove = FALSE) %>% 
+  mutate(end = str_sub(end, 2,-1L)) %>% 
+  dplyr::select(-Plate) %>%
+  left_join(pca_raw %>% 
+              separate(Plate, c("start", "end"), sep = 8, remove = FALSE) %>% 
+              mutate(end = str_sub(end, 2,-1L)) , .) %>% 
+  dplyr::select(-start, -end)
+
+stopifnot(pca_metadata %>% count(screen_ID, Line, Plate) %>% naniar::miss_summary() %>% .$miss_df_prop == 0)
+```
+
+First, I illustrate batch effects and how they are reduced
+
+```{r}
+set.seed(123)
+
+pca_metadata_frac <- pca_metadata %>% sample_frac(0.001)
+
+pca_harmony <- pca_metadata_frac %>% dplyr::select(contains("V"))
+metadata_harmony <- pca_metadata_frac %>% dplyr::select(screen_ID, Line)
+
+my_harmony_embeddings <- HarmonyMatrix(
+  pca_harmony, metadata_harmony, c("screen_ID"),
+  do_pca = FALSE,
+  verbose = TRUE, 
+  return_object = TRUE
+)
+
+umap_pre <- uwot::umap(my_harmony_embeddings$Z_orig %>% t() %>% as_tibble(), verbose = TRUE)
+umap_post <- uwot::umap(my_harmony_embeddings$Z_corr %>% t() %>% as_tibble(), verbose = TRUE)
+
+harmony_effect <- umap_pre %>% as_tibble() %>% mutate(status = "pre") %>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)%>%
+  rbind(.,umap_post %>% as_tibble() %>% mutate(status = "post")%>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)) 
+```
+
+Here we can see the effect of Harmony on batch discordances.
+
+```{r}
+harmony_effect %>% 
+  sample_frac
+  ggplot(aes(V1, V2, color = Line)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  theme_cowplot() + 
+  facet_wrap( ~ status)
+```
+
+Still, line-specific differences are conserved in this method.
+
+```{r}
+harmony_effect %>% 
+ filter(status == "post") %>%
+  ggplot(aes(V1, V2, color = screen_ID)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  theme_cowplot() + 
+  facet_wrap( ~ Line)
+```
+
+
+# Running Harmony on replicate and on replicate+line level
+
+```{r}
+set.seed(123)
+
+pca_harmony <- pca_metadata %>% dplyr::select(contains("V"))
+metadata_harmony <- pca_metadata %>% dplyr::select(screen_ID, Line)
+
+harmony_id <- HarmonyMatrix(
+  pca_harmony, metadata_harmony, c("screen_ID"),
+  do_pca = FALSE,
+  verbose = TRUE, 
+  return_object = TRUE
+)
+
+harmony_id %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_pca_id.Rds"))
+```
+
 
 
 # Import into Monocle 3
@@ -234,102 +327,17 @@ gg_line_overview +
   ggsave(here("results/figures/single_organoid/line.pdf"), height = 8, width = 8)
 ```
 
-# Harmony batch correction
+# Supplement
 
-When looking at this data, I see that the region in the upper-left corner is only present in a subset of organoid lines. When looking closer and comparing the experimental metadata with this observation, there is a real risk of these differences being batch effect. I load the experimental metadata.
-
+Here I collect pieces of code that did not make it into the final analysis but can be run in theory. In order to access these peaces of code, you have to open the *.RMD* file. 
 
 ```{r}
-metadata = read_excel(here::here("data/metadata/Screenings_Imaging_Manuscript.xlsx"))
-
-pca_metadata <- metadata %>% 
-  mutate(Line = paste0(donor, tumor)) %>% 
-  filter(image_CTG == "Imaging") %>%
-  dplyr::select(Line, Plate = barcode, screen_ID) %>% 
-  #cleaning data to harmonize differnt naming schemes
-  mutate(Plate = if_else(Line == "D020T01" & screen_ID %in% c("HC1092-9", "HC1092-10"), str_replace(Plate, "D020T01", "D020T02"), Plate)) %>%
-  mutate(Line = if_else(Line == "D020T01" & screen_ID %in% c("HC1092-9", "HC1092-10"), "D020T02", Line)) %>%
-  #accounting for re-imaging of plates
-  separate(Plate, c("start", "end"), sep = 8, remove = FALSE) %>% 
-  mutate(end = str_sub(end, 2,-1L)) %>% 
-  dplyr::select(-Plate) %>%
-  left_join(pca_raw %>% 
-              separate(Plate, c("start", "end"), sep = 8, remove = FALSE) %>% 
-              mutate(end = str_sub(end, 2,-1L)) , .) %>% 
-  dplyr::select(-start, -end)
-
-stopifnot(pca_metadata %>% count(screen_ID, Line, Plate) %>% naniar::miss_summary() %>% .$miss_df_prop == 0)
+knitr::knit_exit()
 ```
 
+## Running harmony on both line and batch 
 
 ```{r}
-library(harmony)
-set.seed(123)
-
-pca_metadata_frac <- pca_metadata %>% sample_frac(0.01)
-
-pca_harmony <- pca_metadata_frac %>% dplyr::select(contains("V"))
-metadata_harmony <- pca_metadata_frac %>% dplyr::select(screen_ID, Line)
-
-my_harmony_embeddings <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_ID"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
-
-my_harmony_embeddings$Z_corr %>% t() %>% as_tibble()
-#my_harmony_embeddings$Z_orig %>% t() %>% as_tibble()
-```
-
-```{r}
-set.seed(123)
-
-umap_pre <- uwot::umap(my_harmony_embeddings$Z_orig %>% t() %>% as_tibble(), verbose = TRUE)
-umap_post <- uwot::umap(my_harmony_embeddings$Z_corr %>% t() %>% as_tibble(), verbose = TRUE)
-
-```
-
-```{r}
-harmony_effect <- umap_pre %>% as_tibble() %>% mutate(status = "pre") %>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)%>%
-  rbind(.,umap_post %>% as_tibble() %>% mutate(status = "post")%>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)) 
-
-harmony_effect %>% 
-  sample_frac
-  ggplot(aes(V1, V2, color = Line)) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  theme_cowplot() + 
-  facet_wrap( ~ status)
-```
-
-```{r}
-harmony_effect %>% 
- filter(status == "post") %>%
-  ggplot(aes(V1, V2, color = screen_ID)) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  theme_cowplot() + 
-  facet_wrap( ~ Line)
-```
-
-
-# Running HArmony on replicate and on replicate+line level
-
-```{r}
-library(harmony)
-set.seed(123)
-
-pca_harmony <- pca_metadata %>% dplyr::select(contains("V"))
-metadata_harmony <- pca_metadata %>% dplyr::select(screen_ID, Line)
-
-harmony_id <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_ID"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
-
-harmony_id %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_pca_id.Rds"))
-
 harmony_id_line <- HarmonyMatrix(
   pca_harmony, metadata_harmony, c("screen_ID", "Line"),
   do_pca = FALSE,
@@ -342,26 +350,3 @@ harmony_id_line %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_explo
 
 ```
 
-
-# generating metadata objects
-
-
-```{r, eval = TRUE}
-ods_id <- ods
-
-reducedDims(ods_id)$PCA <- harmony_id$
-```
-
-I run the dim reduction methods
-
-```{r, eval = TRUE}
-set.seed(123)
-ods <- reduce_dimension(ods,
-                        reduction_method = "UMAP",
-                        umap.n_neighbors = 15L,
-                        umap.fast_sgd=TRUE, 
-                        cores = parallel::detectCores(),
-                        verbose = TRUE)
-
-saveRDS(ods, here("vignettes/07_organoid_unsupervised_exploration/monocle/bulk_pca_cluster.Rds"))
-```
