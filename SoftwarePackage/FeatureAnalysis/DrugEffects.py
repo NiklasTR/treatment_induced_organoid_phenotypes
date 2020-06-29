@@ -56,6 +56,37 @@ def normalize_features(features, metadata, zscore=True):
     return features_diff
 
 
+def scale_features(features, metadata, zscore=True):
+    """
+    Normalize features to DMSO values and optionally z-scale them.
+
+    NOTE: The division by the DMSO standard deviation has no effect
+    if z-scaling occurs as well. In principle, 'zscore' determines
+    if the scaling occurs by the entire dataset or just the DMSO
+    controls.
+    :param features:
+    :param metadata:
+    :param zscore:
+    :return:
+    """
+
+    avg = np.stack(
+        [features.mean().values] *
+        len(features))
+    features_diff = features - avg
+
+    if zscore:
+        features_diff = (features_diff - features_diff.mean()) / \
+            features_diff.std()
+    else:
+        var = np.stack(
+            [features.std().values] *
+            len(features))
+        features_diff /= var
+
+    return features_diff
+
+
 def get_features(line):
     """
     Loads features
@@ -167,6 +198,54 @@ def get_incremental_pca(species, n_components):
     return pca
 
 
+def get_incremental_pca_scaled(species, n_components):
+    """
+    Incrementally performs a PCA on the entire dataset to find a common,
+    reduced set of features.
+
+    It explicitly uses only features shared by all lines
+
+    :param species:
+    :param n_components:
+    :return:
+    """
+
+    out_fn = os.path.join(
+        Config.DRUGEFFECTSDIR,
+        "IncrementalPCA_scaled_{}_{}components.pkl".format(
+            species, n_components))
+    if os.path.isfile(out_fn):
+        with open(out_fn, "rb") as f:
+            return pickle.load(f)
+
+    print("Calculating scaled incremental PCA ...")
+
+    lines = Utils.get_all_lines(species=species)
+    used_features = get_common_features(species)
+
+    pca = sklearn.decomposition.IncrementalPCA(
+        n_components=n_components)
+
+    for line in lines:
+        print(line)
+        features, metadata = get_features(line)
+
+        # Use only the common features
+        features = features.loc[:, used_features]
+
+        # Scale Features instead of DMSO Normalization
+        features = scale_features(
+            features=features, metadata=metadata)
+
+        # Run PCA
+        pca.partial_fit(X=features)
+
+    with open(out_fn, "wb") as f:
+        pickle.dump(pca, f, pickle.HIGHEST_PROTOCOL)
+
+    return pca
+
+
 def get_transformed_features(species, n_components):
     """
     Apply a PCA to transform organoid features
@@ -221,6 +300,62 @@ def get_transformed_features(species, n_components):
         filename=out_fn)
 
     return all_features, all_metadata
+
+def get_transformed_features_scaled(species, n_components):
+    """
+    Apply a PCA to transform organoid features
+    :param species:
+    :param n_components:
+    :return:
+    """
+
+    out_fn = os.path.join(
+        Config.DRUGEFFECTSDIR, species,
+        "TransformedFeatures_scaled_{}_{}components.h5".format(
+            species, n_components))
+    if os.path.isfile(out_fn):
+        features, metadata = OrganoidFeatures.load_features(out_fn)
+        return features, metadata
+
+    print("Calculating transformed features ...")
+
+    pca = get_incremental_pca_scaled(
+        species=species, n_components=n_components)
+
+    lines = Utils.get_all_lines(species=species)
+    used_features = get_common_features(species)
+
+    all_features = []
+    all_metadata = []
+    for line in lines:
+        print(line)
+        features, metadata = get_features(line)
+
+        # Use only the common features
+        features = features.loc[:, used_features]
+
+        # Normalize to DMSO
+        features = scale_features(
+            features=features, metadata=metadata)
+
+        all_features.append(pca.transform(X=features))
+        all_metadata.append(metadata)
+
+    all_features = np.concatenate(all_features)
+    all_metadata = pd.DataFrame(pd.concat(all_metadata))
+
+    all_features = pd.DataFrame(
+        data=all_features,
+        columns=["PC%d" % (ii+1) for ii in range(all_features.shape[1])],
+        index=all_metadata.index)
+
+    OrganoidFeatures.save_features(
+        features=all_features,
+        metadata=all_metadata,
+        filename=out_fn)
+
+    return all_features, all_metadata
+
 
 
 def train_classifier(species, n_components):
