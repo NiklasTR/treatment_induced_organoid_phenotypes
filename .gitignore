@@ -7,6 +7,9 @@ src/models/PhenotypeSpectrum
 notebooks/SCOPEAnalysis
 notebooks/SCOPEMouse
 
+# password / security
+ssh
+ssh.pub
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

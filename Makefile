@@ -154,12 +154,6 @@ load_modules:
 #################################################################################
 # option to run code via bsub on IBM cluster ssh rindtorf@odcf-lsf01.dkfz.de
 
-### Run FeatureAnalysis to generate processedFeatures objects
-pca_features_bsub: src/features/FeatureAnalysis/run_pca.bsub
-	bsub -R "rusage[mem=150GB]" ./src/features/FeatureAnalysis/run_pca.bsub \
-	-o src/features/FeatureAnalysis/out.bsub \
-	-e src/features/FeatureAnalysis/error.bsub
-
 ### create a UMAP embedded object with and w/o harmony for DMSO treated organoid projects only
 umap_dmso_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/PhenotypeSpectrum/run_umap_dmso.bsub references/Screenings_Imaging_Manuscript.xlsx data/interim/PhenotypeSpectrum/hdf5_pca_absolute_dmso.Rds
 	bsub -R "rusage[mem=100GB]" -q long ./src/models/PhenotypeSpectrum/run_umap_dmso.bsub \
@@ -171,12 +165,6 @@ umap_all_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/Phenot
 	bsub -R "rusage[mem=200GB]" -q verylong ./src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub \
 	-o src/models/PhenotypeSpectrum/out.bsub \
 	-e src/models/PhenotypeSpectrum/error.bsub
-
-### add LDC to single organoid object for exploration
-add_ldc_to_obj: src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results/*log.csv
-	Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds
-	Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds
-
 
 #################################################################################
 # Self Documenting Commands                                                     #
