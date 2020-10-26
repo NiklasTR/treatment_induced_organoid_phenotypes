@@ -20,6 +20,15 @@ endif
 # COMMANDS                                                                      #
 #################################################################################
 
+## Pull Dependencies
+# TODO fill out dependicy pulling
+dependencies:
+	cd src/data
+	git clone https://github.com/NiklasTR/phenotypespectrum.git\
+	cd ../models
+	git clone https://github.com/NiklasTR/phenotypespectrum.git
+	
+
 ## Install Python Dependencies
 requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -U pip setuptools wheel
@@ -73,7 +82,7 @@ else
 endif
 
 ## Test python environment is setup correctly
-test_environment:
+test_environment: dependencies
 	$(PYTHON_INTERPRETER) test_environment.py
 
 #################################################################################
@@ -100,9 +109,12 @@ test_environment:
 #        rsync -rav /data2/valentint/promise /data4/b110_image_archive/HC1092/archive/b110_cluster_valentini  
 #        rsync -rav /data3/promise_legacy /data4/b110_image_archive/HC1092/archive/isilon2
 
+# TODO: remove if not needed any longer
+# rsync -rav rindtorf@b110-sc2cn01:/data/valentini/promise/PROMISE/data-10x-4t-c-16z/hdf5projection/ data/raw/PROMISE/data-10x-4t-c-16z/hdf5projection/
+
 # TODO needs implementation of one-line ssh and sync
-backup:
-	ssh rindtorf@b110-sc2cn01; cd /data4/b110_image_archive/HC1092; make sync
+# backup:
+#	ssh rindtorf@b110-sc2cn01; cd /data4/b110_image_archive/HC1092; make sync
 
 ### access
 ssh_b110:
@@ -113,6 +125,13 @@ ssh_bsub: .log
 	cd /dkfz/groups/shared/OE0049/B110-Isilon2/promise/
 	touch .log
 	
+### modules
+load_modules:
+	module load libpng/1.6.37
+	module load gdal/3.0.2
+	module load pandoc/2.2.1
+	module load anaconda3/2019.07
+	module load R/3.6.2
 
 # ssh user@socket command < /path/to/file/on/local/machine
 
@@ -121,12 +140,6 @@ ssh_bsub: .log
 #################################################################################
 
 
-## Run FeatureAnalysis to generate processedFeatures objects
-### option to run code via bsub on IBM cluster ssh rindtorf@odcf-lsf01.dkfz.de
-pca_features_bsub: src/features/FeatureAnalysis/run_pca.bsub
-	bsub -R "rusage[mem=150GB]" ./src/features/FeatureAnalysis/run_pca.bsub \
-	-o src/features/FeatureAnalysis/out.bsub \
-	-e src/features/FeatureAnalysis/error.bsub
 
 ## Run Live-Dead-Classifier
 
@@ -134,11 +147,18 @@ pca_features_bsub: src/features/FeatureAnalysis/run_pca.bsub
 
 ## Run DrugEffects Analysis
 
-### add LDC to single organoid object for exploration
-add_ldc_to_obj: src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds data/interim/FeatureAnalysis/organoid_viability/human/results/*log.csv
-	Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds
 ### filter dead organoids from all organoids in processedFeatures
 
+#################################################################################
+# Rules for Cluster Execution (Can be run from IBM cluster)                     #
+#################################################################################
+# option to run code via bsub on IBM cluster ssh rindtorf@odcf-lsf01.dkfz.de
+
+### Run FeatureAnalysis to generate processedFeatures objects
+pca_features_bsub: src/features/FeatureAnalysis/run_pca.bsub
+	bsub -R "rusage[mem=150GB]" ./src/features/FeatureAnalysis/run_pca.bsub \
+	-o src/features/FeatureAnalysis/out.bsub \
+	-e src/features/FeatureAnalysis/error.bsub
 
 ### create a UMAP embedded object with and w/o harmony for DMSO treated organoid projects only
 umap_dmso_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/PhenotypeSpectrum/run_umap_dmso.bsub references/Screenings_Imaging_Manuscript.xlsx data/interim/PhenotypeSpectrum/hdf5_pca_absolute_dmso.Rds
@@ -148,9 +168,15 @@ umap_dmso_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/Pheno
 
 ### create a UMAP embedded object with and w/o harmony for all treated organoids
 umap_all_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub references/Screenings_Imaging_Manuscript.xlsx data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds
-	bsub -R "rusage[mem=100GB]" -q long ./src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub \
+	bsub -R "rusage[mem=200GB]" -q verylong ./src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub \
 	-o src/models/PhenotypeSpectrum/out.bsub \
 	-e src/models/PhenotypeSpectrum/error.bsub
+
+### add LDC to single organoid object for exploration
+add_ldc_to_obj: src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results/*log.csv
+	Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds
+	Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/FeatureAnalysis/organoid_viability/human/results data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds
+
 
 #################################################################################
 # Self Documenting Commands                                                     #
