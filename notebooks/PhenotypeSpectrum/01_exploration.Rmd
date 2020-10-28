@@ -285,10 +285,90 @@ p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen.pdf"), width = 
 # Dye Intensity
 
 ```{r}
+umap_tidy 
 
+intensity <- read_rds(here("data/interim/FeatureAnalysis/feature_intensity.rds")) %>%
+  magrittr::set_colnames(c("actin", "permeability", "dapi"))
+
+df <- cbind(umap_tidy, intensity)
 
 ```
 
+```{r}
+df %>%
+  ggplot(aes(actin, fill = screen_id)) +
+  geom_density(alpha = 0.5) + 
+  scale_fill_brewer(type = 'qual') +
+  facet_wrap(~ line) +
+  theme_cowplot()
+```
+
+```{r}
+df %>%
+  ggplot(aes(permeability, fill = screen_id)) +
+  geom_density(alpha = 0.5) + 
+  scale_fill_brewer(type = 'qual') +
+  facet_wrap(~ line) +
+  theme_cowplot()
+```
+
+```{r}
+df %>%
+  ggplot(aes(dapi, fill = screen_id)) +
+  geom_density(alpha = 0.5) + 
+  scale_fill_brewer(type = 'qual') +
+  facet_wrap(~ line) +
+  theme_cowplot()
+```
+
+```{r}
+df %>%
+  filter(drug == "DMSO") %>%
+  sample_n(10000) %>%
+  ggplot(aes(v1, v2, color = log(permeability+10))) + 
+  geom_point_rast(alpha = 0.75, size = 0.35) +
+   scale_colour_gradient(low = "white", high = "green") + 
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       title = "Permeability intensity") + 
+  theme(legend.position = "bottom")
+  
+```
+
+```{r}
+df_sum <- df %>% 
+  group_by(line, replicate, drug, plate, screen_id) %>%
+  summarise(mean_actin = mean(actin),
+            sd_actin = sd(actin),
+            mean_permeability = mean(permeability),
+            sd_permeability = sd(permeability),
+            mean_dapi = mean(dapi),
+            sd_dapi = sd(dapi)
+            )
+
+df_sum %>% 
+  filter(drug == 'DMSO') %>%
+  ggplot(aes(plate, sd_permeability, color = screen_id)) + 
+  geom_point() +
+  theme_cowplot()
+```
+
+```{r}
+df_sum %>% 
+  filter(drug == 'DMSO') %>%
+  ggplot(aes(plate, sd_actin, color = screen_id)) + 
+  geom_point() +
+  theme_cowplot()
+```
+
+```{r}
+df_sum %>% 
+  filter(drug == 'DMSO') %>%
+  ggplot(aes(plate, sd_dapi, color = screen_id)) + 
+  geom_point() +
+  theme_cowplot()
+```
 
 # Lines of interest
 

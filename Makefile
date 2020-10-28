@@ -150,23 +150,6 @@ load_modules:
 ### filter dead organoids from all organoids in processedFeatures
 
 #################################################################################
-# Rules for Cluster Execution (Can be run from IBM cluster)                     #
-#################################################################################
-# option to run code via bsub on IBM cluster ssh rindtorf@odcf-lsf01.dkfz.de
-
-### create a UMAP embedded object with and w/o harmony for DMSO treated organoid projects only
-umap_dmso_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/PhenotypeSpectrum/run_umap_dmso.bsub references/Screenings_Imaging_Manuscript.xlsx data/interim/PhenotypeSpectrum/hdf5_pca_absolute_dmso.Rds
-	bsub -R "rusage[mem=100GB]" -q long ./src/models/PhenotypeSpectrum/run_umap_dmso.bsub \
-	-o src/models/PhenotypeSpectrum/out.bsub \
-	-e src/models/PhenotypeSpectrum/error.bsub
-
-### create a UMAP embedded object with and w/o harmony for all treated organoids
-umap_all_bsub: src/models/PhenotypeSpectrum/R/UMAP_organoids.R src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub references/Screenings_Imaging_Manuscript.xlsx data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds
-	bsub -R "rusage[mem=200GB]" -q verylong ./src/models/PhenotypeSpectrum/run_umap_all_drugs.bsub \
-	-o src/models/PhenotypeSpectrum/out.bsub \
-	-e src/models/PhenotypeSpectrum/error.bsub
-
-#################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################
 
