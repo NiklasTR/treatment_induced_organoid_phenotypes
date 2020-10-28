@@ -37,35 +37,8 @@ library(scico)
 # I wish I could solve my path problems with the here package. 
 PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
-# Loading data and formatting for easier access
-obj_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds"))
-obj <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds"))
 
-# Also, I load similarly processed data, where only DMSO treated organoids were included in PCA
-dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
-dmso <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_dmso.Rds"))
 
-# Formatting UMAP tables for easy access
-umap_tidy_h <- reducedDims(obj_h)$UMAP %>% cbind(colData(obj_h)) %>% as_tibble() %>% janitor::clean_names()
-umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() %>% 
-  left_join(., umap_tidy_h %>% dplyr::select(uuid, prob_live, prob_dead))
-## Spiking in LDC classifier data to DMSO-only data
-umap_tidy_dmso_h <- reducedDims(dmso_h)$UMAP %>% cbind(colData(dmso_h)) %>% as_tibble() %>% janitor::clean_names() %>% 
-  left_join(., umap_tidy_h %>% filter(drug == "DMSO") %>% dplyr::select(uuid, prob_live, prob_dead))
-umap_tidy_dmso <- reducedDims(dmso)$UMAP %>% cbind(colData(dmso)) %>% as_tibble() %>% janitor::clean_names() %>% 
-  left_join(., umap_tidy_h %>% filter(drug == "DMSO") %>% dplyr::select(uuid, prob_live, prob_dead))
-
-# I subsample parts of my data. 
-set.seed(123)
-umap_sampled_h <- umap_tidy_h %>%
-  sample_frac(.01)
-umap_sampled <- umap_tidy%>%
-  sample_frac(.01)
-
-umap_sampled_dmso_h <- umap_tidy_dmso_h %>%
-  sample_frac(.1)
-umap_sampled_dmso <- umap_tidy_dmso %>%
-  sample_frac(.1)
 ```
 
 # Line Differences
@@ -285,17 +258,7 @@ p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen.pdf"), width = 
 # Dye Intensity
 
 ```{r}
-umap_tidy 
-
-intensity <- read_rds(here("data/interim/FeatureAnalysis/feature_intensity.rds")) %>%
-  magrittr::set_colnames(c("actin", "permeability", "dapi"))
-
-df <- cbind(umap_tidy, intensity)
-
-```
-
-```{r}
-df %>%
+umap_sample %>%
   ggplot(aes(actin, fill = screen_id)) +
   geom_density(alpha = 0.5) + 
   scale_fill_brewer(type = 'qual') +
@@ -322,6 +285,8 @@ df %>%
 ```
 
 ```{r}
+set.seed()
+
 df %>%
   filter(drug == "DMSO") %>%
   sample_n(10000) %>%
@@ -333,8 +298,9 @@ df %>%
        y = "UMAP 2",
        title = "Permeability intensity") + 
   theme(legend.position = "bottom")
-  
+
 ```
+
 
 ```{r}
 df_sum <- df %>% 
