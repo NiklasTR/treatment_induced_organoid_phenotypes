@@ -100,7 +100,7 @@ umap_sampled %>% filter(drug == "DMSO") %>%
        x = "ln(size)") + 
   theme(legend.position = "bottom") +
   theme_cowplot() + 
-  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_morph_ridge.pdf"), 
+  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), 
          width = 4, height = 4)
 ```
 
@@ -109,7 +109,7 @@ ggplot(umap_sampled %>% filter(drug == "DMSO") %>%
          filter(line %in% c("D021T01", "D055T01"))) +
   geom_density(aes(x = size_log, color = line, group = replicate)) + 
   #facet_wrap(~ line, ncol = 1) + 
-  theme_cowplot() + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_example.pdf"), width = 3, height = 6)
+  theme_cowplot() + ggsave(paste0(PATH, "reports/figures/gg_size_dist_example.pdf"), width = 3, height = 6)
 ```
 
 
@@ -149,7 +149,7 @@ ggdrug_count <- ggplot(drug_count) +
        title = "Organoid count distribution",
        x = "ln(n)")
 
-ggdrug_count + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug_dist_n_log.pdf"))
+ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
 ```
 
 
@@ -296,7 +296,7 @@ gg_size_supp <- df %>%
   theme(legend.position = "bottom") +
   facet_wrap(~ drug)
 
-gg_size_supp + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_all.pdf"))
+gg_size_supp + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"))
 ```
 
 # Organoid line differences
@@ -334,7 +334,7 @@ gg_line <- df %>% dplyr::select(-line) %>%
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "nothing")
 
-gg_line + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_all.pdf"), width = 4, height = 4)
+gg_line + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"), width = 4, height = 4)
 ```
 
 _E_13_contrastProjections.h5
@@ -379,7 +379,7 @@ gg_bortezomib <- umap_sampled %>%
   
 gg_bortezomib
 
-gg_bortezomib + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_bortezomib.pdf"), width = 2, height = 8)
+gg_bortezomib + ggsave(paste0(PATH, "reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
 ```
 
 
@@ -490,21 +490,23 @@ gg_tram_traj <-
   theme(legend.position = "bottom") + 
   facet_wrap(~ drug)
 
-gg_tram_traj + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_traj.pdf"), width = 4, height = 4)
+gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
 ```
 
 I am repeating the same figure for D027T01
 
 ```{r}
+set.seed(123)
+
 drug_order <- c("Trametinib")
 
 center_df <- umap_tidy %>%
     filter(drug %in% drug_order) %>%
-  filter(line %in% c("D027T01", "D019T01")) %>% 
+  filter(line %in% c("D027T01")) %>% 
   mutate(drug = factor(drug, levels =drug_order)) %>% 
   arrange((drug)) %>% 
   group_by(drug, line, concentration) %>%
-  sample_n(200, replace = TRUE) %>% ungroup() # adjust based on pan-line vs. 
+  sample_n(400, replace = TRUE) %>% ungroup() # adjust based on pan-line vs. 
 
 plot_df <- center_df %>%
   nest(-line, -drug) %>%
@@ -517,7 +519,7 @@ gg_tram_traj <-
   geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
   geom_point(data = plot_df %>% unnest(data),
              aes(color = line, v1, v2), alpha = 0.5, size = 0.35) +
-  geom_path(data = plot_df %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[, ])) %>% unnest(plot_trace), 
+  geom_path(data = plot_df %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[1:1500,])) %>% unnest(plot_trace), 
             aes(v1, v2, group = paste0(drug, line), color = line), size = 1.5, 
             arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches")))+ 
   scale_color_brewer(type = "qual", palette = "Set2") +
@@ -527,7 +529,7 @@ gg_tram_traj <-
   theme(legend.position = "bottom") + 
   facet_wrap(~ drug)
 
-gg_tram_traj + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_traj_D27_D19.pdf"), width = 4, height = 4)
+gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj_D27_D19.pdf"), width = 4, height = 4)
 ```
 
 
@@ -560,7 +562,7 @@ gg_mtor_all <- umap_tidy %>%
 
   theme(legend.position = "nothing")
 
-gg_mtor_all + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_mtor.pdf"), width = 6, height = 3)
+gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_mtor.pdf"), width = 6, height = 3)
 ```
 
 ```{r}
@@ -593,7 +595,7 @@ gg_mtor_all <- umap_tidy %>%
 
   theme(legend.position = "nothing")
 
-gg_mtor_all + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_gsk.pdf"), width = 6, height = 3)
+gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_gsk.pdf"), width = 6, height = 3)
 ```
 
 
@@ -670,14 +672,14 @@ gg_curve_df %>%
 # Plot Export
 
 ```{r}
-gg_size_dist + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist.pdf"))
-gg_size_dist_log +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_log.pdf"))
-ggdrug_size + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug_dist_size_log.pdf"))
-gg_ecdf + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_ecdf.pdf"))
+gg_size_dist + ggsave(paste0(PATH, "reports/figures/gg_size_dist.pdf"))
+gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
+ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
+gg_ecdf + ggsave(paste0(PATH, "reports/figures/gg_size_dist_ecdf.pdf"))
 
-gg_drug + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug.pdf"), 
+gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), 
          width = 8, height = 4)
-gg_size_drug + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
+gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
 ```
 
 
@@ -761,7 +763,7 @@ ggplot(df) +
 
 ## Count distribution of Paclitaxel treated organoids 
 
-```{r}
+
 
 ```{r}
 drug_count_param <- drug_count %>% 
