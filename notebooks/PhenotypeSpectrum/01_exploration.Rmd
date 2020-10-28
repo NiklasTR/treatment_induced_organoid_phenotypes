@@ -37,7 +37,15 @@ library(scico)
 # I wish I could solve my path problems with the here package. 
 PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
+# umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() %>% 
+#   left_join(., umap_tidy_h %>% dplyr::select(uuid, prob_live, prob_dead))
 
+umap_sampled_h <- umap_tidy_h %>%
+  sample_frac(.01)
+umap_sampled_dmso_h <- umap_tidy_dmso_h %>%
+  sample_frac(.1)
+umap_sampled_dmso <- umap_tidy_dmso %>%
+  sample_frac(.1)
 
 ```
 
@@ -285,19 +293,33 @@ df %>%
 ```
 
 ```{r}
-set.seed()
+set.seed(123)
 
 df %>%
   filter(drug == "DMSO") %>%
   sample_n(10000) %>%
-  ggplot(aes(v1, v2, color = log(permeability+10))) + 
+  ggplot(aes(v1, v2, color = actin)) + 
   geom_point_rast(alpha = 0.75, size = 0.35) +
-   scale_colour_gradient(low = "white", high = "green") + 
+   scale_colour_gradient(low = "white", high = "red") + 
   theme_cowplot() +
   labs(x = "UMAP 1",
        y = "UMAP 2",
-       title = "Permeability intensity") + 
-  theme(legend.position = "bottom")
+       title = "Actin staining intensity") + 
+  theme(legend.position = "bottom") + 
+  ggsave(paste0(PATH, "reports/figures/gg_actin.pdf"), width = 4, height = 4)
+
+df %>%
+  filter(drug == "DMSO") %>%
+  sample_n(10000) %>%
+  ggplot(aes(v1, v2, color = dapi)) + 
+  geom_point_rast(alpha = 0.75, size = 0.35) +
+   scale_colour_gradient(low = "white", high = "blue") + 
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       title = "Nuclear staining intensity") + 
+  theme(legend.position = "bottom") + 
+  ggsave(paste0(PATH, "reports/figures/gg_dapi.pdf"), width = 4, height = 4)
 
 ```
 

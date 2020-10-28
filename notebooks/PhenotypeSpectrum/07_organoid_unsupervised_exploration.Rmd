@@ -20,20 +20,22 @@ library(ggrastr)
 library(cowplot)
 library(princurve)
 library(scico)
+library(ggridges)
 
-umap_tidy %>% read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-pca_tidy %>% read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
-umap_sampled %>% read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+# I wish I could solve my path problems with the here() package, but experienced unreliable behaviour 
+PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
+
+umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
+pca_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
+umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 ```
-
-
 
 # Organoid size Distributions
 
 I plot a size-distribution. 
 
 ```{r, eval = TRUE}
-gg_size_dist <- colData(obj) %>% as_tibble() %>% 
+gg_size_dist <- umap_tidy %>% 
   ggplot(aes(size)) + 
   geom_histogram() + 
   theme_classic()
@@ -81,92 +83,14 @@ df %>% ggplot(aes(x, line)) +
 organoid_size_factor <- df$line %>% levels()
 ```
 
-I estimate a log-gaussian mixture model of organoid size.
-
 ```{r}
-library(mixtools)
-
-df_mix <- normalmixEM(umap_tidy$size_log, k = 2)
-
-df_fus <- df %>% dplyr::select(size_log) %>% mutate(posterior = "joined") %>% 
-  rbind(data.frame(size_log = df_mix$x,
-                   posterior = df_mix$posterior %>% as.data.frame() %>% round() %>% .$comp.1))
-
-ggplot(df) + 
-  geom_density(aes(x = size_log, y=..count..), alpha = 0.2) + 
-  theme_cowplot()
-
-ggplot(df_fus) + 
-  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
-  theme_cowplot()
-```
-
-```{r}
-df_mix
-```
-
-
-
-I scale this approach to all other organoid lines. 
-
-```{r}
-set.seed(0123349)
-
-umap_mix <- umap_tidy %>% filter(drug == "DMSO")  %>% 
-  nest(-line, -replicate) %>%
-  mutate(mix_fit = map(data, ~ normalmixEM(.x$size_log, k = 2, maxit = 5000)),
-         prob = map(mix_fit, ~ .x$posterior %>% as.data.frame() %>% .$comp.1)) 
-
-umap_mix = umap_mix %>% unnest(prob, data) 
-```
-
-```{r}
-set.seed(0.1)
-
-df = umap_mix %>% mutate(posterior = round(prob)) %>% mutate(posterior = factor(posterior))
-
-df %>% 
-  sample_frac(0.01) %>%
-  ggplot(aes(prob_dead, fill = posterior)) + 
-  geom_histogram() + 
-  scale_fill_brewer(type= "qual") + 
-  scale_y_log10() + 
-  theme_cowplot()
-
-ggplot(df) + 
-  geom_density(aes(x = size_log, fill = posterior, group = replicate), alpha = 0.5) + 
-  facet_wrap(~ line) + 
-  labs(caption = "Plotted are Replicates, DMSO treated organoids",
-       x = "ln(size)") + 
-  theme(legend.position = "bottom") +
-  theme_cowplot()
-
-
-ggplot(df) + 
-  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
-  theme_cowplot() + 
-  facet_wrap(~ line)
-```
-
-
-```{r}
-library(ggridges)
-
-# df <- umap_mix %>% 
-#   distinct(line, mix_fit) %>%
-#   mutate(mu_max = map(mix_fit, ~ .x$mu %>% max()))
-# 
-# df %>% unnest(mu_max) %>% 
-#   distinct(line, mu_max) %>% 
-#   arrange(mu_max) %>%
-#   .$line
-
 organoid_size_factor_09 <- umap_sampled %>% group_by(line) %>% 
   summarise(x = quantile(size_log, 0.9)) %>% 
   #summarise(x = mean(size_log)) %>% 
   arrange(x) %>% .$line
 
-umap_sampled %>% filter(drug == "DMSO") %>% mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
+umap_sampled %>% filter(drug == "DMSO") %>% 
+  mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
   ggplot() +
   geom_density_ridges_gradient(aes(y = line, x = size_log, fill = stat(x)), scale = 1) +
   #geom_density(aes(x = size_log, group = replicate, color = morphological_class)) + 
@@ -175,49 +99,17 @@ umap_sampled %>% filter(drug == "DMSO") %>% mutate(line = factor(line, levels = 
   labs(caption = "DMSO treated organoids",
        x = "ln(size)") + 
   theme(legend.position = "bottom") +
-  theme_cowplot() + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
+  theme_cowplot() + 
+  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_morph_ridge.pdf"), 
+         width = 4, height = 4)
 ```
 
-
 ```{r}
-ggplot(umap_sampled %>% filter(drug == "DMSO") %>% filter(line %in% c("D021T01", "D055T01"))) +
+ggplot(umap_sampled %>% filter(drug == "DMSO") %>% 
+         filter(line %in% c("D021T01", "D055T01"))) +
   geom_density(aes(x = size_log, color = line, group = replicate)) + 
   #facet_wrap(~ line, ncol = 1) + 
   theme_cowplot() + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_example.pdf"), width = 3, height = 6)
-```
-
-
-
-# Organoid Count Distribution 
-
-```{r}
-library(fitdistrplus)
-set.seed(123)
-
-df <- colData(obj) %>% as_tibble() %>% filter(drug == "DMSO") %>%
-  dplyr::count(concentration, line, replicate, well)
-
-plotdist(df$n, demp = TRUE)
-descdist(df$n, boot = 1000)
-
-fw <- fitdistrplus::fitdist(df$n, "weibull")
-#fg <- fitdist(df$size, "gamma")
-fln <- fitdistrplus::fitdist(df$n, "lnorm")
-par(mfrow = c(2, 2))
-plot.legend <- c("Weibull", "lognormal")
-
-denscomp(list(fw, fln), legendtext = plot.legend)
-qqcomp(list(fw, fln), legendtext = plot.legend)
-cdfcomp(list(fw, fln), legendtext = plot.legend)
-ppcomp(list(fw, fln), legendtext = plot.legend)
-  
-
-```
-
-# Characterizing regions
-
-```{r}
-
 ```
 
 
@@ -225,13 +117,13 @@ ppcomp(list(fw, fln), legendtext = plot.legend)
 
 
 ```{r}
-trametinib_size <- colData(obj) %>% as_tibble() %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
+drug_size <- umap_tidy %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>%
   #filter(morphological_class == "disorganized") %>% 
   #filter(morphological_class != "other") %>% 
   mutate(concentration = factor(concentration, levels = c("0", "0.0016", "0.008", "0.04", "0.2", "1.0")))
 
-ggtram_size <- ggplot(trametinib_size) +
+ggdrug_size <- ggplot(drug_size) +
   geom_density(aes(x = log(size), group = concentration, color = concentration), size = 1.5) + 
   scico::scale_color_scico_d() +
   theme_cowplot() + 
@@ -241,14 +133,14 @@ ggtram_size <- ggplot(trametinib_size) +
        title = "Organoid size distribution",
        x = "ln(size)")
 
-ggtram_size + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_dist_size_log.pdf"))
+ggdrug_size 
 ```
 
 ```{r}
-trametinib_count <- trametinib_size %>%
+drug_count <- drug_size %>%
   dplyr::count(concentration, line, replicate, well)
 
-ggtram_count <- ggplot(trametinib_count) +
+ggdrug_count <- ggplot(drug_count) +
   geom_density(aes(x = log(n), group = concentration, color = concentration), size = 1.5) + 
   scico::scale_color_scico_d() +
   theme_cowplot() + 
@@ -257,38 +149,9 @@ ggtram_count <- ggplot(trametinib_count) +
        title = "Organoid count distribution",
        x = "ln(n)")
 
-ggtram_count + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_dist_n_log.pdf"))
+ggdrug_count + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug_dist_n_log.pdf"))
 ```
 
-```{r}
-tram_count_param <- trametinib_count %>% 
-  nest(-concentration, -line) %>% 
-  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$n, "lnorm")))
-         param = map(fit, ~ .x$estimate %>% broom::tidy()))
-
-tram_count_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>%
-  ggplot(aes(concentration, exp(x))) + 
-    geom_point() + 
-  theme_cowplot()
-```
-
-
-```{r}
-tram_count_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>% 
-  dplyr::select(concentration, line, count = x) %>% 
-  left_join(tram_size_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>% dplyr::select(concentration, line, size = x)) %>% 
-  
-  ggplot(aes(count, size, color = concentration)) + 
-  geom_point() + 
- # geom_path(aes(group = line)) +
-  scico::scale_color_scico_d() + 
-  theme_cowplot()
-
-
-```
 
 ```{r}
 set.seed(234)
@@ -300,7 +163,7 @@ df <- umap_tidy  %>%
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>% 
   filter(line == loi)
 
-gg_trametinib <- umap_sampled %>%
+gg_drug <- umap_sampled %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -322,30 +185,24 @@ gg_trametinib <- umap_sampled %>%
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "bottom")
  
-gg_trametinib + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_trametinib.pdf"), width = 8, height = 4)
-
+gg_drug
 ```
 
 
 
 ```{r}
+loi <- c("D022T01", "D055T01")
 
-```
-
-
-```{r}
-loi <- c("D055T01")
-
-tram_size_param <- trametinib_size %>% 
+drug_size_param <- drug_size %>% 
   nest(-concentration, -line) %>% 
   mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
          param = map(fit, ~ .x$estimate %>% broom::tidy()))
 
-df <- tram_size_param %>% unnest(param) %>% 
+df <- drug_size_param %>% unnest(param) %>% 
   filter(names == "meanlog") %>%
   mutate(concentration = factor(concentration, levels = c("0", "0.0016", "0.008", "0.04", "0.2", "1.0"))) 
 
-gg_size_tram <- df %>%
+gg_size_drug <- df %>%
   #mutate(concentration = as.numeric(as.character(concentration))) %>%
   ggplot(aes(concentration, x)) + 
     geom_point(color = "grey") + 
@@ -357,7 +214,7 @@ gg_size_tram <- df %>%
   #scale_x_log10()
   theme_cowplot()
 
-gg_size_tram + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
+gg_size_drug
 ```
 
 
@@ -636,6 +493,44 @@ gg_tram_traj <-
 gg_tram_traj + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_traj.pdf"), width = 4, height = 4)
 ```
 
+I am repeating the same figure for D027T01
+
+```{r}
+drug_order <- c("Trametinib")
+
+center_df <- umap_tidy %>%
+    filter(drug %in% drug_order) %>%
+  filter(line %in% c("D027T01", "D019T01")) %>% 
+  mutate(drug = factor(drug, levels =drug_order)) %>% 
+  arrange((drug)) %>% 
+  group_by(drug, line, concentration) %>%
+  sample_n(200, replace = TRUE) %>% ungroup() # adjust based on pan-line vs. 
+
+plot_df <- center_df %>%
+  nest(-line, -drug) %>%
+  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
+
+
+gg_tram_traj <- 
+
+  ggplot() + 
+  geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point(data = plot_df %>% unnest(data),
+             aes(color = line, v1, v2), alpha = 0.5, size = 0.35) +
+  geom_path(data = plot_df %>% mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[, ])) %>% unnest(plot_trace), 
+            aes(v1, v2, group = paste0(drug, line), color = line), size = 1.5, 
+            arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches")))+ 
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+  theme(legend.position = "bottom") + 
+  facet_wrap(~ drug)
+
+gg_tram_traj + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_tram_traj_D27_D19.pdf"), width = 4, height = 4)
+```
+
+
 ```{r}
 drug_order <- c("WYE-132", "DMSO")
 
@@ -668,6 +563,38 @@ gg_mtor_all <- umap_tidy %>%
 gg_mtor_all + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_mtor.pdf"), width = 6, height = 3)
 ```
 
+```{r}
+set.seed(123)
+drug_order <- c("CHIR-98014", "DMSO")
+
+center_df <- umap_tidy %>%
+    filter(drug %in% drug_order) %>%
+  #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
+  group_by(drug, line, concentration) %>%
+  sample_n(500, replace = TRUE) %>% ungroup()
+
+gg_mtor_all <- umap_tidy %>%
+    
+  filter(drug == "DMSO" | grepl(drug, pattern = drug_order[1])) %>%
+  #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
+  
+  group_by(drug) %>% 
+  sample_n(500) %>%
+  ggplot(aes(v1, v2)) + 
+  
+  geom_point_rast(data = umap_sampled %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+ 
+  geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16, color = "black") + 
+  facet_wrap(~ drug) + 
+ 
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+
+  theme(legend.position = "nothing")
+
+gg_mtor_all + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_gsk.pdf"), width = 6, height = 3)
+```
 
 
 ```{r, eval = FALSE}
@@ -745,8 +672,12 @@ gg_curve_df %>%
 ```{r}
 gg_size_dist + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist.pdf"))
 gg_size_dist_log +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_log.pdf"))
-
+ggdrug_size + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug_dist_size_log.pdf"))
 gg_ecdf + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_dist_ecdf.pdf"))
+
+gg_drug + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_drug.pdf"), 
+         width = 8, height = 4)
+gg_size_drug + ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
 ```
 
 
@@ -757,6 +688,113 @@ Here I collect pieces of code that did not make it into the final analysis but c
 ```{r}
 knitr::knit_exit()
 ```
+
+## Mixture modeling of Organoid size distribution
+
+
+I estimate a log-gaussian mixture model of organoid size.
+
+```{r, eval = TRUE}
+library(mixtools)
+
+df_mix <- normalmixEM(umap_tidy$size_log, k = 2)
+
+df_fus <- df %>% dplyr::select(size_log) %>% mutate(posterior = "joined") %>% 
+  rbind(data.frame(size_log = df_mix$x,
+                   posterior = df_mix$posterior %>% as.data.frame() %>% round() %>% .$comp.1))
+
+ggplot(df) + 
+  geom_density(aes(x = size_log, y=..count..), alpha = 0.2) + 
+  theme_cowplot()
+
+ggplot(df_fus) + 
+  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
+  theme_cowplot()
+```
+
+```{r, eval = TRUE}
+df_mix
+```
+
+
+
+I scale this approach to all other organoid lines. 
+
+```{r}
+set.seed(0123349)
+
+umap_mix <- umap_tidy %>% filter(drug == "DMSO")  %>% 
+  nest(-line, -replicate) %>%
+  mutate(mix_fit = map(data, ~ normalmixEM(.x$size_log, k = 2, maxit = 5000)),
+         prob = map(mix_fit, ~ .x$posterior %>% as.data.frame() %>% .$comp.1)) 
+
+umap_mix = umap_mix %>% unnest(prob, data) 
+```
+
+```{r}
+set.seed(0.1)
+
+df = umap_mix %>% mutate(posterior = round(prob)) %>% mutate(posterior = factor(posterior))
+
+df %>% 
+  sample_frac(0.01) %>%
+  ggplot(aes(prob_dead, fill = posterior)) + 
+  geom_histogram() + 
+  scale_fill_brewer(type= "qual") + 
+  scale_y_log10() + 
+  theme_cowplot()
+
+ggplot(df) + 
+  geom_density(aes(x = size_log, fill = posterior, group = replicate), alpha = 0.5) + 
+  facet_wrap(~ line) + 
+  labs(caption = "Plotted are Replicates, DMSO treated organoids",
+       x = "ln(size)") + 
+  theme(legend.position = "bottom") +
+  theme_cowplot()
+
+
+ggplot(df) + 
+  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
+  theme_cowplot() + 
+  facet_wrap(~ line)
+```
+
+## Count distribution of Paclitaxel treated organoids 
+
+```{r}
+
+```{r}
+drug_count_param <- drug_count %>% 
+  nest(-concentration, -line) %>% 
+  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$n, "lnorm")))
+        # param = map(fit, ~ .x$estimate %>% broom::tidy()))
+
+drug_count_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>%
+  ggplot(aes(concentration, exp(x))) + 
+    geom_point() + 
+  theme_cowplot()
+```
+
+
+```{r}
+drug_count_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>% 
+  dplyr::select(concentration, line, count = x) %>% 
+  left_join(tram_size_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>% dplyr::select(concentration, line, size = x)) %>% 
+  
+  ggplot(aes(count, size, color = concentration)) + 
+  geom_point() + 
+ # geom_path(aes(group = line)) +
+  scico::scale_color_scico_d() + 
+  theme_cowplot()
+
+
+```
+
+
+
 
 ## Main Panel
 
@@ -841,7 +879,7 @@ harmony_effect %>%
 ```
 
 
-# Running Harmony on replicate and on replicate+line level
+## Running Harmony on replicate and on replicate+line level
 
 ```{r, eval = FALSE}
 set.seed(123)
