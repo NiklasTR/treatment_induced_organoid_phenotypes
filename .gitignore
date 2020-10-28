@@ -7,9 +7,10 @@ src/models/PhenotypeSpectrum
 notebooks/SCOPEAnalysis
 notebooks/SCOPEMouse
 
-# password / security
-ssh
-ssh.pub
+# Rstudio
+.Rhistory
+promise.Rproj
+.Rproj
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
