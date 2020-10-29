@@ -18,3 +18,7 @@ python path/to/the/file/export_h5_to_tif.py /path/of/the/h5/file/you/want/to/con
 3. You will be asked for a password which is "heidelberg"
 4. The script will first import the chosen file and then create a directory named after the imported file +_TIFF which
 contains the converted tif files
+
+example:
+source ~/Environments/promise_virtualenv/bin/activate
+python ~/Work/promise/src/visualization/image_converter/export_h5_to_tif.py /promise/data/external/D007T01P009L08_E_13_contrastProjections.h5
