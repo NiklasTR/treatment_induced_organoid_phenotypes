@@ -127,8 +127,6 @@ plot_grid(
 ) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_panel.pdf"), 
             width = 8,
             height = 8)
-
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size.pdf"))
 ```
 
 
@@ -323,40 +321,6 @@ df %>%
 
 ```
 
-
-```{r}
-df_sum <- df %>% 
-  group_by(line, replicate, drug, plate, screen_id) %>%
-  summarise(mean_actin = mean(actin),
-            sd_actin = sd(actin),
-            mean_permeability = mean(permeability),
-            sd_permeability = sd(permeability),
-            mean_dapi = mean(dapi),
-            sd_dapi = sd(dapi)
-            )
-
-df_sum %>% 
-  filter(drug == 'DMSO') %>%
-  ggplot(aes(plate, sd_permeability, color = screen_id)) + 
-  geom_point() +
-  theme_cowplot()
-```
-
-```{r}
-df_sum %>% 
-  filter(drug == 'DMSO') %>%
-  ggplot(aes(plate, sd_actin, color = screen_id)) + 
-  geom_point() +
-  theme_cowplot()
-```
-
-```{r}
-df_sum %>% 
-  filter(drug == 'DMSO') %>%
-  ggplot(aes(plate, sd_dapi, color = screen_id)) + 
-  geom_point() +
-  theme_cowplot()
-```
 
 # Lines of interest
 
