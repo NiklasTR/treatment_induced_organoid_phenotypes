@@ -118,6 +118,15 @@ gg_size_dist_morph_ridge <- umap_sampled %>% filter(drug == "DMSO") %>%
 gg_size_dist_morph_ridge
 ```
 
+# Line differences
+
+UMAP Cystic (Lines 18, 13, 27, 30) vs. Solid (others) treated with DMSO, for Figure 1 / matching expression analysis done for cystic vs. rest
+
+```{r}
+
+```
+
+
 # Organoid Size during Drug Treatment
 
 
@@ -187,7 +196,7 @@ gg_drug <- umap_sampled %>%
   scico::scale_color_scico_d() + 
   facet_wrap(~ line, ncol = 2) +
   theme(legend.position = "bottom") +
-  theme_cowplot(font_size = 8) + 
+  #theme_cowplot(font_size = 8) + 
   theme(legend.position = "bottom")
  
 gg_drug
@@ -538,17 +547,15 @@ plot_grid(gg_size_dist_morph_ridge, gg_size_replicate)
 # Plot Export
 
 ```{r}
-gg_size_dist + ggsave(paste0(PATH, "reports/figures/gg_size_dist.pdf"))
-gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
-ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
-gg_ecdf + ggsave(paste0(PATH, "reports/figures/gg_size_dist_ecdf.pdf"))
+#gg_size_dist + ggsave(paste0(PATH, "reports/figures/gg_size_dist.pdf"))
+#gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
+#ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
+#gg_ecdf + ggsave(paste0(PATH, "reports/figures/gg_size_dist_ecdf.pdf"))
+#gg_size_dist_morph_ridge +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
 
-gg_size_dist_morph_ridge +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
-
-ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
-
-gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), width = 8, height = 4)
-gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
+# ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
+# gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), width = 8, height = 4)
+# gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
 
 gg_bortezomib + ggsave(paste0(PATH, "reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
 
@@ -560,14 +567,19 @@ gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 
 ```
 
 ```{r}
-plot_grid(gg_size_dist_morph_ridge, gg_size_replicate)
+plot_grid(gg_size_dist_morph_ridge, gg_size_replicate,
+          labels = c('A', 'B'), label_size = 12, ncol = 2) +
+  ggsave(paste0(PATH, "reports/panel_size_dist.pdf"), width = 8, height = 4)
 
 plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size = 12),
           gg_drug,
           gg_size_drug,
-          labels = c('A', ''), label_size = 12, ncol = 1) +
-  ggsave(paste0(PATH, "reports/panel_size.pdf"), width = 6, height = 9)
+          labels = c('', 'C', 'D'), label_size = 12, ncol = 1) +
+  ggsave(paste0(PATH, "reports/panel_size_drug.pdf"), width = 8, height = 12)
 
+gg_mtor_all
+
+gg_size_supp
 
 ```
 
