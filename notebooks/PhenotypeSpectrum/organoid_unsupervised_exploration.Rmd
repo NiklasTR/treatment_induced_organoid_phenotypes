@@ -27,7 +27,7 @@ umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolu
 umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 ```
 
-# Organoid size Distributions
+# Organoid Size Distributions
 
 I plot a size-distribution. 
 
@@ -35,7 +35,7 @@ I plot a size-distribution.
 gg_size_dist <- umap_tidy %>% 
   ggplot(aes(size)) + 
   geom_histogram() + 
-  theme_classic()
+  theme_cowplot()
 
 gg_size_dist_log <- gg_size_dist + 
   scale_x_log10() 
@@ -118,7 +118,7 @@ gg_size_dist_morph_ridge <- umap_sampled %>% filter(drug == "DMSO") %>%
 gg_size_dist_morph_ridge
 ```
 
-# Paclitaxel Case Study
+# Organoid Size during Drug Treatment
 
 
 ```{r}
@@ -208,21 +208,26 @@ df <- drug_size_param %>% unnest(param) %>%
   mutate(concentration = factor(concentration, levels = c("0", "0.0016", "0.008", "0.04", "0.2", "1.0"))) 
 
 gg_size_drug <- df %>%
+  filter(line %in% loi) %>%
   #mutate(concentration = as.numeric(as.character(concentration))) %>%
   ggplot(aes(concentration, x)) + 
     geom_point(color = "grey") + 
-  geom_line(aes(group = line), color = "grey") +
-  geom_point(data = df %>% filter(line %in% loi), color = "black") +
-  geom_line(aes(group = line), data = df %>% filter(line %in% loi), color = "black") +
-  labs(y = 'size ln(mean)' ,
+  geom_line(data = df %>% dplyr::rename(line_h = line) , aes(group = line_h), color = "grey") +
+  geom_point(data = df %>% dplyr::rename(line_h = line), color = "grey") +
+  geom_point(color = "black") +
+  geom_line(aes(group = line), color = "black") +
+  labs(y = 'mu ln(size)' ,
+       x = "Concentration Factor",
        caption = paste0(paste(loi, collapse=" "), ", Paclitaxel")) +
-  #scale_x_log10()
+  facet_wrap(~ line)+
   theme_cowplot()
 
 gg_size_drug
 ```
 
-I use an alternative, manual, plotting method. In order to plot the object data, I export a subset of organoids. I plot the cells by size.
+# Organoid Heterogeneity
+
+I plot 2 organoid lines treated with DMSO control
 
 ```{r}
 set.seed(234)
@@ -249,7 +254,7 @@ gg_cys_comp <- df %>%
 gg_cys_comp
 ```
 
-I also create a supplement comparing DMSO with other treatments
+In general, DMSO treated organoid lines cover the same latent space than drug treated organoids. This is likely influenced by the large number of untreated organoids in the dataset.
 
 ```{r}
 set.seed(123)
@@ -419,7 +424,7 @@ gg_tram_traj <-
   theme(legend.position = "bottom") + 
   facet_wrap(~ drug)
 
-gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
+gg_tram_traj 
 ```
 
 I am repeating the same figure for D027T01
@@ -442,7 +447,7 @@ plot_df <- center_df %>%
   mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
 
 
-gg_tram_traj <- 
+gg_tram_traj_sel <- 
 
   ggplot() + 
   geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -458,7 +463,7 @@ gg_tram_traj <-
   theme(legend.position = "bottom") + 
   facet_wrap(~ drug)
 
-gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj_D27_D19.pdf"), width = 4, height = 4)
+gg_tram_traj_sel
 ```
 
 
@@ -529,6 +534,7 @@ gg_gsk_all <- umap_tidy %>%
 
 
 
+plot_grid(gg_size_dist_morph_ridge, gg_size_replicate)
 # Plot Export
 
 ```{r}
@@ -537,20 +543,32 @@ gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
 ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
 gg_ecdf + ggsave(paste0(PATH, "reports/figures/gg_size_dist_ecdf.pdf"))
 
-gg_size_dist_morph_ridge + 
-  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), 
-         width = 4, height = 4)
+gg_size_dist_morph_ridge +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
 
 ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
 
-gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), 
-         width = 8, height = 4)
+gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), width = 8, height = 4)
 gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
 
 gg_bortezomib + ggsave(paste0(PATH, "reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
 
 gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_mtor.pdf"), width = 6, height = 3)
 gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_gsk.pdf"), width = 6, height = 3)
+
+gg_tram_traj_sel  + ggsave(paste0(PATH, "reports/figures/gg_tram_traj_D27.pdf"), width = 4, height = 4)
+gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
+```
+
+```{r}
+plot_grid(gg_size_dist_morph_ridge, gg_size_replicate)
+
+plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size = 12),
+          gg_drug,
+          gg_size_drug,
+          labels = c('A', ''), label_size = 12, ncol = 1) +
+  ggsave(paste0(PATH, "reports/panel_size.pdf"), width = 6, height = 9)
+
+
 ```
 
 
