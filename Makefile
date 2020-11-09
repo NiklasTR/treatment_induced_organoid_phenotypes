@@ -132,6 +132,7 @@ load_modules:
 	module load pandoc/2.2.1
 	module load anaconda3/2019.07
 	module load R/3.6.2
+	module load gcc/7.2.0 
 
 # ssh user@socket command < /path/to/file/on/local/machine
 
