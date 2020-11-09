@@ -13,9 +13,9 @@ set.seed(123)
 PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
 # Loading data and formatting for easier access
-obj <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds"))
+umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 
-df <- colData(obj) %>% as_tibble() %>% filter(drug == "DMSO")
+df <- umap_tidy %>% filter(drug == "DMSO")
 
 plotdist(df$size, demp = TRUE)
 descdist(df$size, boot = 1000)

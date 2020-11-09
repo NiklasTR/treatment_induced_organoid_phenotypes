@@ -48,7 +48,7 @@ df <- umap_sampled
 
 gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
   stat_ecdf(aes(x = size, group = line), 
-              geom = "step", size = 1.5) +
+              geom = "step", size = 1) +
   #scale_color_manual(values = c("#00AFBB", "#E7B800"))+
   labs(y = "f(size)",
        x = "organoid size [pixels]") + 
@@ -86,8 +86,8 @@ gg_size_replicate <- df %>%
   geom_smooth(method = "lm", se = FALSE, color = "grey") +
   geom_point() + 
   theme_cowplot() + 
-  labs(x = "Replicate 1, mu [ln pixels]",
-       y = "Replicate 2, mu [ln pixels]",
+  labs(x = "Replicate 1, mu [ln size]",
+       y = "Replicate 2, mu [ln size]",
        caption = paste0("2 replicates, r= ", round(r_size, 2))) + 
   coord_fixed(ratio = 1) 
   #geom_abline(slope = 1, color = "grey")
@@ -110,7 +110,8 @@ gg_size_dist_morph_ridge <- umap_sampled %>% filter(drug == "DMSO") %>%
   #facet_wrap(~ line) + 
   scale_fill_viridis_c() +
   labs(caption = "DMSO treated organoids",
-       x = "ln(size)") + 
+       x = "ln(size)",
+       fill = "size") + 
   theme(legend.position = "bottom") +
   theme_cowplot() 
 
@@ -245,43 +246,6 @@ df %>%
   coord_fixed()
 ```
 
-I wonder what the small, predominantly cystic cluster, is consisting off. In order to rule out potential segmentation artefacts, I take a closer look at wells, for which we have generated segmentation masks beforehand. 
-
-```{r}
-set.seed(234)
-
-df <- umap_tidy  %>%
-  mutate(cystic = if_else(line == "D013T01" &  well == "B24" & plate == "D013T01P001L02", TRUE, FALSE))
-
-df %>% 
-  sample_frac(0.01) %>%
-  ggplot(aes(v1, v2, color = size_log)) + 
-  #scale_color_brewer(type = "qual", palette = 2) +
-  geom_point_rast(alpha = 0.1, size = 0.35) + 
-  geom_point_rast(color = "red", alpha = 1, size = 0.5, data = df %>% filter(cystic == TRUE)) +
-  scale_color_viridis_c() +
-  theme_cowplot() + 
-  coord_fixed() + 
-  ggtitle("organoids with one well of cystic line marked red")
-```
-
-
-```{r}
-umap_tidy %>%
-  dplyr::filter(line == "D013T01" &  well == "B24" & plate == "D013T01P001L02") %>% 
-  mutate(original_x = as.numeric(original_x),
-         original_y = as.numeric(original_y)) %>%
-  #filter(v1 < -7 & v2 > 0) %>%
-  mutate(field = factor(field, levels = c(1, 2, 4, 3))) %>%
-  ggplot(aes(original_x, -original_y, size = size_log, color = v1)) + 
-  geom_point() + 
-  facet_wrap(~field, ncol = 2) + 
-  coord_fixed() +
-  viridis::scale_color_viridis() +
-  theme_cowplot()
-```
-
-
 I also create a supplement comparing DMSO with other treatments
 
 ```{r}
@@ -341,7 +305,6 @@ gg_line <- df %>% dplyr::select(-line) %>%
 gg_line + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"), width = 4, height = 4)
 ```
 
-_E_13_contrastProjections.h5
 
 # Concentration dependent phenotype transitions
 
