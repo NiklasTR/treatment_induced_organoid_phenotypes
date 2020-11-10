@@ -1,11 +1,5 @@
-# Project related
-src/data/PROMISE
-src/data/microscopyjobs
-src/features/FeatureAnalysis
-src/features/S3O
-src/models/PhenotypeSpectrum
-notebooks/SCOPEAnalysis
-notebooks/SCOPEMouse
+# Project related 
+notebooks/SCOPEAnalysis/data/
 
 # Rstudio
 .Rhistory
