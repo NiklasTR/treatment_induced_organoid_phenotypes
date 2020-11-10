@@ -415,21 +415,14 @@ gg_bortezomib
 
 
 ```{r}
-drug_order <- c("WYE-132", "DMSO")
-
-center_df <- umap_tidy %>%
-    filter(drug %in% drug_order) %>%
-  filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
-  group_by(drug, line, concentration) %>%
-  sample_n(700, replace = TRUE) %>% ungroup()
-
 gg_mtor_all <- umap_tidy %>%
     
   filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
-  filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
+  #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
+  filter(line %in% c("D027T01")) %>%
   
   group_by(drug) %>% 
-  sample_n(700) %>%
+  sample_n(700, replace = TRUE) %>%
   ggplot(aes(v1, v2)) + 
   
   geom_point_rast(data = umap_sampled %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -446,7 +439,7 @@ gg_mtor_all <- umap_tidy %>%
 gg_mtor_all
 ```
 
-```{r}
+```{r, eval = FALSE}
 set.seed(123)
 drug_order <- c("CHIR-98014", "DMSO")
 
