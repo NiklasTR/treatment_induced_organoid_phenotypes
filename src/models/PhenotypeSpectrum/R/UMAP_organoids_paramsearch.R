@@ -7,8 +7,8 @@ library(readxl)
 
 # input
 args = commandArgs(trailingOnly=TRUE)
-if (!length(args)==6) {
-  stop("Arguments must be supplied (input file name , output filename harmony, output filename raw, seed, metadata).n", call.=FALSE)
+if (!length(args)==4) {
+  stop("Arguments must be supplied (input file name , output filename raw, seed, metadata).n", call.=FALSE)
 } 
 
 # seed
@@ -16,13 +16,14 @@ set.seed(args[4])
 
 # load data
 pca_dmso_raw <- readRDS(args[1])
+print("loaded data")
 
 # Setting a PCA cutoff at 25 (hard coded!)
 pca_dmso_subset <- pca_dmso_raw %>% 
   dplyr::select(-(PC26:PC50))
 
-# Removing batch effects with Harmony
-metadata = read_excel(args[3])
+# Loading and preparing metadata
+metadata = read_excel(args[2])
 
 pca_metadata <- metadata %>% 
   # reducing dataset size by an order of magnitude
@@ -51,7 +52,7 @@ pca_anno_df <- pca_metadata %>% dplyr::select(-(PC1:PC25)) %>%
   mutate(size_log = log(size)) %>%
   as.data.frame() %>% 
   column_to_rownames("uuid2")
-
+print("prepared metadata")
 
 
 ## combining annotation data with harmonized PCA information
@@ -64,8 +65,11 @@ cce <- new_cell_data_set(pca_matrix %>% t(),
 ## I manually inject the PCA compression of the data into the object
 reducedDims(cce)$PCA <- pca_matrix
 
-for(i_dist in c(0, 0.01, 0.05, 0.1, 0.5, 1)){
-  for(j_nn in c(5, 15, 30, 50, 100)){
+print("running gridsearch")
+for(i_dist in c(0, 0.01, 0.05, 0.1, 0.5, 1))
+  {
+  for(j_nn in c(5, 15, 30, 50, 100))
+    {
     print(i_dist)
     print(j_nn)
     ## Run UMAP embedding
@@ -78,7 +82,7 @@ for(i_dist in c(0, 0.01, 0.05, 0.1, 0.5, 1)){
                             verbose = TRUE)
     
     # Save harmony result
-    saveRDS(cce, paste0(args[2], "_", i_dist, "_", j_nn, ".Rds")
+    saveRDS(cce, paste0(args[3], "_", i_dist, "_", j_nn, ".Rds"))
+    }
   }
-}
 
