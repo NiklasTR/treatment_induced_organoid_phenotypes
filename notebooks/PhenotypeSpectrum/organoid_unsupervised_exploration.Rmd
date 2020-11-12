@@ -119,7 +119,7 @@ gg_size_dist_morph_ridge
 ```
 
 ```{r}
-umap_size <- function(umap, main){
+umap_size <- function(umap){
   umap %>%
   #filter(Size < 1000) %>%
   ggplot(aes(v1, v2, color = size_log)) + 
@@ -128,13 +128,13 @@ umap_size <- function(umap, main){
   theme_cowplot() +
   labs(x = "UMAP 1",
        y = "UMAP 2",
-       title = main,
        color = "ln(size)") + 
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom") + 
+    coord_fixed()
 }
 
-p2 <- umap_size(umap_sampled, "Raw Data, All data")
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size.pdf"))
+gg_size <- umap_size(umap_sampled)
+
 ```
 
 
@@ -340,8 +340,7 @@ I am focusing on cystic vs solid organoid lines
 
 set.seed(123)
 
-loi <- c("D018T01", "D013T01",  "D027T01", "D030T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
-#loi <- umap_sampled$line %>% unique()
+loi <- c("D018T01", "D013T01",  "D027T01", "D030T01")
 
 df <- umap_tidy %>%
   filter(drug == "DMSO") %>% 
@@ -351,11 +350,17 @@ df <- umap_tidy %>%
 gg_cystic <- umap_sampled %>% 
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
-  geom_point_rast(data = df %>%
+  
+  # geom_point_rast(data = df %>%
+  #   filter(morphology == "cystic") %>% 
+  #     sample_frac(0.05),
+  # aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
+  
+  geom_density_2d(data = df %>%
     filter(morphology == "cystic") %>% 
       sample_frac(0.05),
-  aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
- # facet_wrap( ~ line, ncol =2) +
+  aes(color = morphology), size = 1.5) +
+
   scale_color_brewer(type = "qual", palette = "Set2") +
   #scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F", "#24345E"))) + 	
   #geom_density2d(color = "black") + 
@@ -364,7 +369,8 @@ gg_cystic <- umap_sampled %>%
        y = "UMAP 2")+
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8) + 
-  theme(legend.position = "nothing")
+  theme(legend.position = "nothing") 
+  
 
 gg_cystic
 ```
@@ -382,12 +388,15 @@ gg_cystic
 # ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
 # gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), width = 8, height = 4)
 # gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
+gg_cystic + ggsave(paste0(PATH, "reports/figures/gg_cystic.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
-plot_grid(gg_size_dist_morph_ridge, gg_size_replicate,
-          labels = c('A', 'B'), label_size = 12, ncol = 2) +
-  ggsave(paste0(PATH, "reports/panel_size_dist.pdf"), width = 8, height = 4)
+plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
+          gg_size,
+          plot_grid(gg_line, gg_cystic, labels = c('D', 'E'), label_size = 12, ncol = 2),
+          labels = c('', 'C', ''), label_size = 12, ncol = 1) +
+  ggsave(paste0(PATH, "reports/panel_size_dist.pdf"), width = 8, height = 16)
 
 plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size = 12),
           gg_drug,
@@ -395,9 +404,10 @@ plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size 
           labels = c('', 'C', 'D'), label_size = 12, ncol = 1) +
   ggsave(paste0(PATH, "reports/panel_size_drug.pdf"), width = 8, height = 12)
 
-gg_mtor_all
+
 
 gg_size_supp
+
 
 ```
 

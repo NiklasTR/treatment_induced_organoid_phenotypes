@@ -12,6 +12,7 @@ Rscript src/models/PhenotypeSpectrum/R/UMAP_organoids_paramsearch.R \
         "data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds" \
         "references/Screenings_Imaging_Manuscript.xlsx" \
         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs_paramsearch" \
-        "123" 
+        "123" \
+        "0.001"
 
         
