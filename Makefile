@@ -27,7 +27,7 @@ dependencies:
 	git clone https://github.com/NiklasTR/phenotypespectrum.git\
 	cd ../models
 	git clone https://github.com/NiklasTR/phenotypespectrum.git
-	
+# also docker dependency managed via singularity singularity pull docker://gtca/mofa2	
 
 ## Install Python Dependencies
 requirements: test_environment
