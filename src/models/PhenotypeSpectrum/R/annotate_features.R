@@ -17,7 +17,9 @@ df <- tibble(name = h5read(path, "feature_names_organoids")) %>%
                              grepl(pattern = "x\\.b\\.", x = name) ~ "cell_event",
                              grepl(pattern = "x\\.c\\.", x = name) ~ "dapi"))
 
-# df %>% write_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"))
+# TODO build test to check wether the returned features equal the features listed in Comon_Features_human.txt in that directory
+
+df %>% write_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"))
 
 print('reading features')
 
