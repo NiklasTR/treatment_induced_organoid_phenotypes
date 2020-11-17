@@ -97,6 +97,7 @@ target/
 # Mypy cache
 .mypy_cache/
 .Rproj.user
+./data/gene_expression/
 ./data/raw/PROMISE/data-10x-4t-c-16z/hdf5dir/180222-PDL1-test-3h-8xwash/180222-PDL1-test-3h-8xwash_D_13.h5
 ./data/raw/PROMISE/data-10x-4t-c-16z/hdf5dir/180222-PDL1-test-3h-8xwash/180222-PDL1-test-3h-8xwash_D_23.h5
 ./data/raw/PROMISE/data-10x-4t-c-16z/hdf5dir/180222-PDL1-test-3h-8xwash/180222-PDL1-test-3h-8xwash_D_09.h5
