@@ -210,7 +210,7 @@ We perform GSEA for the humanized intestinal crypt signatures published in Merlo
 
 ```{r}
 ## parse signatures and make list
-intestinal_sig <- readxl::read_excel(here('../../data/gene_expression/merloz-suarez_sigantures.xls'), 
+intestinal_sig <- readxl::read_excel(here('data/gene_expression/merloz-suarez_sigantures.xls'), 
                                      sheet = 1, skip = 4) %>% .[,1:4] %>%
   gather(signature, symbol) %>% drop_na() %>% 
   mutate(symbol = gsub('\\*', '', symbol))
