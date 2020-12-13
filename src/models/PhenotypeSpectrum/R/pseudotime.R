@@ -30,11 +30,13 @@ create_plot_df_bulk <- function(loi, drug_order, n_sample, v1_cut = 99999, stret
   set.seed(123)
   # I am pulling in all drug observations and set concentration to 1
   drug_df <- umap_tidy %>%
+    filter(partition %in% c(1,2)) %>%
     filter(drug %in% drug_order) %>%
     filter(line %in% loi) %>%
     mutate(concentration = ifelse(concentration == "nan", 1, concentration))
   # I identify DMSO treated observations and set a concentration to 0
   dmso_df <- umap_tidy %>%
+    filter(partition %in% c(1,2)) %>%
     filter(drug == "DMSO") %>%
     filter(line %in% loi) %>%
     mutate(concentration = 0) 
@@ -60,7 +62,7 @@ create_plot_df_bulk <- function(loi, drug_order, n_sample, v1_cut = 99999, stret
 
 draw_trajectory_bulk <- function(df){
   gg <- ggplot() + 
-    geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% dplyr::select(-line, -drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+    geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% filter(partition %in% c(1,2)) %>% dplyr::select(-line, -drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
     geom_point(data = df %>% unnest(data),
                aes(color = drug, v1, v2), alpha = 0.5, size = 0.35) +
     geom_path(data = df %>% unnest(plot_trace), 
@@ -81,6 +83,7 @@ create_plot_df <- function(loi, drug_order, n_sample, v1_cut = 99999, stretch = 
   set.seed(123)
   
   center_df <- umap_tidy %>%
+    filter(partition %in% c(1,2)) %>%
     filter(drug %in% drug_order) %>%
     filter(line %in% loi) %>% #, "D027T01", "D019T01"
     filter(concentration != "nan") %>%
@@ -99,7 +102,7 @@ create_plot_df <- function(loi, drug_order, n_sample, v1_cut = 99999, stretch = 
 
 draw_trajectory <- function(df){
   gg <- ggplot() + 
-    geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+    geom_point_rast(aes(v1, v2), data = umap_tidy %>% sample_frac(0.01) %>% filter(partition %in% c(1,2)) %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
     geom_point(data = df %>% unnest(data),
                aes(color = line, v1, v2), alpha = 0.5, size = 0.35) +
     geom_path(data = df %>% unnest(plot_trace), 
