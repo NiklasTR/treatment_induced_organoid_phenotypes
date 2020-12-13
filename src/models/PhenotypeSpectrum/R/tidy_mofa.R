@@ -19,7 +19,8 @@ print("preparing data")
 # I am aggregating intensity values using the mean to have one gene intensity per chip
 expression <- promise_expr %>% 
   group_by(line, symbol, chip_name, batch, id) %>% 
-  summarise(expr = mean(expr))
+  summarise(expr = mean(expr)) %>% 
+  filter(!(line %in% c("D015T01", "D052T01", "D021T01")))
 
 # I wrangle the data to fit into the MOFA input format
 # TODO mean of means does not equal the overall mean across plates
@@ -96,6 +97,8 @@ all_groups %>%
   dplyr::select(id, img_group, expr_group) %>%
   as.data.frame() %>% column_to_rownames("id") %>% 
   pheatmap::pheatmap()
+
+all_groups %>% write_rds(here("data/processed/PhenotypeSpectrum/groups.Rds"))
 
 print("preparing final df")
 # Creating a df with the following variables sample   group          feature   view value

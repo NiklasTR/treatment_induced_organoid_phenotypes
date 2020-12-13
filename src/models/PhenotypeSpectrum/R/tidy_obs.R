@@ -10,7 +10,7 @@ library(scico)
 PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
 # Loading data and formatting for easier access
-obj <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds"))
+obj <- readRDS(paste0(PATH, "data/processed/PhenotypeSpectrum/louvain_absolute_all_drugs_1e-07"))
 # Also, I load similarly processed data, where only DMSO treated organoids were included in PCA and/or Harmony was tested
 obj_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds"))
 dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
@@ -33,6 +33,10 @@ intensity <- read_rds(paste0(PATH, "data/interim/FeatureAnalysis/feature_intensi
 umap_tidy <- cbind(umap_tidy, intensity)
 pca_tidy <- cbind(pca_tidy, intensity)
 
+# adding cluster and segment-level data
+umap_tidy <- cbind(umap_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
+pca_tidy <- cbind(pca_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
+
 # I subsample parts of my data. 
 set.seed(123)
 umap_sampled <- umap_tidy%>%
@@ -43,7 +47,7 @@ umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_abso
 pca_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
 umap_sampled %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 
-# other output data
+# other output data for comparison
 umap_tidy_h %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_tidy.Rds"))
 umap_tidy_dmso_h %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/harmony_umap_absolute_dmso_tidy.Rds"))
 umap_tidy_dmso %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_dmso_tidy.Rds"))
