@@ -11,8 +11,8 @@ import sklearn.model_selection
 import sklearn.svm
 import sklearn.manifold
 import pickle
-import keras.layers
-import keras.models
+#import keras.layers
+#import keras.models
 
 
 def get_drug_features(species, drug):
@@ -66,46 +66,46 @@ def get_drug_features(species, drug):
     return drug_feats, drug_md
 
 
-def detect_outliers_with_autoencoder(features, encoding_dim):
-    """
-    Trains and applies an autoencoder to detect outliers. Returns the
-    (euclidean) distances of the reconstructed organoids to the
-    original features.
-    :param features:
-    :param encoding_dim: The size of the hidden layer
-    :return:
-    """
-
-    # z-scale features
-    features = (features - features.mean()) / features.mad()
-
-    # Set up network
-    input_layer = keras.layers.Input(shape=(features.shape[1],))
-    encoded = keras.layers.Dense(
-        units=encoding_dim, activation="relu")(input_layer)
-    decoded = keras.layers.Dense(
-        units=features.shape[1], activation="relu")(encoded)
-    autoencoder = keras.models.Model(inputs=input_layer, outputs=decoded)
-    encoder = keras.models.Model(inputs=input_layer, outputs=encoded)
-    encoded_input = keras.layers.Input(shape=(encoding_dim,))
-    decoder_layer = autoencoder.layers[-1]
-    decoder = keras.models.Model(
-        inputs=encoded_input, outputs=decoder_layer(encoded_input))
-
-    autoencoder.compile(
-        optimizer="adam", loss="mean_squared_error")
-
-    autoencoder.fit(
-        x=features.values, y=features.values, epochs=50,
-        batch_size=128, shuffle=True, verbose=0)
-
-    xx_pred = decoder.predict(encoder.predict(features.values))
-
-    dist = np.zeros(len(features.values))
-    for i, x in enumerate(features.values):
-        dist[i] = np.linalg.norm(x - xx_pred[i])
-
-    return dist
+# def detect_outliers_with_autoencoder(features, encoding_dim):
+#     """
+#     Trains and applies an autoencoder to detect outliers. Returns the
+#     (euclidean) distances of the reconstructed organoids to the
+#     original features.
+#     :param features:
+#     :param encoding_dim: The size of the hidden layer
+#     :return:
+#     """
+# 
+#     # z-scale features
+#     features = (features - features.mean()) / features.mad()
+# 
+#     # Set up network
+#     input_layer = keras.layers.Input(shape=(features.shape[1],))
+#     encoded = keras.layers.Dense(
+#         units=encoding_dim, activation="relu")(input_layer)
+#     decoded = keras.layers.Dense(
+#         units=features.shape[1], activation="relu")(encoded)
+#     autoencoder = keras.models.Model(inputs=input_layer, outputs=decoded)
+#     encoder = keras.models.Model(inputs=input_layer, outputs=encoded)
+#     encoded_input = keras.layers.Input(shape=(encoding_dim,))
+#     decoder_layer = autoencoder.layers[-1]
+#     decoder = keras.models.Model(
+#         inputs=encoded_input, outputs=decoder_layer(encoded_input))
+# 
+#     autoencoder.compile(
+#         optimizer="adam", loss="mean_squared_error")
+# 
+#     autoencoder.fit(
+#         x=features.values, y=features.values, epochs=50,
+#         batch_size=128, shuffle=True, verbose=0)
+# 
+#     xx_pred = decoder.predict(encoder.predict(features.values))
+# 
+#     dist = np.zeros(len(features.values))
+#     for i, x in enumerate(features.values):
+#         dist[i] = np.linalg.norm(x - xx_pred[i])
+# 
+#     return dist
 
 
 def get_ranked_features(
@@ -258,6 +258,114 @@ def process_dmso_organoids(species):
 
     feats_fn = os.path.join(
         results_dir, "ReducedFeatures_{}_{}.h5".format(species, "DMSO"))
+    OrganoidFeatures.save_features(
+        features=dmso_feats,
+        metadata=dmso_md, filename=feats_fn)
+
+def process_dmso_organoids_no_aa(species):
+    """
+    This function does not remove outlier organoids with an autoencoder. 
+
+    :param species:
+    :return:
+    """
+    results_dir = os.path.join(
+        Config.LINEDIFFERENCESDIR, species,
+        "DMSO", "results")
+    if not os.path.isdir(results_dir):
+        os.makedirs(results_dir)
+
+    print("Load Features ...")
+    dmso_feats, dmso_md = get_drug_features(species=species, drug="DMSO")
+
+    # print("Trim outliers with autoencoder ...")
+    # dists_fn = os.path.join(
+    #     results_dir, "AutoEncoder_Organoid_Distances_{}.pkl".format(species))
+    # if os.path.isfile(dists_fn):
+    #     with open(dists_fn, "rb") as f:
+    #         dists = pickle.load(f)
+    # else:
+    #     dists = {}
+    #     for line in dmso_md.Line.unique():
+    #         print(" - {}".format(line))
+    #         dists[line] = detect_outliers_with_autoencoder(
+    #             features=dmso_feats.loc[dmso_md.Line == line, :],
+    #             encoding_dim=30)
+    #     with open(dists_fn, "wb") as f:
+    #         pickle.dump(dists, f, pickle.HIGHEST_PROTOCOL)
+    # 
+    # trim_thresh = 80
+    # sel_indices = []
+    # # The somewhat bizarre loop is to ensure the selection indices are
+    # # generated in the right order.
+    # for line in dmso_md.groupby(dmso_md.Line).first().index.values:
+    #     sel_indices.append(
+    #         dists[line] <= np.percentile(dists[line], trim_thresh))
+    # sel_indices = np.concatenate(sel_indices)
+    # dmso_feats = dmso_feats.loc[sel_indices, :]
+    # dmso_md = dmso_md.loc[sel_indices, :]
+
+    print("Calculate Z-Scores of Features ...")
+    dmso_feats = (dmso_feats - dmso_feats.mean()) / dmso_feats.std()
+
+    print("Perform PCA")
+    pca = sklearn.decomposition.PCA()
+    dmso_feats_pca = pd.DataFrame(
+        data=pca.fit_transform(X=dmso_feats),
+        columns=["PC{}".format(ii+1) for ii in
+                 range(dmso_feats.shape[1])],
+        index=dmso_feats.index)
+
+    # Save original and PCA features
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeaturesPCA_noaa_{}_{}.h5".format(species, "DMSO"))
+    OrganoidFeatures.save_features(
+        features=dmso_feats_pca.iloc[:, 0:50],
+        metadata=dmso_md, filename=feats_fn)
+
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeatures_noaa_{}_{}.h5".format(species, "DMSO"))
+    OrganoidFeatures.save_features(
+        features=dmso_feats,
+        metadata=dmso_md, filename=feats_fn)
+
+
+def process_all_organoids(species):
+    """
+    This function does not remove outlier organoids with an autoencoder. 
+    It runs this step of feature processing using a high-mem instance.
+    :param species:
+    :return:
+    """
+    results_dir = os.path.join(
+        Config.LINEDIFFERENCESDIR, species,
+        "all_drugs", "results")
+    if not os.path.isdir(results_dir):
+        os.makedirs(results_dir)
+
+    print("Load Features ...")
+    dmso_feats, dmso_md = get_drug_features(species=species, drug="DMSO")
+
+    print("Calculate Z-Scores of Features ...")
+    dmso_feats = (dmso_feats - dmso_feats.mean()) / dmso_feats.std()
+
+    print("Perform PCA")
+    pca = sklearn.decomposition.PCA()
+    dmso_feats_pca = pd.DataFrame(
+        data=pca.fit_transform(X=dmso_feats),
+        columns=["PC{}".format(ii+1) for ii in
+                 range(dmso_feats.shape[1])],
+        index=dmso_feats.index)
+
+    # Save original and PCA features
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeaturesPCA_alldrugs_{}.h5".format(species))
+    OrganoidFeatures.save_features(
+        features=dmso_feats_pca.iloc[:, 0:50],
+        metadata=dmso_md, filename=feats_fn)
+
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeatures_alldrugs_{}.h5".format(species))
     OrganoidFeatures.save_features(
         features=dmso_feats,
         metadata=dmso_md, filename=feats_fn)

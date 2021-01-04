@@ -25,3 +25,8 @@ monocle3
 ggrastr
 cowplot
 princurve
+platetools
+OutlierDetection
+rhdf5
+future
+furrr
