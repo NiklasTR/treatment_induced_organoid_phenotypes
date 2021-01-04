@@ -46,6 +46,8 @@ kmeans clustering on the PCA does not recover complex relationships, such as the
  
 The final clustering method to move forward is the benchmark MST method proposed in "A comparison of single-cell trajectory inference methods" in which a model-based clustering was performed on the UMAP embedding of the dataset. For scalability reasons, the clustering was performend on a random sample of the complete dataset and labels were predicted.
 
+# Model based clustering
+
 ```{r}
 source(here::here("R/mclust_predict_cluster_umap.R"))
 ```
@@ -121,33 +123,12 @@ gg_path <- clust$data %>%
   #            size = 1.3,
   #            color = "black") +
   
-  theme_classic() +
+  theme_cowplot() +
   labs(x = "UMAP 1",
        y = "UMAP 2")+
        #caption = "control treated organoids") + 
   #theme(legend.position = "bottom") +
   theme(legend.position = "None") +
-  theme(axis.title.x = element_text(color = "black", size = 8),
-        axis.title.y = element_text(color = "black", size = 8),
-        axis.text.y = element_text(color = "black", size = 8),
-        axis.text.x = element_text(color = "black", size = 8),
-        legend.text = element_text(color = "black", size = 8),
-        legend.title = element_text(color = "black", size = 8)) + 
-  # scale_color_manual(values = c("#6c80cc",
-  #                               #"#6db13c", 
-  #                               "#945fce",
-  #                               #"#59c377", 
-  #                               "#d34394",
-  #                               #"#4a9e75", 
-  #                               "#d0493a",
-  #                               #"#45b0cf", 
-  #                               "#db8f33",
-  #                               #"#b76dac", 
-  #                               "#b9af49"#,
-  #                               #"#c05b6d", "#6f7a31",
-  #                               #"#e0946e", "#9b5f2c"
-  #                               )) 
-  #scale_color_viridis_d() + 
   scale_color_manual(values = scico::scico(length(milestone_order), palette = 'berlin')) #+ 
   #scale_color_manual(values = scico::scico(15, palette = 'roma')) 
 
@@ -171,6 +152,7 @@ milestone_location %>%
   theme_classic()
 ```
 
+# Cluster proportions
 
 It is hard to interpret the tree of clusters. For the following analysis I am going to use the clustering results and will create a barcode plot for each line and treatment. As the number of clusters is large (n > 15) I will introduce an order of clusters. 
 
@@ -265,7 +247,6 @@ clust_var %>%
   write_csv(here("vignettes/07_organoid_unsupervised_exploration/mclust/cluster_proportions.csv"))
 ```
 
-
 I associate proportions with a cluster of interest, M4
 
 ```{r}
@@ -329,15 +310,8 @@ gg_borte_prop <- df_cluster %>%
   mutate(drug = factor(drug, levels =drug_order)) %>%
   ggplot(aes(drug, fill = mclust_complete_classification)) + 
   geom_bar(position = "fill") + 
-  theme_classic() + 
+  theme_cowplot() + 
   coord_flip() + 
-  #theme(legend.position = "bottom") +
-  theme(axis.title.x = element_text(color = "black", size = 8),
-        axis.title.y = element_text(color = "black", size = 8),
-        axis.text.y = element_text(color = "black", size = 8),
-        axis.text.x = element_text(color = "black", size = 8),
-        legend.text = element_text(color = "black", size = 8),
-        legend.title = element_text(color = "black", size = 8)) + 
   scale_fill_manual(values = scico::scico(15, palette = 'roma')) +
   #facet_wrap(~ concentration) +
   theme(legend.text = element_blank()) + 

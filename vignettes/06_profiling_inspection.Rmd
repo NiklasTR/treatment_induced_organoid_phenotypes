@@ -10,7 +10,7 @@ knitr::opts_chunk$set(dev="CairoPNG")
 
 # Setup
 
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(here)
 library(feather)
@@ -18,7 +18,7 @@ library(monocle3)
 library(ggrastr)
 library(cowplot)
 library(platetools)
-library(OutlierDetection)
+#library(OutlierDetection)
 #library(princurve)
 
 # local data access
@@ -32,28 +32,7 @@ here()
 ```
 
 
-```{r, eval = FALSE}
-#Legacy chunk for raw feature calculation
-
-# feature_path <- here::here("/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features") #"/home/rindtorf/data/rauscher/promise/PROMISE/data-10x-4t-c-16z/features"
-# 
-# hdf5_path_df <- tibble(path = list.files(feature_path, full.name = TRUE),
-#        bc = list.files(feature_path, full.name = FALSE)) %>%
-#   filter((grepl(x = path, pattern = "D0"))) %>% 
-#   mutate(hdf5_path = paste0(path, "/", bc, "_processedFeatures.h5")) %>% 
-#   # I remove every file that does not exist 
-#   mutate(exist = furrr::future_map(hdf5_path, ~ .x %>% file.exists)) %>% 
-#   unnest()
-# 
-# # only execute with access to large dataset
-# df <- hdf5_path_df[1,]
-# 
-# poi <- df$hdf5_path
-# h5ls(poi)
-```
-
-
-I load the profiling dataset. 
+# Drug Effect Data
 
 ```{r, eval = TRUE}
 pca_path <- here::here("data/profiling/TransformedFeatures_human_25components.h5")
@@ -88,13 +67,29 @@ saveRDS(hdf5_pca, here("vignettes/06_profiling_inspection/hdf5_pca.Rds"))
 
 
 ```{r, eval = TRUE}
-pca_raw <- readRDS(here("vignettes/06_profiling_inspection/hdf5_pca.Rds"))
+pca_effect_raw <- readRDS(here("vignettes/06_profiling_inspection/hdf5_pca.Rds"))
+```
+
+I test whether the number of plates in this dataset matches the raw feature dataset am I evaluated before. 
+
+```{r}
+plates = hdf5_pca_meta %>% dplyr::select(Plate) %>% distinct() %>% .$Plate
+
+stopifnot(hdf5_path_df %>% mutate(pca = if_else(bc %in% plates, TRUE, FALSE)) %>% 
+  filter(exist == TRUE) %>% 
+  .$pca %>%
+  min(as.numeric(.)) == 1)
+
+stopifnot(hdf5_path_df %>% mutate(pca = if_else(bc %in% plates, TRUE, FALSE)) %>% 
+  filter(exist == FALSE) %>% 
+  .$pca %>%
+  max(as.numeric(.)) == 0)
 ```
 
 I give a short overview of the dataset. 
 
 ```{r, eval = TRUE}
-pca_raw %>% 
+pca_effect_raw %>% 
   sample_n(10000) %>%
   ggplot(aes(V1, V2, color = Line)) + 
   geom_point() + 
@@ -104,20 +99,20 @@ pca_raw %>%
   
 ```
 
-# Segmentation outliers
+## Segmentation outliers
 
 ```{r}
-segmentation_metrics <- pca_raw %>% group_by(Plate, Well, Line, Replicate) %>% 
+segmentation_metrics <- pca_effect_raw %>% group_by(Plate, Well, Line, Replicate) %>% 
   mutate(Size = as.numeric(Size)) %>%
   summarise_at(vars(contains("Size")), funs(mean)) %>% 
   ungroup() %>%
-  left_join(pca_raw %>% 
+  left_join(pca_effect_raw %>% 
   dplyr::count(Line, Plate, Well) %>% ungroup()) #%>%
   # mutate(Plate = if_else(Plate == "M001W01P908L07", "M001W01P008L07", Plate))
 
 df <- segmentation_metrics
 
-pca_raw %>% 
+pca_effect_raw %>% 
   dplyr::count(Line, Plate, Well) %>% 
   ggplot(aes(n, fill = Line)) + 
   geom_histogram() + 
@@ -154,12 +149,12 @@ platetools::raw_grid(data = df$Size,
 
 
 ```{r}
-segmentation_metrics_field <- pca_raw %>% 
+segmentation_metrics_field <- pca_effect_raw %>% 
   group_by(Plate, Well, Line, Replicate, Field) %>% 
   mutate(Size = as.numeric(Size)) %>%
   summarise_at(vars(contains("Size")), funs(mean)) %>% 
   ungroup() %>%
-  left_join(pca_raw %>% 
+  left_join(pca_effect_raw %>% 
   dplyr::count(Line, Plate, Well, Field) %>% ungroup())
 
 # Switched back as most artefacts visible by human eye are well-wise, not tile-wise.
@@ -182,6 +177,52 @@ segmentation_metrics %>%
 
 I don't observe concerning deviations in terms of objects/field or object size. 
 
+# Organoid Phenotype Data
+
+With segmentation QC cleared, I also export PCA transformed organoid features from untreated models across all lines. 
+
+## Load LineDifference
+
+```{r}
+feature_path <- here::here("FeatureAnalysis/line_differences/human/DMSO/results/ReducedFeaturesPCA_noaa_human_DMSO.h5") 
+
+h5ls(feature_path)
+```
+
+```{r}
+path = feature_path
+
+index = h5read(path, "feature_names_organoids") %>% as_tibble()
+
+meta = h5read(path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>%          magrittr::set_colnames(h5read(path, "metadata_names_organoids")) %>% janitor::clean_names()
+
+data = h5read(path, "features_organoids") %>% as_tibble() %>% 
+    magrittr::set_colnames(index$value)
+  
+pca_dmso_raw <- cbind(meta, data) %>% 
+  arrange(line, plate, well) %>% 
+  mutate(morphological_class = case_when(line %in% c("D046T01",
+                                                     "D054T01",
+                                                     "D055T01") ~ "disorganized",
+                                         line %in% c("D018T01") ~ "organized",
+                                         line %in% c("D027T01",
+                                                     "D013T01",
+                                                     "D030T01") ~ "weakly organized",
+                                         line %in% c("D010T01",
+                                                     "D007T01") ~ "weakly disorganized",
+                                         line %in% c("D004T01",
+                                                     "D019T01",
+                                                     "D020T01",
+                                                     "D022T01") ~ "intermediate",
+                                         line %in% c("D018T01") ~ "organized",
+  TRUE ~ "other") %>% factor(levels = c("organized", "weakly organized", "intermediate", "weakly disorganized", "disorganized", "other")))
+```
+
+```{r}
+saveRDS(pca_dmso_raw, here("vignettes/06_profiling_inspection/hdf5_pca_absolute_dmso.Rds"))
+```
+
+
 # Supplements
 
 Here I collect pieces of code that did not make it into the final analysis but can be run in theory. In order to access these peaces of code, you have to open the *.RMD* file. 
@@ -190,6 +231,97 @@ Here I collect pieces of code that did not make it into the final analysis but c
 knitr::knit_exit()
 ```
 
+## Loading raw preprocessedFeatures
+
+I am receiving OOM erros when loading the large feature set on my RstudioServer isntance. 
+
+```{r, eval = TRUE}
+#Legacy chunk for raw feature calculation
+
+feature_path <- here::here("PROMISE/data-10x-4t-c-16z/features") 
+
+hdf5_path_df <- tibble(path = list.files(feature_path, full.name = TRUE),
+       bc = list.files(feature_path, full.name = FALSE)) %>%
+  filter((grepl(x = path, pattern = "D0"))) %>%
+  mutate(hdf5_path = paste0(path, "/", bc, "_processedFeatures.h5")) %>%
+  # I remove every file that does not exist
+  mutate(exist = furrr::future_map(hdf5_path, ~ .x %>% file.exists)) %>%
+  unnest()
+
+# only execute with access to large dataset
+df <- hdf5_path_df[1,]
+poi <- df$hdf5_path
+h5ls(poi)
+```
+
+I have identified common features before using the FeatureAnalysis package. 
+
+```{r}
+library(readr)
+common_features_human <- read_csv(
+  here::here("FeatureAnalysis/drug_effects/human/Common_Features_human.txt"), 
+    col_names = FALSE) %>% magrittr::set_colnames("feature")
+
+```
+
+I define a function to create tibbles with the feature data I need. 
+
+```{r}
+pull_data_hdf5 <- function(path, common_features = common_features_human){ 
+  index = h5read(path, "feature_names_organoids") %>% as_tibble() %>% mutate(index = 1:nrow(.)) %>% 
+    filter(value %in% common_features$feature) %>% .$index
+  meta <- h5read(path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>% magrittr::set_colnames(h5read(path, "metadata_names_organoids")) %>% janitor::clean_names()
+  data = h5read(path, "features_organoids", index = list(NULL, index)) %>% as_tibble() %>% 
+    magrittr::set_colnames(common_features$feature)
+  
+  cbind(meta, data) %>% 
+  arrange(line, plate, well) %>% 
+    return()
+  }
+```
+
+I load the raw feature data, pre-filtered for features that are found across all lines.
+
+```{r, eval = FALSE}
+features_raw = hdf5_path_df %>% 
+  dplyr::filter(exist == TRUE) %>% # removing plates that have not been processed yet.
+  dplyr::select(hdf5_path) %>%
+  head(2) %>%
+  mutate(data = purrr::map(hdf5_path, ~ .x %>% pull_data_hdf5())) 
+
+
+features_raw %>% 
+  unnest(data) %>% 
+  dplyr::select(- hdf5_path) %>% 
+  # monstrous peace of code to manual add another feature
+  mutate(morphological_class = case_when(line %in% c("D046T01",
+                                                     "D054T01",
+                                                     "D055T01") ~ "disorganized",
+                                         line %in% c("D018T01") ~ "organized",
+                                         line %in% c("D027T01",
+                                                     "D013T01",
+                                                     "D030T01") ~ "weakly organized",
+                                         line %in% c("D010T01",
+                                                     "D007T01") ~ "weakly disorganized",
+                                         line %in% c("D004T01",
+                                                     "D019T01",
+                                                     "D020T01",
+                                                     "D022T01") ~ "intermediate",
+                                         line %in% c("D018T01") ~ "organized",
+  TRUE ~ "other") %>% factor(levels = c("organized", "weakly organized", "intermediate", "weakly disorganized", "disorganized", "other")))
+
+saveRDS(features_raw, here("vignettes/06_profiling_inspection/hdf5_features.Rds"))
+```
+
+
+```{r}
+features_raw %>% 
+  unnest(data) %>% 
+  ggplot(aes(x.Ba.h.asm.s4, fill = line)) + 
+  geom_histogram()
+```
+
+## Automatic Outlier Detection
 
 ```{r, eval = FALSE}
 set.seed(213124)
@@ -360,17 +492,17 @@ get_img_path_exact(path_to_images = path_to_images_dir,
 After removing segmentation outliers on a field-level basis, I check the number of dropped organoids per replicate and line. 
 
 ```{r, eval = FALSE}
-pca_raw_filtered <- segmentation_outlier_manual %>%
+pca_effect_raw_filtered <- segmentation_outlier_manual %>%
   left_join(segmentation_outlier_well) %>%
   filter(status == "in_focus" & outlier == 0) %>%
   select(Plate, Well, Line) %>%
-  semi_join(pca_raw %>% mutate(Size = as.numeric(Size)), .)
+  semi_join(pca_effect_raw %>% mutate(Size = as.numeric(Size)), .)
 
-pca_raw_filtered %>%
+pca_effect_raw_filtered %>%
   group_by(Line) %>%
   dplyr::count(Replicate) %>%
   mutate(status = "filtered") %>% 
-  rbind(pca_raw %>%
+  rbind(pca_effect_raw %>%
   group_by(Line) %>%
   dplyr::count(Replicate) %>%
   mutate(status = "unfiltered")) %>% 
@@ -382,18 +514,18 @@ pca_raw_filtered %>%
 ```
  
 ```{r, eval = FALSE}
-pca_raw_filtered %>% 
+pca_effect_raw_filtered %>% 
   dplyr::count(Drug, Line, Replicate) %>%
   dplyr::count(Drug) %>%
   dplyr::count(n)
 
-pca_raw %>% 
+pca_effect_raw %>% 
   dplyr::count(Drug, Line, Replicate) %>%
   dplyr::count(Drug) %>%
   dplyr::count(n)
 ```
  
 ```{r, eval = FALSE}
-saveRDS(pca_raw_filtered, here("vignettes/06_profiling_inspection/hdf5_pca_filtered.Rds"))
+saveRDS(pca_effect_raw_filtered, here("vignettes/06_profiling_inspection/hdf5_pca_filtered.Rds"))
 ```
 
