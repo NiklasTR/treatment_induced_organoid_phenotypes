@@ -11,8 +11,8 @@ NUMFIELDS = 4
 # CUSTOM DIRECTORIES
 # These directories point to the two base directories needed for this module,
 # the directory for the analysis output and the directory for the data input
-BASEDIR = "/Users/jansauer/Thesis/Projects/PROMISE/FeatureAnalysis_handover"
-PROMISEDIR = "/local-collab-ag-fischer/PROMISE/data-10x-4t-c-16z"
+BASEDIR = "/rsession-store/rindtorf/promise/FeatureAnalysis"
+PROMISEDIR = "/rsession-store/rindtorf/promise/PROMISE/data-10x-4t-c-16z"
 
 # PROMISE
 # These directories describe the PROMISE folder structure.
