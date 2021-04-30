@@ -19,7 +19,8 @@ print("preparing data")
 # I am aggregating intensity values using the mean to have one gene intensity per chip
 expression <- promise_expr %>% 
   group_by(line, symbol, chip_name, batch, id) %>% 
-  summarise(expr = mean(expr))
+  summarise(expr = mean(expr)) %>% 
+  filter(!(line %in% c("D015T01", "D052T01", "D021T01")))
 
 # I wrangle the data to fit into the MOFA input format
 # TODO mean of means does not equal the overall mean across plates
@@ -63,7 +64,7 @@ morph_groups <- morph_metadata %>%
   arrange(line) %>% 
   filter(line %in% lines) %>%
   cbind(replicate = rep(c(1,2), times = length(lines))) %>%
-  mutate(img_group = factor(screen_id) %>% as.numeric())
+  mutate(img_group = str_split(screen_id, pattern = "-") %>% unlist() %>% tail(1) %>% as.numeric()) # used to be factor(screen_id) %>% as.numeric()
   
 # preparing data
 morph <- morphology %>% 
@@ -96,6 +97,8 @@ all_groups %>%
   dplyr::select(id, img_group, expr_group) %>%
   as.data.frame() %>% column_to_rownames("id") %>% 
   pheatmap::pheatmap()
+
+all_groups %>% write_rds(here("data/processed/PhenotypeSpectrum/groups.Rds"))
 
 print("preparing final df")
 # Creating a df with the following variables sample   group          feature   view value
