@@ -8,6 +8,7 @@ data
 notebooks/*.Rdata
 notebooks/*.pdf
 notebooks/*.png
+*.html
 *.rdb
 *.rdx
 *_cache
