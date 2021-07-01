@@ -1,13 +1,14 @@
 ### manually added
 .DS_Store
 **/.DS_Store
+
 .Rproj*
 data/processed/
 .Rhistory
 data
-notebooks/*.Rdata
-notebooks/*.pdf
-notebooks/*.png
+notebooks/**/*.Rdata
+notebooks/**/*.pdf
+notebooks/**/*.png
 *.html
 *.rdb
 *.rdx
