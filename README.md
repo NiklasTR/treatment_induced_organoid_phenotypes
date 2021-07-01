@@ -3,12 +3,18 @@ promise
 
 Human Cancer Organoid Profiling Project at the German Cancer Research Center
 
+
+Note for contributors
+------------
+the most up-to-date branch is "niklas". Please merge your contributions to this branch.
+I plan to diff niklas and master in 08/21
+
 To-Do
 ------------
-File transfer: 
-* ctg data 
+File transfer:
+* ctg data
 * gene expression
-* 
+
 
 
 Analysis Pipeline
@@ -16,7 +22,7 @@ Analysis Pipeline
 
 
 raw.hdf -- FeatureAnalysis -> pca.hdf & raw.hdf
-pca.hdf -- UMAP -> 
+pca.hdf -- UMAP ->
 
 
 Project Organization
