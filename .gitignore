@@ -7,7 +7,7 @@ data/processed/
 .Rhistory
 data
 notebooks/**/*.Rdata
-notebooks/**/*.pdf
+notebooks/**/**/**/**/*.pdf
 notebooks/**/*.png
 *.html
 *.rdb
