@@ -60,3 +60,4 @@ docs/
 # translation temp files
 po/*~
 *.rdx
+notebooks/SCOPEAnalysis/inst/.DS_Store
