@@ -1,6 +1,6 @@
 ### manually added
 .DS_Store
-*.DS_Store
+**/.DS_Store
 .Rproj*
 data/processed/
 .Rhistory
