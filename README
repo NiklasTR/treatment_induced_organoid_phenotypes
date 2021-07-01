@@ -1,6 +1,0 @@
-# Move large files to .gitignore
-find ./* -size +100M | cat >> .gitignore
-find ./* -size +100M | cat >> transfer_file
-
-# Sync features from current PROMISE directory
-rsync -rav --include="features/*/*_processedFeatures.h5" --exclude="features/*/*" rindtorf@b110-sc2cn01:/home/rindtorf/data/valentini/promise/PROMISE/data-10x-4t-c-16z/features /rsession-store/rindtorf/
