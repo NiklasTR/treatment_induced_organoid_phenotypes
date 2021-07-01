@@ -1,0 +1,1012 @@
+---
+title: "MOFA exploration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(MOFA2)
+library(here)
+library(MOFAdata)
+library(ReactomePA)
+library(biomaRt)
+```
+
+
+```{r}
+model <- load_model(here("data/processed/PhenotypeSpectrum/mofa_model_active_drugs_unscaled.hdf5"))
+load(here("notebooks/SCOPEAnalysis/data/promise_expr.rda")) 
+feature_anno <- read_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"))
+
+PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
+
+umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
+umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+
+# fomrmatting model output
+weights <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_morphology <- model@expectations$W$morphology %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_expression <- model@expectations$W$expression %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+intercepts_morphology = model@intercepts$morphology$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+intercepts_expression = model@intercepts$morphology$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+
+```
+
+```{r}
+plot_data_overview(model)
+```
+
+```{r}
+head(model@cache$variance_explained$r2_total[[1]])
+```
+
+
+Breakdown by factors 
+
+```{r}
+model@cache$variance_explained$r2_per_factor$single_group
+```
+
+
+```{r}
+predicted_expr <- predict(model, view='expression') 
+```
+
+
+```{r}
+gg_ve <- plot_variance_explained(model, x="view", y="factor")
+```
+
+```{r}
+ph_cor <- weights %>% 
+  as.data.frame() %>% 
+  column_to_rownames("id") %>% 
+  cor() %>% 
+  pheatmap::pheatmap()
+```
+
+```{r}
+weights %>% 
+  as.data.frame() %>% 
+  column_to_rownames("id") %>% 
+  cor() %>% as.vector() %>% 
+  .[. != 1] %>% 
+  summary()
+```
+
+
+```{r}
+plot_factor(model, 
+  factor = 1:5
+)
+```
+
+
+```{r}
+# defining a weight matrix with only single concentration treatment
+weights_single_conc <- weights %>% 
+  mutate(line = substr(id, 1, 7),
+         img_group = substr(id, nchar(id), nchar(id)),
+         expr_group = substr(id, nchar(id)-2, nchar(id)-2),
+         drug = substr(id, 9, nchar(id)-4),
+         conc_nan = substr(drug, nchar(drug)-2, nchar(drug))) %>% 
+  filter(conc_nan == "NaN") %>% 
+  mutate(drug = substr(drug, 1, nchar(drug)-4))
+```
+
+
+```{r}
+umap_tidy_factor <- weights_single_conc %>% nest(-line, -drug) %>% mutate(order = purrr::map(data, ~ .x %>% mutate(img_group = as.numeric(img_group)) %>% arrange((img_group)) %>% cbind(replicate = c("1","2")))) %>% unnest(order) %>% dplyr::select(-data) %>%
+  dplyr::select(-conc_nan) %>%
+  left_join(umap_tidy)
+
+set.seed(124)
+umap_sampled_factor <- umap_tidy_factor %>% sample_frac(0.01)
+```
+
+
+# QC for technical artefacts
+
+```{r, eval = FALSE}
+aov_pval <- weights %>% 
+  mutate(line = substr(id, 1, 7),
+         img_group = substr(id, nchar(id), nchar(id)),
+         expr_group = substr(id, nchar(id)-2, nchar(id)-2)) %>%
+  #separate("id", c("line", "drug", "concentration", "img_group", "expr_group"), sep = "_") %>%
+  #dplyr::select(-drug, -concentration) %>%
+  pivot_longer(contains('factor'), values_to = 'value', names_to = "factor") %>%
+  nest(-factor) %>%
+  mutate(aov = purrr::map(data, ~ aov(value ~ img_group + expr_group, data = .x) %>% broom::tidy())) %>%
+  unnest(aov) %>%
+  filter(term != 'Residuals') %>% 
+  arrange((p.value)) %>%
+  mutate(fdr = p.adjust(p.value, method = "bonferroni"))
+
+# aov_pval %>% 
+#   filter(fdr < 0.2) %>% arrange(factor)
+
+ggbatch <- weights %>% 
+  #separate("id", c("line", "drug", "concentration", "img_group", "expr_group"), sep = "_") %>%
+  mutate(line = substr(id, 1, 7),
+         img_group = substr(id, nchar(id), nchar(id)),
+         expr_group = substr(id, nchar(id)-2, nchar(id)-2)) %>%
+  ggplot(aes(img_group, factor1)) + 
+  geom_violin() + 
+  theme_cowplot() + 
+  labs(x = "Imaging Batch",
+       y = "Factor 1",
+       title = "Significant Association of Imaging Batch with Factor 1")
+
+ggbatch
+```
+
+# Factor Exploration
+
+```{r}
+umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+```
+I am also displaying all factors except factor 2, which is strongly linked to the cell permeability dye. 
+
+```{r}
+gg_fm2 <- umap_sampled_factor %>% 
+  filter(partition %in% c(1,2)) %>%
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  filter(number != "factor2") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "factor value") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_fm2 + ggsave(here("factor_overview.pdf"), height = 6 , width = 6)
+```
+
+## GSEA
+
+```{r, eval = FALSE}
+# converting gene names
+set.seed(1343)
+
+model@expectations$W$expression
+
+feature_metadata_conversion <- model@features_metadata %>% 
+  mutate(gene = substr(feature, 1, nchar(feature)-11))
+
+mart <- biomaRt::useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+dict= biomaRt::getBM(attributes = c("ensembl_gene_id", "hgnc_symbol"), filters = "hgnc_symbol", values = feature_metadata_conversion$gene, bmHeader = T, mart = mart)
+colnames(dict)=c("ensembl_gene_id","hgnc_symbol")
+
+# TODO In an unorthodox way, I arbitrarily sample a ENSG id linking to each hgnc symbol, by taking the first ENSG in cases where there are many
+dict_sampled <- dict %>% 
+  nest(-hgnc_symbol) %>% 
+  mutate(short = purrr::map(data, ~ .x %>% head(1))) %>% 
+  dplyr::select(-data) %>% 
+  unnest() 
+
+df <- dict_sampled %>% 
+  mutate(id = paste0(hgnc_symbol, "_expression")) %>%
+   semi_join(loadings_expression)
+
+# TODO check dropping of genes in merge = the reason I introduced a semi_join above
+model_ensg <- model
+index_model <- rownames(model_ensg@expectations$W$expression) %in% df$id
+
+tmp = model_ensg@expectations$W$expression[index_model,]
+rownames(tmp) = df$ensembl_gene_id
+model_ensg@expectations$W$expression <- tmp
+
+
+model_ensg
+```
+
+
+```{r, eval = FALSE}
+gene_sets = msigdbr::msigdbr(#category = "C2",
+                                species = "Homo sapiens")
+
+gene_sets_matrix <- gene_sets %>% 
+  dplyr::select(gs_name, gene_symbol) %>% 
+  mutate(present = 1,
+         gene_symbol = paste0(gene_symbol, "_expression")) %>% 
+  pivot_wider(names_from = gene_symbol,
+              values_from = present,
+              values_fill = 0) %>%
+  as.data.frame() %>% column_to_rownames("gs_name") %>% as.matrix()
+
+enrichment.parametric_all <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "all",
+  statistical.test = "parametric"
+)
+
+enrichment.parametric_negative <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "negative",
+  statistical.test = "parametric"
+)
+
+enrichment.parametric_positive <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "positive",
+  statistical.test = "parametric"
+)
+
+enrichment.cor.adj.parametric_all <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "all",
+  statistical.test = "cor.adj.parametric"
+)
+
+enrichment.cor.adj.parametric_negative <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "negative",
+  statistical.test = "cor.adj.parametric"
+)
+
+enrichment.cor.adj.parametric_positive <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "positive",
+  statistical.test = "cor.adj.parametric"
+)
+
+enrichment.permutation_all <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "all",
+  statistical.test = "permutation"
+)
+
+enrichment.permutation_negative <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "negative",
+  statistical.test = "permutation"
+)
+
+enrichment.permutation_positive <- MOFA2::run_enrichment(model,
+  view = "expression", factors = 1:5,
+  feature.sets = gene_sets_matrix,
+  sign = "positive",
+  statistical.test = "permutation"
+)
+
+enrichment.parametric_all %>% saveRDS(here("data/processed/PhenotypeSpectrum/mofa_gsea_parametric_all.Rds"))
+saveRDS(enrichment.parametric_negative, here("data/processed/PhenotypeSpectrum/mofa_gsea_parametric_down.Rds"))
+saveRDS(enrichment.parametric_positive, here("data/processed/PhenotypeSpectrum/mofa_gsea_parametric_up.Rds"))
+
+enrichment.cor.adj.parametric_all %>% saveRDS(here("data/processed/PhenotypeSpectrum/mofa_gsea_adjparametric_all.Rds"))
+saveRDS(enrichment.cor.adj.parametric_negative, here("data/processed/PhenotypeSpectrum/mofa_gsea_adjparametric_down.Rds"))
+saveRDS(enrichment.cor.adj.parametric_positive, here("data/processed/PhenotypeSpectrum/mofa_gsea_adjparametric_up.Rds"))
+
+enrichment.permutation_all %>% saveRDS(here("data/processed/PhenotypeSpectrum/mofa_gsea_permutation_all.Rds"))
+saveRDS(enrichment.permutation_negative, here("data/processed/PhenotypeSpectrum/mofa_gsea_permutation_down.Rds"))
+saveRDS(enrichment.permutation_positive, here("data/processed/PhenotypeSpectrum/mofa_gsea_permutation_up.Rds"))
+```
+
+Loading GSEA results
+
+```{r}
+enrichment.parametric_negative <- readRDS(here("data/processed/PhenotypeSpectrum/mofa_gsea_down.Rds"))
+enrichment.parametric_positive <- readRDS(here("data/processed/PhenotypeSpectrum/mofa_gsea_up.Rds"))
+```
+
+Check p-value histograms
+
+```{r}
+enrichment.parametric_negative$pval[,3] %>% hist()
+```
+
+#TODO association of p value with % representation in the term of interest, because the p-val histogram looks murky
+
+```{r}
+enrichment.parametric_negative$pval.adj[,3] %>% as.data.frame() %>% rownames_to_column() %>% magrittr::set_colnames(c("signature", "p.adj")) %>% as_tibble() %>%
+  arrange(p.adj)
+```
+
+
+## Factor 1
+
+```{r}
+gg_f1 <- umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  filter(number == "factor1") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "factor") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+```
+
+
+```{r}
+plot_top_weights(model,
+  view = "morphology",
+  factor = 1,
+  nfeatures = 10
+)
+```
+
+
+```{r}
+library(ReactomePA)
+
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor1))
+
+ranks <- setNames(df$factor1, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human'
+  #nPerm = 1e5,
+  #minGSSize = 100,
+  #maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+```
+
+```{r}
+gg_factor_size <- umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "factor", values_to = "value") %>%
+  ggplot(aes(size_log, value, color = factor)) + 
+  geom_smooth() + 
+  cowplot::theme_cowplot()  +
+  scale_color_brewer(type = "qual", palette = 2) +
+  # facet_wrap(~ factor) + 
+  labs(y = "factor value",
+       x = "ln(size)")
+
+gg_factor_size + ggsave(here("reports/figures/factor_value.pdf"), width = 4, height = 4)
+```
+
+
+
+Which drugs are associated with factor1?
+
+# why D054 missing?
+
+```{r}
+df = weights_single_conc %>%
+  filter(line != "D054T01") %>%
+  #dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") # %>%
+  #filter(number == "factor1") %>% 
+  #filter(line == "D019T01")
+
+df %>% ggplot(aes(value)) +
+  facet_wrap( ~ number) +
+  geom_density() +
+    geom_vline(data = df %>%
+    filter(drug == "DMSO"), color = "blue", aes(xintercept = value)) + 
+    # geom_vline(data = df %>%
+    # filter(drug == "Flavopiridol (Alvocidib)"), color = "red", aes(xintercept = value)) + 
+    
+  cowplot::theme_cowplot()
+```
+
+
+
+```{r}
+weights_single_conc %>% 
+  filter(drug == "DMSO") %>% 
+  dplyr::select(contains("factor"), id, line) %>% 
+  #filter(line != "D021T01") %>%
+  #filter(line != "D022T01") %>%
+  #dplyr::select( -factor2) %>%
+  dplyr::select( -line) %>%
+  as.data.frame() %>%
+  column_to_rownames("id") %>%
+  pheatmap::pheatmap()
+```
+
+reproducibilty of factors for treatments
+
+```{r}
+umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  filter(number == "factor1") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+```
+
+```{r}
+cowplot::plot_grid(gg_f1, gg_factor_size, labels = "AUTO", ncol = 2)
+# requires a cleanup with expected values for size, not samples
+```
+
+
+
+## Factor 2
+
+
+```{r}
+umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  filter(number == "factor2") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+```
+
+
+
+```{r}
+plot_top_weights(model,
+  view = "expression",
+  factor = 4,
+  nfeatures = 30,
+  scale = FALSE
+)
+```
+
+
+```{r}
+matrix_morphology <- loadings_morphology %>% 
+  separate(id, c("name", "exp", "morph"), sep = "_") %>%
+  dplyr::select(-exp, -morph) %>% 
+  #mutate_at(vars(contains("factor")), funs(scale)) %>%
+  left_join(feature_anno)
+
+map_morphology <- matrix_morphology %>%
+  pivot_longer(cols = contains("factor"), names_to = "factor", values_to = "value") %>% 
+  mutate(abs_value = abs(value)) %>%
+  arrange(desc(abs_value)) %>%
+  nest(-factor) %>%
+  mutate(head = purrr::map(data, ~ .x %>% head(5))) %>% 
+  unnest(head) %>%
+  dplyr::select(name) %>% 
+  semi_join(matrix_morphology, .) 
+
+map_morphology %>% 
+  dplyr::select(contains("factor"), name) %>%
+  as.data.frame() %>% 
+  column_to_rownames("name") %>% 
+  pheatmap::pheatmap(
+    annotation_row = map_morphology %>% 
+  dplyr::select(name, class, channel) %>% 
+  as.data.frame() %>% 
+  column_to_rownames("name")
+  )
+  
+
+```
+
+
+```{r}
+umap_sampled_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "factor", values_to = "value") %>% 
+  sample_n(1000) %>%
+  ggplot(aes(factor(screen_id), value, color = factor)) + 
+  geom_boxplot()
+```
+
+
+```{r}
+library(ReactomePA)
+
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor2))
+
+ranks <- setNames(df$factor2, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human'
+  #nPerm = 1e5,
+  #minGSSize = 100,
+  #maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+```
+
+
+
+## Factor 3
+
+```{r}
+set.seed(123)
+
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor3))
+
+ranks <- setNames(df$factor3, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_f3 <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 5,
+  maxGSSize = 5000
+)
+
+rna_f3 <- emapplot(gse_reactome_f3, color = "NES")
+```
+
+```{r}
+plot_top_weights(model,
+  view = "morphology",
+  factor = 3,
+  nfeatures = 10
+)
+```
+
+
+
+```{r}
+plot_enrichment(enrichment.parametric_negative, 
+  factor =3, 
+  max.pathways = 15
+)
+
+plot_enrichment(enrichment.parametric_positive, 
+  factor =3, 
+  max.pathways = 15
+)
+```
+
+```{r}
+plot_enrichment_detailed(enrichment.parametric_negative, 
+  factor = 3, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+
+plot_enrichment_detailed(enrichment.parametric_positive, 
+  factor = 3, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+```
+
+
+## Factor 4
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor4))
+
+ranks <- setNames(df$factor4, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_f4 <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 5,
+  maxGSSize = 5000
+)
+
+rna_f4 <- emapplot(gse_reactome_f4, color = "NES")
+```
+
+
+
+```{r}
+plot_enrichment(enrichment.parametric_negative, 
+  factor =4, 
+  max.pathways = 15
+)
+
+plot_enrichment(enrichment.parametric_positive, 
+  factor =4, 
+  max.pathways = 15
+)
+```
+
+```{r}
+plot_enrichment_detailed(enrichment.parametric_negative, 
+  factor = 4, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+
+plot_enrichment_detailed(enrichment.parametric_positive, 
+  factor = 4, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+```
+
+
+## Factor 5
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor5))
+
+ranks <- setNames(df$factor5, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_f5 <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 5,
+  maxGSSize = 5000
+)
+
+rna_f5 <- emapplot(gse_reactome_f5, color = "NES")
+```
+
+
+
+```{r}
+plot_enrichment(enrichment.parametric_negative, 
+  factor =5, 
+  max.pathways = 15
+)
+
+plot_enrichment(enrichment.parametric_positive, 
+  factor =5, 
+  max.pathways = 15
+)
+```
+
+```{r}
+plot_enrichment_detailed(enrichment.parametric_negative, 
+  factor = 5, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+
+plot_enrichment_detailed(enrichment.parametric_positive, 
+  factor = 5, 
+  max.genes = 10, 
+  max.pathways = 3
+)
+```
+
+
+## Plot
+
+
+
+
+
+```{r}
+cowplot::plot_grid(cowplot::plot_grid(gg_fm2, gg_ve, ncol =2))
+gg_ve + ggsave(here("variance_explained_mofa.pdf"), height = 4, width =2)
+
+## ,cowplot::plot_grid(rna_f3, rna_f4, rna_f5, ncol =3)
+```
+
+
+
+
+# Supplement
+
+Here I collect pieces of code that did not make it into the final analysis but can be run in theory. In order to access these peaces of code, you have to open the *.RMD* file. 
+
+```{r}
+knitr::knit_exit()
+```
+
+
+
+
+
+```{r}
+weights_single_conc_umap <- weights_single_conc %>% 
+  uwot::umap()
+
+df <- cbind(weights_single_conc_umap, weights_single_conc) %>% janitor::clean_names()
+
+df %>% 
+  ggplot(aes(x1, x2, color = line)) + 
+  geom_point()
+```
+
+
+which treatments move organoids for particular treatments?
+
+```{r}
+
+```
+
+
+
+
+## Predicting factors from morphological data
+
+## Other factors
+
+No enriched term for factor 4
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor4))
+
+ranks <- setNames(df$factor4, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 100,
+  maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+
+gse_reactome %>% as.data.frame()
+```
+
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor5))
+
+ranks <- setNames(df$factor5, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 100,
+  maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+
+gse_reactome %>% as.data.frame()
+```
+
+No enrichment for factor 6
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor7))
+
+ranks <- setNames(df$factor7, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 100,
+  maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+```
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor8))
+
+ranks <- setNames(df$factor8, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 100,
+  maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+```
+
+F9 - downregulation of MAPK signaling
+F11 - downregulation of RHOkinase signaling
+F13 - upregulation TP53 regulation
+F14 - no results
+F15 - oxidative damage induced senescence and MHC1 antigen representation
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  left_join(promise_expr %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor15))
+
+ranks <- setNames(df$factor15, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  minGSSize = 100,
+  maxGSSize = 500
+)
+
+emapplot(gse_reactome, color = "NES")
+```
+
+## Problem while scaling of organoid area?
+
+
+```{r}
+plot_top_weights(model,
+  view = "morphology",
+  factor = 6,
+  nfeatures = 10
+)
+```
+
+
+
+
+```{r}
+plot_data_heatmap(model,
+  view = "expression",         # view of interest
+  factor = 6,             # factor of interest
+  features = 20,          # number of features to plot (they are selected by weight)
+  
+  # extra arguments that are passed to the `pheatmap` function
+  cluster_rows = TRUE, cluster_cols = TRUE,
+  show_rownames = TRUE, show_colnames = TRUE
+)
+```
+
+
+```{r}
+df <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble()
+```
+
+```{r}
+df %>% arrange(Factor1)
+```
+
+```{r}
+weights <- readRDS(here("data/processed/PhenotypeSpectrum/mofa_model_weights.rds"))
+loadings_morphology <- readRDS(here("data/processed/PhenotypeSpectrum/mofa_model_loadings_morphology.rds"))
+loadings_expression <- readRDS(here("data/processed/PhenotypeSpectrum/mofa_model_loadings_expression.rds"))
+
+umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
+
+groups <- read_rds(here("data/processed/PhenotypeSpectrum/groups.Rds")) %>% 
+  dplyr::select(line, replicate, img_group)
+```
+
+## Program correlation
+
+
+```{r}
+umap_tidy_factor <- umap_tidy %>% 
+  filter(drug == "DMSO" & concentration == "nan") %>%
+  left_join(weights %>% separate(id, c("line", "drug", "concentration", "img_group", "exp_group"), sep = "_") %>% 
+              janitor::clean_names() %>% 
+              mutate(concentration = ifelse(concentration == "NaN", "nan", concentration),
+                     img_group = as.numeric(img_group)) %>% 
+              left_join(groups) %>% 
+              mutate(replicate = as.character(replicate))
+            ) %>% 
+  drop_na() # TODO map back to DMSO treated wells with concentration anno
+```
+
+```{r}
+umap_tidy_factor %>% 
+  sample_frac(0.1) %>%
+  ggplot(aes(v1, v2, color = factor6)) +
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom")
+```
+
+
+
+```{r}
+weight_map <- weights %>% 
+  uwot::umap()
+
+solid <- c('D004', 'D007', 'D010', 'D019', 'D020',
+'D022', 'D046', 'D054', 'D055')
+cystic <- c('D013', 'D018', 'D021', 'D027', 'D030')
+
+weight_map %>% as_tibble() %>% cbind(weights) %>% janitor::clean_names() %>%
+  mutate(line = substr(id, 1, 4),
+         cystic = ifelse(line %in% cystic, 1, 0)) %>%
+  #filter(line %in% cystic) %>%
+  ggplot(aes(v1, v2, color = line, size = cystic)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  labs(x = "UMAP1 factors",
+       y = "UMAP2 factors")
+```
+
+```{r}
+weights %>% 
+  janitor::clean_names() %>%
+  mutate(line = substr(id, 1, 4),
+         cystic = ifelse(line %in% cystic, 1, 0)) %>%
+  #filter(line %in% cystic) %>%
+  ggplot(aes(factor1, factor5, color = line, size = cystic)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  labs(x = "UMAP1 factors",
+       y = "UMAP2 factors")
+```
