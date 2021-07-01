@@ -1,20 +1,24 @@
 ### manually added
+# mac
 .DS_Store
 **/.DS_Store
 
+# R
 .Rproj*
-data/processed/
 .Rhistory
+
+# data
+data/processed/
 data
-.Rdata
-.pdf
-.png
+
+# notebooks
 *.html
 *.rdb
 *.rdx
 *_cache
+*_files
 *unnamed-chunk*
-unnamed-chunk*
+
 
 #### template from https://github.com/github/gitignore/blob/master/R.gitignore
 # History files
