@@ -2,15 +2,21 @@
 # mac
 .DS_Store
 **/.DS_Store
+core.48991
 
 # R
 .Rproj*
-.Rproj
+*.Rproj
 .Rhistory
+.env
+.log
+x86_64-pc-linux-gnu-library
+.rstudio
 
 # data
 data/processed/
 data
+reports/large_figures/
 
 # notebooks
 *.rdb
@@ -18,6 +24,9 @@ data
 *_cache
 *_files
 *unnamed-chunk*
+
+# industry projects
+references/layouts/qgel
 
 
 #### template from https://github.com/github/gitignore/blob/master/R.gitignore
