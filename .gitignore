@@ -12,7 +12,6 @@ data/processed/
 data
 
 # notebooks
-*.html
 *.rdb
 *.rdx
 *_cache
@@ -70,7 +69,4 @@ po/*~
 
 ## others
 notebooks/SCOPEAnalysis/inst/.DS_Store
-notebooks/SCOPEAnalysis/inst/.DS_Store
-src/data/PROMISE/R/.Rhistory
-src/data/PROMISE/R/.Rhistory
 src/data/PROMISE/R/.Rhistory
