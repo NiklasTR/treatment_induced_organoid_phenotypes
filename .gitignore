@@ -5,6 +5,7 @@
 
 # R
 .Rproj*
+.Rproj
 .Rhistory
 
 # data
