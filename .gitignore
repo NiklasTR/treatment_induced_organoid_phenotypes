@@ -6,12 +6,12 @@ data/processed/
 .Rhistory
 data
 notebooks/*.Rdata
+notebooks/*.pdf
 *.rdb
 *.rdx
-*unnamed-chunk*
 *_cache
+*unnamed-chunk*
 unnamed-chunk*
-.Rhistory
 
 #### template from https://github.com/github/gitignore/blob/master/R.gitignore
 # History files
@@ -60,4 +60,7 @@ docs/
 # translation temp files
 po/*~
 *.rdx
+
+## others
+notebooks/SCOPEAnalysis/inst/.DS_Store
 notebooks/SCOPEAnalysis/inst/.DS_Store
