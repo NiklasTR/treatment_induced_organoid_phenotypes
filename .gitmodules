@@ -1,0 +1,6 @@
+[submodule "phenotypespectrum"]
+	path = phenotypespectrum
+	url = https://github.com/NiklasTR/phenotypespectrum.git
+[submodule "organoidexplorer"]
+	path = organoidexplorer
+	url = https://github.com/NiklasTR/organoidexplorer.git
