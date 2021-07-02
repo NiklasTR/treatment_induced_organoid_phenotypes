@@ -28,6 +28,9 @@ reports/large_figures/
 # industry projects
 references/layouts/qgel
 
+# temp files
+.#
+
 
 #### template from https://github.com/github/gitignore/blob/master/R.gitignore
 # History files

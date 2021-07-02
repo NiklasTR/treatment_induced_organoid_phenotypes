@@ -4,6 +4,17 @@ promise
 Human Cancer Organoid Profiling Project at the German Cancer Research Center
 
 
+Hackathon agenda: 
+* manuscript
+    * last version
+    * comments
+    * upcoming version
+* overview github repo
+    * separate existence of SCOPE package with rest of repository (especially relevant for package data within SCOPE)
+    * ground truth file for organoid classification
+    * RNA expression data harmonization
+
+
 Note for contributors
 ------------
 the most up-to-date branch is "niklas". Please merge your contributions to this branch.
@@ -13,10 +24,13 @@ To-Do
 ------------
 File transfer:
 * ctg data
-* gene expression
 
 
-
+Gene expression
+* data were generated via the DKFZ GPCF
+* raw data is stored in .CEL format under data/raw/expression, data relating to the latest manuscript is separated under microarray_manuscript
+* a normalized file, also deposited at GEO, is generated
+    
 Analysis Pipeline
 ------------
 
