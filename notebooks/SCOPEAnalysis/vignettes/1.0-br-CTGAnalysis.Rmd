@@ -6,8 +6,10 @@ output:
   BiocStyle::pdf_document
 vignette: >
   %\VignetteIndexEntry{Drug-Induced Phenotypes}
-  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Dependencies
@@ -404,6 +406,9 @@ mut_profile <- mutations %>% dplyr::select(line, SYMBOL) %>%
   mutate(mut = as.factor(1))  %>% distinct() %>% 
   spread(SYMBOL, mut) %>% mutate_all(funs(ifelse(is.na(.), 0, .))) %>%
   rbind(c('D018T01', rep(0, 19)))
+
+## fix tp53 in line 20
+mut_profile <- mut_profile %>% mutate(TP53 = ifelse(line == 'D020T01', '0', TP53))
 ```
 
 ## Pariwise interactions between drug response and mutations
@@ -643,13 +648,12 @@ Now we pair these drug responses with genes mutated at least 3 times and check f
 drug_morph_interaction <- mut_profile %>% 
   gather(mutation, status, -line) %>% 
   group_by(mutation) %>% filter(sum(as.integer(status)) >=3) %>%
-  nest(-mutation) %>%
-  mutate(tres = map(data, ~{
-    .x %>% inner_join(aucroc) %>% nest(-drug) %>%
-      mutate(res = map(data, 
-                       ~ broom::tidy(t.test(auroc ~ status, data = .x)))) %>% 
-      unnest(res)
-  })) %>% unnest(tres, names_repair = "universal")  # new argument in later versions of the fct.
+  group_modify(~{
+    .x %>% inner_join(aucroc) %>% 
+      group_by(drug) %>%
+      group_modify(~ broom::tidy(t.test(auroc ~ status, data = .x))) %>% 
+      ungroup()
+  }) %>% ungroup()
 
 drug_morph_interaction <- drug_morph_interaction %>% 
   arrange(p.value) %>% mutate(FDR = p.adjust(p.value, method='BH'))
