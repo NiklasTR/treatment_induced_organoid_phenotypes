@@ -18,6 +18,15 @@ Analysis Pipeline
 raw.hdf -- FeatureAnalysis -> pca.hdf & raw.hdf
 pca.hdf -- UMAP -> 
 
+Vignettes
+------------
+
+Bene (all scripts are in notebooks/SCOPAnalysis/vignettes/):
+
+| Script                  | Figures           | Input            |
+| ----------------------- |:-----------------:| ----------------:|
+| 1.0-br-CTGAnalysis      | Supp. Fig. 5      | SCOPE R package  |
+
 
 Project Organization
 ------------
