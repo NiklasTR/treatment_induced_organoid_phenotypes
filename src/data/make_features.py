@@ -7,3 +7,5 @@ os.system('Rscript src/models/PhenotypeSpectrum/R/LDC_organoids.R data/interim/F
 
 # exporting tidied and small subsets of the data for interactive handling.
 os.system('Rscript src/features/annotate_features.R')
+
+os.system('Rscript src/data/make_expression.R')
