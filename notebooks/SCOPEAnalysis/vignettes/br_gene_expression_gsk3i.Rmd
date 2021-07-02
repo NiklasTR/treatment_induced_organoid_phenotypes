@@ -48,7 +48,7 @@ We load the gene expression data from the raw Affymetrix CEL files and normalize
 
 ```{r}
 ## list of cel files
-cel_files <- list.files(here('../../data/gene_expression/gsk3_inhibitor/cel_files/'),
+cel_files <- list.files(here('data/gene_expression/gsk3_inhibitor/cel_files/'),
                         full.names = T, pattern = '.CEL')
 
 ## parse and normalize
@@ -68,7 +68,7 @@ sample_info <- tibble(names = colnames(expr_mat)) %>%
           regex = '^(D.+?)-(.+?)-([1,2])_.+?', remove = F)
 
 ## create an annotation for the probe IDs
-load(here('../../data/gene_expression/promise_expr.rda'))
+load(here('data/gene_expression/promise_expr.rda'))
 probe_anno <- promise_expr %>% distinct(probe, symbol, entrez)
 ## confirm that chip model was the same
 table(probe_anno$probe %in% rownames(expr_mat))
@@ -162,6 +162,13 @@ expr_long %>% filter(symbol %in% c('AXIN2')) %>%
   stat_summary(geom = 'bar', fun = 'mean') +
   geom_point() +  
   facet_wrap(~line + symbol + probe, scales =)
+
+## various stemness markers
+expr_long %>% filter(symbol %in% c('CD44', 'LGR5', 'ASCL2', 'EPHB2')) %>%
+  ggplot(aes(treatment, expr)) + 
+  stat_summary(geom = 'bar', fun = 'mean') +
+  geom_point(aes(color = line)) +  
+  facet_wrap(~ symbol + probe, scales = 'free_y')
 ```
 
 This looks good. There is no difference between AXIN2 levels indicating that the GSK3 inhibition does not affect Wnt signaling in these lines. This is likely due to APC mutations. How many DGE do we get for each comparison?
@@ -235,7 +242,7 @@ We perform GSEA for the humanized intestinal crypt signatures published in Merlo
 
 ```{r}
 ## parse signatures and make list
-intestinal_sig <- readxl::read_excel(here('../../data/gene_expression/merloz-suarez_sigantures.xls'), 
+intestinal_sig <- readxl::read_excel(here('data/gene_expression/merloz-suarez_sigantures.xls'), 
                                      sheet = 1, skip = 4) %>% .[,1:4] %>%
   gather(signature, symbol) %>% drop_na() %>% 
   mutate(symbol = gsub('\\*', '', symbol))
@@ -275,6 +282,22 @@ gseaplot2(
   title = paste0(gse_sig$ID[1], 
                 ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
                 '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
+)
+
+## late ta
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[2],
+  title = paste0(gse_sig$ID[2], 
+                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
+)
+
+## ephb2-isc
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[3],
+  title = paste0(gse_sig$ID[3], 
+                ' (p = ', round(gse_sig_tbl$pvalue[3], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[3], 2), ')')
 )
 ```
 

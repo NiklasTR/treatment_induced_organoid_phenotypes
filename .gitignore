@@ -94,6 +94,10 @@ target/
 *.swp
 *.swo
 
+# plots
+./plots/
+plots/
+
 # Mypy cache
 .mypy_cache/
 .Rproj.user
