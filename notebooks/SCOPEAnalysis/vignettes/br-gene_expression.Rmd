@@ -14,11 +14,8 @@ knitr::opts_chunk$set(echo = T, message = F, warning = F, results = 'hide')
 # Dependencies
 
 ```{r}
-library(limma)
-library(clusterProfiler)
-library(ReactomePA)
-library(enrichplot)
-library(org.Hs.eg.db)
+library(SummarizedExperiment)
+library(glmnet)
 library(pheatmap)
 library(reshape2)
 library(tidyverse)
@@ -33,6 +30,7 @@ filter <- dplyr::filter
 select <- dplyr::select
 rename <- dplyr::rename
 slice <- dplyr::slice
+count <- dplyr::count
 ```
 
 Set parameters for plotting.
@@ -46,15 +44,23 @@ theme_set(theme_cowplot())
 We load the gene expression data from an Rdata object from file.
 
 ```{r}
-load(here('../../data/gene_expression/promise_expr.rda'))
+load(here('data/gene_expression/promise_expr.rda'))
 
 ## annotate phenotype group
 solid <- c('D004', 'D007', 'D010', 'D019', 'D020', 
            'D022', 'D046', 'D054', 'D055')
 cystic <- c('D013', 'D018', 'D021', 'D027', 'D030')
 
+## long data frame
+promise_long <- assays(promise_expr)$expr %>% 
+  as_tibble(rownames = 'probe') %>% 
+  pivot_longer(values_to = 'expr', names_to = 'id', -probe) %>%
+  left_join(as_tibble(rowData(promise_expr), rownames = 'probe')) %>%
+  inner_join(as_tibble(colData(promise_expr), rownames = 'id')) %>%
+  select(-chip_name)
+
 ## exclude lines 15 and 52 due to potential contamination
-promise_expr <- promise_expr %>% 
+promise_long <- promise_long %>% 
   mutate(phenotype = ifelse(line %in% solid, 'solid', 
                      ifelse(line %in% cystic, 'cystic', 'other'))) %>% 
   filter(phenotype != 'other')
@@ -66,14 +72,12 @@ We perform a clustering to check if the samples are grouped correctly.
 
 ```{r}
 ## make expr matrix
-expr_mat <- promise_expr %>% 
-  distinct(probe, line, date, expr) %>%
-  acast(probe ~ line + date, value.var = 'expr')
+expr_mat <- assays(promise_expr)$expr
 
 ## generate heatmap annotation
-anno <- promise_expr %>% 
-  distinct(line, date, batch_large, phenotype) %>% 
-  unite(id, line, date) %>% 
+anno <- promise_long %>% 
+  distinct(line, rep, phenotype) %>% 
+  unite(id, line, rep) %>% 
   mutate_all(as.factor) %>%
   as.data.frame() %>% column_to_rownames('id')
 
@@ -90,168 +94,172 @@ pheatmap(expr_mat[order(apply(expr_mat, 1, sd), decreasing = T)[1:500],],
 
 ```{r}
 ## exclude outlier
-promise_expr <- promise_expr %>% filter(!(line == 'D021' & date == '2017-05-19'))
+promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
 ```
 
-# Differential gene expression
+# Unsupervised analysis
 
-We use 'limma' to perform differential gene expression analysis between cystic and solid organoid lines.
+I perform a principal component analysis of individual lines at the gene level in order to develop insights into which factors drive variation in the gene expression data.
 
 ```{r}
-## make new expr matrix
-expr_mat <- promise_expr %>% 
-  distinct(probe, line, date, expr) %>%
-  acast(probe ~ line + date, value.var = 'expr')
+## select most highly expressed probe to represent each gene
+select_probes <- promise_long %>% group_by(symbol, probe) %>% 
+  summarise(avg_probe = mean(expr)) %>% ungroup() %>%
+  group_by(symbol) %>% top_n(1, avg_probe) %>% ungroup() %>% pull(probe)
 
-## sample annotation
-sample_anno <- promise_expr %>% 
-  distinct(line, date, phenotype) %>% 
-  unite(id, line, date, remove = F) %>%
-  arrange(line)
+## summarize replicates
+gene_expr <- promise_long %>% 
+  # group_by(line, symbol, probe, phenotype) %>%
+  # summarise(expr = mean(expr)) %>% ungroup() %>%
+  filter(probe %in% select_probes)
 
-## model matrix
-mm <- model.matrix(~phenotype, data = sample_anno)
+## get to 500 variable genes, do PCA
+gene_expr_mat <- gene_expr %>% acast(symbol ~ line + rep, 
+                                     value.var = 'expr')
+pca <- prcomp(t(gene_expr_mat[order(apply(gene_expr_mat, 1, sd), decreasing = T)[1:500],]))
 
-## set technical replicate plots
-blocks <- as.factor(sample_anno$line)
-## compute within-block correlations
-corfit <- duplicateCorrelation(expr_mat, mm, block = blocks)
+## annotate and plot pca results
+pca_res <- as_tibble(pca$x, rownames = 'id') %>% select(id, PC1:PC5) %>% 
+  inner_join(distinct(gene_expr %>% distinct(id, phenotype))) %>% 
+  inner_join(gene_expr %>% filter(symbol == 'MIR483') %>% 
+               distinct(id, IGF = expr))
 
-## fit model and compute model coefficients
-fit_phenotype <- lmFit(expr_mat, mm, 
-                       block = blocks, 
-                       cor= corfit$consensus.correlation)
-fit_phenotype <- eBayes(fit_phenotype)
-
-## extract results and annotate gene symbols
-probe_to_symbol <- promise_expr %>% distinct(probe, symbol) %>% 
-  group_by(probe) %>% slice(1) %>% ungroup()
-phenotype_res <- topTable(fit_phenotype, coef = 'phenotypesolid', n = Inf) %>% 
-  as_tibble(rownames = 'probe') %>%
-  left_join(probe_to_symbol)
+pca_res %>% ggplot(aes(PC1, PC2, color = IGF, shape = phenotype)) +
+  geom_point(size = 2) + 
+  ggrepel::geom_text_repel(aes(label = id), min.segment.length = 0) + 
+  scale_color_gradient(low = '#cccccc', high = '#111111')
 ```
 
-We plot a histogram of the P-values to check if we have good signal.
+I plot H19/IGF2 imprinting genes across lines.
 
 ```{r}
-phenotype_res %>% ggplot(aes(P.Value)) + geom_histogram(bins = 50)
+promise_long %>% mutate(symbol = ifelse(probe == '202410_x_at', 'IGF2', symbol)) %>%
+  filter(symbol %in% c('H19', 'MIR483', 'IGF2')) %>%   
+  ggplot(aes(line, expr, fill = phenotype)) + 
+  stat_summary(fun = 'mean', geom = 'bar') + 
+  geom_point() + 
+  facet_wrap(~ symbol + probe, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+promise_long %>% filter(symbol %in% c('PEG10') | (probe == '214218_s_at')) %>%   
+  ggplot(aes(line, expr, fill = phenotype)) + 
+  stat_summary(fun = 'mean', geom = 'bar') + 
+  geom_point() + 
+  facet_wrap(~ symbol + probe, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-We also plot the top 3-4 differentially expressed genes to check expression differences.
+# Expression markers
+
+Do any of the gene expression probes predict whether an organoid line will respond to a drug treatment? I fit a penalized regression model with the AUROC curve from the SVM analysis as dependent and the gene expression measurements as independent variables. I use a LASSO appraoch to cut down on the number of coefficients since my sample sizes are very low.
 
 ```{r}
-promise_expr %>% filter(probe %in% phenotype_res$probe[1:4]) %>% 
-  ggplot(aes(phenotype, expr)) +
-  stat_summary(fun = 'mean', color = '#cccccc', geom = 'bar') + 
-  geom_point(aes(color = line)) + 
-  facet_wrap(~symbol + probe)
+## load auroc from file
+data('aucroc', package = 'SCOPEAnalysis')
+
+## exclude lknes 21, 54, 55
+aucroc <- aucroc %>% filter(!line %in% c('D055T01', 'D021T01', 'D020T02', 'D021T01'))
+
+## matrix with independnt variables (gene expression), merge reps
+x_lasso <- promise_long %>% 
+  group_by(line, symbol, probe, phenotype) %>%
+  summarise(expr = mean(expr)) %>% ungroup() %>%
+  filter(probe %in% select_probes) %>%
+  mutate(line = paste0(line, 'T01')) %>%
+  acast(line ~ symbol, value.var = 'expr')
+## center by subtracting means and retain genes with high var.
+x_lasso <- apply(x_lasso, 2, function(x) x - mean(x))
+x_lasso <- x_lasso[,order(apply(x_lasso, 2, var), decreasing=T)[1:1000]]
+
+drug_expr <- aucroc %>% group_by(drug) %>%
+  filter(!any(is.na(auroc))) %>%
+  group_modify(~{
+    ## fit model
+    stopifnot(identical(rownames(x_lasso), .x$line))
+    fit <- cv.glmnet(
+      x = x_lasso,
+      y = .x$auroc,
+      family = 'gaussian',
+      # alpha = 0.5, 
+      grouped = F
+    )
+    ## extract non-zero coefficients
+    as_tibble(as.matrix(coef(fit, s = fit$lambda.min)),
+              rownames = 'symbol') %>%
+      `colnames<-`(c('symbol', 'coef')) %>%
+      filter(coef > 0)
+  }) %>% ungroup()
+
+## check best coefficients
+drug_expr <- drug_expr %>% filter(symbol != '(Intercept)') %>% 
+  arrange(desc(coef))
 ```
 
-# Gene set enrichment
-
-## Gene Ontology
-
-I use the clusterProfiler + fgsea packages to perform a ranked gene set enrichment analysis in order to identify differentially expressed pathways.
+Check if therea re correlations in the gene expression data for some of the top coefficients.
 
 ```{r}
-## annotate entrez gene ids
-probe_to_entrez <- promise_expr %>% distinct(probe, entrez) %>% 
-  group_by(probe) %>% slice(1) %>% ungroup()
+plot(filter(aucroc, drug == 'AZ 960')$auroc, x_lasso[,'KIT'])
 
-## select strongest probe for each entrez id
-res_filtered <- phenotype_res %>% inner_join(probe_to_entrez) %>% 
-  group_by(entrez) %>% top_n(1, -P.Value) %>% ungroup()
+plot(filter(aucroc, drug == 'AZD1080')$auroc, x_lasso[,'TUBB6'])
 
-## create ranked list for enrichment
-ranks <- setNames(res_filtered$t, as.character(res_filtered$entrez))
-ranks <- sort(ranks, decreasing = T)
+plot(filter(aucroc, drug == 'WYE-125132 (WYE-132)')$auroc, x_lasso[,'LEF1'])
 
-## GO term enrichment (biological process)
-gse_go <- gseGO(
-  geneList = ranks,
-  OrgDb = org.Hs.eg.db,
-  ont = 'BP',
-  nPerm = 1e5,
-  minGSSize = 100,
-  maxGSSize = 500
-)
+plot(filter(aucroc, drug == 'WYE-125132 (WYE-132)')$auroc, x_lasso[,'H19'])
 ```
 
-We can generate a network plot using clusterProfiler in order to get an overview of the results.
+I load drug target annotations from file. Do the same drugs have the same targets?
 
 ```{r}
-emapplot(gse_go)
+## load drug annotation
+drug_anno <- readxl::read_excel('data/Compound_Annotation_Libraries_New.xlsx') %>% distinct(drug = `Compound name`, target = `Primary Target`)
+
+## annotate model coefficients
+drug_expr <- drug_expr %>% left_join(drug_anno)
 ```
 
-## Reactome
-
-We do the same for Reactome instead of GO terms. A convenience function for enrichment against Reactome is implemented in the 'ReactomePA' package. Conceptually this function works the same way as the clusterProfiler functions.
+Generate network diagram.
 
 ```{r}
-## Reactome enrichment analysis
-gse_reactome <- gsePathway(
-  geneList = ranks,
-  organism = 'human',
-  nPerm = 1e5,
-  minGSSize = 100,
-  maxGSSize = 500
-)
+library(tidygraph)
+library(ggraph)
+
+## correlation between gene expr as links
+genes <- drug_expr %>% pull(symbol)
+gene_cor <- cor(x_lasso[,colnames(x_lasso) %in% genes])
+diag(gene_cor) <- NA
+gene_cor <- gene_cor %>% as_tibble(rownames = 'source') %>%
+  pivot_longer(names_to = 'target', values_to = 'val', -source) %>%
+  filter(val > 0.85) %>% 
+  mutate(edge_type = 'gene_cor')
+
+## lasso coefficients
+drug_assoc <- drug_expr %>% 
+  select(source = drug, target = symbol, val = coef) %>%
+  mutate(edge_type = 'drug_assoc')
+
+## combine and make graph
+g <- gene_cor %>% bind_rows(drug_assoc) %>% 
+  as_tbl_graph() %>% 
+  activate(nodes) %>%
+  arrange(name) %>%
+  mutate(type = ifelse(name %in% genes, 'gene', 'drug'))
+
+## drug target annotation for network
+targ_anno <- drug_anno %>% rename(name = drug) %>% 
+  bind_rows(distinct(tibble(name = genes, target = 'none'))) %>% 
+  filter(!is.na(name), name %in% as_tibble(g)$name) %>%  
+  arrange(name)
+
+g <- g %>% activate(nodes) %>% mutate(target = targ_anno$target)
+
+## visualize
+g %>% ggraph(layout = 'kk') + 
+  geom_edge_link(aes(color = edge_type)) + 
+  geom_node_point(size = 2, aes(color = target)) +
+  geom_node_text(aes(label = name), colour = 'black', vjust = 0.4) 
 ```
 
-Again we plot an enrichment map to visualize the results.
 
-```{r}
-emapplot(gse_reactome)
-```
-
-## Intestinal crypt signatures
-
-We perform GSEA for the humanized intestinal crypt signatures published in Merloz-Suarez et al (Cell Stem Cell, 2011).
-
-```{r}
-## parse signatures and make list
-intestinal_sig <- readxl::read_excel(here('data/gene_expression/merloz-suarez_sigantures.xls'), 
-                                     sheet = 1, skip = 4) %>% .[,1:4] %>%
-  gather(signature, symbol) %>% drop_na() %>% 
-  mutate(symbol = gsub('\\*', '', symbol))
-
-## run gsea with clusterprofiler
-res_symbol <- phenotype_res %>% 
-  group_by(symbol) %>% top_n(1, -P.Value) %>% ungroup()
-ranks_symbol <- sort(setNames(res_symbol$t, res_symbol$symbol), decreasing = T)
-
-gse_sig <- GSEA(
-  geneList = ranks_symbol,
-  TERM2GENE = intestinal_sig,
-  nPerm = 1e5,
-  minGSSize = 1,
-  maxGSSize = 1000,
-  pvalueCutoff = 1
-)
-
-## output as tibble
-gse_sig_tbl <- as_tibble(gse_sig)
-```
-
-We see a significant upregulation of the proliferation signature and a downregulation of the Lgr5 ISC signature in solid compared to cystic organoids. We generate barcode plots to visualize these enrichments.
-
-```{r}
-## lgr5 signature
-gseaplot2(
-  gse_sig, geneSetID = gse_sig$ID[2], 
-  title = paste0(gse_sig$ID[2], 
-                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
-                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
-) 
-
-## proliferation
-gseaplot2(
-  gse_sig, geneSetID = gse_sig$ID[1],
-  title = paste0(gse_sig$ID[1], 
-                ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
-                '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
-)
-```
 
 # Session info
 
