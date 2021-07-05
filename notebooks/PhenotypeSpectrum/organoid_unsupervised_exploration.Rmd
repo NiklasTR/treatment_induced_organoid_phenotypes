@@ -49,7 +49,7 @@ umap_sampled %>%
 ```
 
 ```{r}
-umap_tidy %>% 
+umap_sampled %>% 
   dplyr::count(partition) %>% 
   mutate(ratio = n/sum(n)) %>% 
   arrange(desc(ratio))
