@@ -24,8 +24,8 @@ library(ggridges)
 # PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 PATH = paste0(here::here(), "/")
 
-umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
+umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
 ```
@@ -36,7 +36,7 @@ We are able to observe 4 partitions in our data.
 After manual inspection, it becomes cleat that the two smallest partitions are mostly consisting of 
 
 ```{r}
-umap_sampled %>% 
+umap_df %>% 
   ggplot(aes(v1, v2, color = factor(partition))) + 
   geom_point_rast(alpha = 0.5, size = 0.35) + 
   scale_color_brewer(type = "qual", palette = "Set2") +
@@ -49,7 +49,7 @@ umap_sampled %>%
 ```
 
 ```{r}
-umap_sampled %>% 
+umap_df %>% 
   dplyr::count(partition) %>% 
   mutate(ratio = n/sum(n)) %>% 
   arrange(desc(ratio))
@@ -63,7 +63,7 @@ I remove 2 partitions from all main figures for ease of reading. Below, it is ea
 I plot a size-distribution. 
 
 ```{r, eval = TRUE}
-gg_size_dist <- umap_tidy %>% 
+gg_size_dist <- umap_df %>% 
   filter(partition %in% c(1,2)) %>%
   ggplot(aes(size)) + 
   geom_histogram() + 
@@ -76,7 +76,7 @@ gg_size_dist_log <- gg_size_dist +
 I add the eCDF.
 
 ```{r}
-df <- umap_sampled %>% filter(partition %in% c(1,2))
+df <- umap_df %>% filter(partition %in% c(1,2))
 
 gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
   stat_ecdf(aes(x = size, group = line), 
@@ -92,7 +92,7 @@ gg_ecdf
 For more details about distributions, please refer to *reports/Phenotypespectrum/'xyz'_dist.pdf*.
 
 ```{r}
-line_param <- umap_sampled %>% filter(partition %in% c(1,2)) %>% 
+line_param <- umap_df %>% filter(partition %in% c(1,2)) %>% 
   nest(-line, -replicate) %>% 
   mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
          param = map(fit, ~ .x$estimate %>% broom::tidy()))
@@ -130,13 +130,13 @@ gg_size_replicate
 
 ```{r}
 
-organoid_size_factor_09 <- umap_sampled %>% filter(partition %in% c(1,2)) %>% group_by(line) %>% 
+organoid_size_factor_09 <- umap_df %>% filter(partition %in% c(1,2)) %>% group_by(line) %>% 
   summarise(x = quantile(size_log, 0.9)) %>% 
   #summarise(x = mean(size_log)) %>% 
   arrange(x) %>% .$line
 
 
-gg_size_dist_morph_ridge <- umap_sampled %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
+gg_size_dist_morph_ridge <- umap_df %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
   mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
   ggplot() +
   geom_density_ridges_gradient(aes(y = line, x = size_log, fill = stat(x)), scale = 1) +
@@ -167,7 +167,7 @@ umap_size <- function(umap){
     coord_fixed()
 }
 
-gg_size <- umap_size(umap_sampled %>% filter(partition %in% c(1,2)))
+gg_size <- umap_size(umap_df %>% filter(partition %in% c(1,2)))
 ```
 
 
@@ -177,7 +177,7 @@ gg_size <- umap_size(umap_sampled %>% filter(partition %in% c(1,2)))
 
 ```{r}
 
-drug_size <- umap_tidy %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
+drug_size <- umap_df %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>%
   #filter(morphological_class == "disorganized") %>% 
   #filter(morphological_class != "other") %>% 
@@ -218,13 +218,13 @@ set.seed(234)
 loi = c("D022T01", "D046T01")
 
 
-df <- umap_tidy  %>%
+df <- umap_df  %>%
   filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>% 
   filter(line == loi)
 
-gg_drug <- umap_sampled %>% filter(partition %in% c(1,2)) %>%
+gg_drug <- umap_df %>% filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -289,7 +289,7 @@ I plot 2 organoid lines treated with DMSO control
 set.seed(234)
 
 
-df <- umap_tidy  %>% filter(partition %in% c(1,2)) %>%
+df <- umap_df  %>% filter(partition %in% c(1,2)) %>%
   mutate(cystic = if_else(line == "D013T01" &  well == "D24" & plate == "D013T01P001L02", TRUE, FALSE)) %>%
   mutate(compact = if_else(line == "D055T01" &  well == "D24" & plate == "D055T01P007L02", TRUE, FALSE))
 
@@ -316,7 +316,7 @@ In general, DMSO treated organoid lines cover the same latent space than drug tr
 ```{r}
 set.seed(123)
 
-df <- umap_sampled %>% filter(partition %in% c(1,2))
+df <- umap_df %>% filter(partition %in% c(1,2))
 
 
 gg_size_supp <- df %>%
@@ -341,9 +341,9 @@ I create a single plot showing the two extreme organoid lines and their distribu
 set.seed(123)
 
 loi <- c("D055T01", "D007T01",  "D027T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
-#loi <- umap_sampled$line %>% unique()
+#loi <- umap_df$line %>% unique()
 
-df <- umap_sampled %>%
+df <- umap_df %>%
   filter(drug == "DMSO") %>% 
   filter(partition %in% c(1,2))
 
@@ -351,7 +351,7 @@ df <- umap_sampled %>%
 gg_line <- df %>% dplyr::select(-line) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
-  geom_point_rast(data = umap_tidy %>%
+  geom_point_rast(data = umap_df %>%
                     filter(drug == "DMSO") %>% 
                    # filter(line %in% c("D021T01")) %>%
     filter(line %in% loi) %>% 
@@ -383,14 +383,14 @@ set.seed(123)
 cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
 dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
-df <- umap_tidy %>%
+df <- umap_df %>%
   filter(drug == "DMSO") %>% 
   filter(partition %in% c(1,2)) %>%
   mutate(morphology = case_when(line %in% cystic_l ~ "cystic",
                                 line %in% dense_l ~ "dense",
                                  TRUE ~ "other"))
 
-gg_cystic <- umap_sampled %>% 
+gg_cystic <- umap_df %>% 
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
   
@@ -489,7 +489,7 @@ I estimate a log-gaussian mixture model of organoid size.
 ```{r, eval = TRUE}
 library(mixtools)
 
-df_mix <- normalmixEM(umap_tidy$size_log, k = 2)
+df_mix <- normalmixEM(umap_df$size_log, k = 2)
 
 df_fus <- df %>% dplyr::select(size_log) %>% mutate(posterior = "joined") %>% 
   rbind(data.frame(size_log = df_mix$x,
@@ -515,7 +515,7 @@ I scale this approach to all other organoid lines.
 ```{r}
 set.seed(0123349)
 
-umap_mix <- umap_tidy %>% filter(drug == "DMSO")  %>% 
+umap_mix <- umap_df %>% filter(drug == "DMSO")  %>% 
   nest(-line, -replicate) %>%
   mutate(mix_fit = map(data, ~ normalmixEM(.x$size_log, k = 2, maxit = 5000)),
          prob = map(mix_fit, ~ .x$posterior %>% as.data.frame() %>% .$comp.1)) 
@@ -718,11 +718,11 @@ harmony_id_line %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_explo
 ```{r, eval = FALSE}
 set.seed(123)
 
-drug_order <- umap_tidy %>%
+drug_order <- umap_df %>%
   dplyr::select(drug) %>%
     filter(grepl(drug, pattern = "__")) %>% .$drug %>% unique() %>% sort()
 
-curve_df <- umap_tidy %>%
+curve_df <- umap_df %>%
     filter(drug %in% drug_order) %>%
   mutate(drug = factor(drug, levels =drug_order)) %>% 
   arrange((drug)) %>% 
@@ -742,11 +742,11 @@ curve_df %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/
 ```{r, eval = FALSE}
 set.seed(123)
 
-drug_order <- umap_tidy %>%
+drug_order <- umap_df %>%
   dplyr::select(drug) %>%
     filter(grepl(drug, pattern = "__")) %>% .$drug %>% unique() %>% sort()
 
-curve_df <- umap_tidy %>%
+curve_df <- umap_df %>%
     filter(drug %in% drug_order) %>%
   mutate(drug = factor(drug, levels =drug_order)) %>% 
   arrange((drug)) %>% 
@@ -883,11 +883,11 @@ sample_index = pca_subset$uuid
 
 curve_index = FNN::get.knnx(data = pca_subset %>% dplyr::select(pc1:pc5) %>% as.matrix(), gg_curve_df %>% dplyr::select(pc1:pc5) %>% as.matrix(), k=1, algorithm=c("kd_tree"))
 
-gg_curve_df = cbind(gg_curve_df, umap_tidy %>% filter(uuid %in% sample_index) %>% .[curve_index$nn.index,] %>% dplyr::select(v1, v2))
+gg_curve_df = cbind(gg_curve_df, umap_df %>% filter(uuid %in% sample_index) %>% .[curve_index$nn.index,] %>% dplyr::select(v1, v2))
 
 gg_curve_df %>%
   ggplot(aes(v1, v2)) + 
-  geom_point(data = curve_df %>% unnest(data) %>% dplyr::select(compound, line, uuid) %>% left_join(umap_tidy %>% dplyr::select(uuid, v1, v2)),
+  geom_point(data = curve_df %>% unnest(data) %>% dplyr::select(compound, line, uuid) %>% left_join(umap_df %>% dplyr::select(uuid, v1, v2)),
              aes(color = compound), alpha = 0.05, size = 0.35) +
   
   #geom_path(aes(group = compound_line, color = compound_line), size = 1.5, arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
