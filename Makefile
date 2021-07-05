@@ -85,6 +85,15 @@ endif
 test_environment: dependencies
 	$(PYTHON_INTERPRETER) test_environment.py
 
+## Set up python interpreter environment
+export_environment:
+ifeq (True,$(HAS_CONDA))
+		@echo ">>> Detected conda, exporting conda environment."
+		conda list --explicit > conda_env.txt
+endif
+		@echo ">>> conda env exported. Import with:\nconda env create --file conda_env.txt --name $(PROJECT_NAME)"
+
+
 #################################################################################
 # CLUSTER RULES                                                                 #
 #################################################################################
