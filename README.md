@@ -15,6 +15,10 @@ Hackathon agenda:
     * RNA expression data harmonization
 
 
+Issues I needed to fix
+* document the analysis workflow
+* run code with latest freetype version to perform ggrastr plots -> I add a subset of the data for local processing
+
 Note for contributors
 ------------
 the most up-to-date branch is "niklas". Please merge your contributions to this branch.
@@ -30,6 +34,9 @@ Gene expression
 * data were generated via the DKFZ GPCF
 * raw data is stored in .CEL format under data/raw/expression, data relating to the latest manuscript is separated under microarray_manuscript
 * a normalized file, also deposited at GEO, is generated
+    
+    
+    
     
 Analysis Pipeline
 ------------
@@ -88,6 +95,37 @@ Project Organization
     └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
 
 
---------
+## data/raw/PROMISE (imaging)
+* hdf5dir - contains raw well-level hdf5 imaging data of each well (e.g. per object: 4 regions, 3 channels, 16 z-levels), ca. 1GB/well
+* hdf5projection - contains hdf5 objects with image projection information on a well level, ca. 50MB/well
+* hdf5validation - text files containing error reports in case checksum are not matching between hdf5 files after file transfer (data was originally moved after local projection to a remote compute environment and storage)
+* htmldir - visualization of plate projections
+* segmentation - image segmentation segmentation masks on well-level
+* segmentationhtmldir - visualization of segmentation masks
+* features - storage of feature extraction results on a plate level with 3 elements
+	* wells/ - directory with well-level feature data
+	* features - a plate level aggregation of well-level features
+	* processedFeatures - these data have been pre-processed, including the following steps
+		* removing objects at the well boundary
+		* removing objects that are out of focus
+		* removing objects with unexpected size
+
+## data/interim (created by ML tools/ scripts)
+the directory contains 3 larger ML projects that were started for particular purposes within the manuscript
+* **line_differences** - a collection of common features across all organoid lines, followed by PCA for Unsupervised Learning and EDA
+	* Features_human_all_drugs.h5 - 27GB large file containing all features across lines
+	* results/ReducedFeatures_all_drugs_human.h5 - 27GB large file containing all shared features across lines
+	* results/ReducedFeaturesPCA_all_drugs_human.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines
+* **drug_effects** - a project to estimate the effect of each drug treatment on every individual organoid line. Common features across lines are identified, features for each line are scaled to their DMSO control and PCA is being performed.
+	* TransformedFeatures_human_25components.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines, the **important difference to ReducedFeaturesPCA_all_drugs_human.h5** is that input features were scaled to each line's respective DMSO control.
+	* incrementalPCA - pickle of PCA model
+	* lines/ - containing the linear models for each line and drug with their respective AUROC and pvalue
+* **organoid_viability**
+	* classifiers/ - model checkpoint of random forest
+	* diagnostics/ 
+	* results/ - containing csv files with viability estimates
+
+## data/processed (data for notebook processing)
+
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>

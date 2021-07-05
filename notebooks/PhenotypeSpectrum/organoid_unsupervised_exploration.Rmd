@@ -21,10 +21,13 @@ library(scico)
 library(ggridges)
 
 # I wish I could solve my path problems with the here() package, but experienced unreliable behavior 
-PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
+# PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
+PATH = here::here()
 
 umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
+  dplyr::select(line = organoid, morphology = visual_inspection_v2)
 ```
 
 # Data Filtering
@@ -73,7 +76,6 @@ gg_size_dist_log <- gg_size_dist +
 I add the eCDF.
 
 ```{r}
-
 df <- umap_sampled %>% filter(partition %in% c(1,2))
 
 gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
@@ -213,7 +215,7 @@ ggdrug_count
 
 ```{r}
 set.seed(234)
-loi = c("D022T01", "D055T01")
+loi = c("D022T01", "D046T01")
 
 
 df <- umap_tidy  %>%
@@ -378,8 +380,8 @@ I am focusing on cystic vs solid organoid lines
 set.seed(123)
 
 # TODO reference morphology from
-cystic_l <- c("D018T01", "D013T01",  "D027T01", "D030T01")
-dense_l <- c("D007T01", "D010T01", "D046T01", "D054T01", "D055T01")
+cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
+dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
 df <- umap_tidy %>%
   filter(drug == "DMSO") %>% 
