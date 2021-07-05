@@ -22,7 +22,7 @@ library(ggridges)
 
 # I wish I could solve my path problems with the here() package, but experienced unreliable behavior 
 # PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
-PATH = here::here()
+PATH = paste0(here::here(), "/")
 
 umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
