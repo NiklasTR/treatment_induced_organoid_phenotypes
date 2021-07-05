@@ -1,10 +1,10 @@
 library(here)
 library(tidyverse)
 library(readxl)
+library(SummarizedExperiment)
 
 print("loading data")
-load(here("notebooks/SCOPEAnalysis/data/promise_expr.rda"))
-load(here("notebooks/SCOPEAnalysis/data/mutations.rda"))
+load(here("data/processed/expression/promise_expr.rda"))
 
 # TODO integrate Common_Feautres_human.txt into all drugs
 # TODO evaluate better source of features to avoid mean of means
