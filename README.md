@@ -126,6 +126,9 @@ the directory contains 3 larger ML projects that were started for particular pur
 	* results/ - containing csv files with viability estimates
 
 ## data/processed (data for notebook processing)
+* umap_ ..
+	* umap_absolute_all_drugs_tidy.Rds - all included organoid objects in UMAP projection with metadata
+	* umap_absolute_all_drugs_sampled.Rds - a subset of the UMAP object above, that represents 5% of the original corpus, ca. 300k objects
 
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
