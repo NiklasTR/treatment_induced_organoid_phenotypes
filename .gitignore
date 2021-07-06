@@ -31,6 +31,8 @@ references/layouts/qgel
 # temp files
 .#
 
+## conda
+env
 
 #### template from https://github.com/github/gitignore/blob/master/R.gitignore
 # History files
