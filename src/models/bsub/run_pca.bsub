@@ -14,6 +14,6 @@ python src/models/FeatureAnalysis/PCAScaledFeatures.py
 # data/interim/FeatureAnalysis/line_differences/human/all_drugs/results
 
 # convert the pca transformed object into an .Rds object locally
-Rscript src/models/PhenotypeSpectrum/R/tidy_pca.R
+Rscript src/models/umap/tidy_pca.R
 
 

@@ -49,50 +49,50 @@ pca.hdf -- UMAP ->
 Project Organization
 ------------
 
-    ├── LICENSE
-    ├── Makefile           <- Makefile with commands like `make data` or `make train`
-    ├── README.md          <- The top-level README for developers using this project.
-    ├── data
-    │   ├── external       <- Data from third party sources.
-    │   ├── interim        <- Intermediate data that has been transformed.
-    │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
-    │
-    ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
-    │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
-    │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
-    │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
-    │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
-    │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
-    │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
-    │
-    └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
+    ????????? LICENSE
+    ????????? Makefile           <- Makefile with commands like `make data` or `make train`
+    ????????? README.md          <- The top-level README for developers using this project.
+    ????????? data
+    ??????? ????????? external       <- Data from third party sources.
+    ??????? ????????? interim        <- Intermediate data that has been transformed.
+    ??????? ????????? processed      <- The final, canonical data sets for modeling.
+    ??????? ????????? raw            <- The original, immutable data dump.
+    ???
+    ????????? docs               <- A default Sphinx project; see sphinx-doc.org for details
+    ???
+    ????????? models             <- Trained and serialized models, model predictions, or model summaries
+    ???
+    ????????? notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
+    ???                         the creator's initials, and a short `-` delimited description, e.g.
+    ???                         `1.0-jqp-initial-data-exploration`.
+    ???
+    ????????? references         <- Data dictionaries, manuals, and all other explanatory materials.
+    ???
+    ????????? reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
+    ??????? ????????? figures        <- Generated graphics and figures to be used in reporting
+    ???
+    ????????? requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
+    ???                         generated with `pip freeze > requirements.txt`
+    ???
+    ????????? setup.py           <- makes project pip installable (pip install -e .) so src can be imported
+    ????????? src                <- Source code for use in this project.
+    ??????? ????????? __init__.py    <- Makes src a Python module
+    ???   ???
+    ??????? ????????? data           <- Scripts to download or generate data
+    ??????? ??????? ????????? make_dataset.py
+    ???   ???
+    ??????? ????????? features       <- Scripts to turn raw data into features for modeling
+    ??????? ??????? ????????? build_features.py
+    ???   ???
+    ??????? ????????? models         <- Scripts to train models and then use trained models to make
+    ???   ???   ???                 predictions
+    ??????? ??????? ????????? predict_model.py
+    ??????? ??????? ????????? train_model.py
+    ???   ???
+    ??????? ????????? visualization  <- Scripts to create exploratory and results oriented visualizations
+    ???????     ????????? visualize.py
+    ???
+    ????????? tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
 
 # data
 ## data/raw/PROMISE (imaging)
@@ -133,11 +133,26 @@ the directory contains 3 larger ML projects that were started for particular pur
 
 # src - source code required to process data and run models
 ## src/data
+the directory contains two libraries (PROMISE and S3O) required for the generation of (image and feature-level) raw data. 
+* PROMISE - contains a scheduler and handles the processing of raw microscopy images, incl. the compression into hdf5 objects
+* S3O - is a segmentation toolbox for organoid projections and, together with PROMISE is required to generate the feature-level raw data
+* make_expression.R - R script to perform preprocessing on microarray data, starting with .CEL files
+## src/models
+code within the models directory is used to process feature-level raw data (input in data/raw, output in data/interim and data/processed)
+*FeatureAnalysis - the library contains python scripts to process the raw feature data by filtering and scaling it
+  * Utils.py - contains two functions that contain the manual annotation for every imaged plate and need adjustment when running on new data 
+    * get_rep_ids
+    * get_rep_ids_real
+  * PCAScaledFeatures.py - a set of function required for the PCA projection of raw feature-level organoid data; the results are stored within the **line_differences** subdir (data/interim/line_differences)
+* bsub - contains .bsub jobs for the DKFZ ODCF cluster, the scripts call other functions that can be run in a different compute environemnt as well
+* umap - contains code for the further embedding of PCA projections from (ReducedFeaturesPCA_all_drugs_human.h5); the final result are the umap files **umap_absolute_all_drugs_tidy** and the downsampled version **umap_absolute_all_drugs_sampled**
+* clustering contains code related to various clustering methods for UMAP or PCA level feature data
+* mofa - 
+## src/visualization
+
+hdf5_pca_absolute_all_drugs.Rds
 
 
-Utils.py contains two functions that have a manual annotation for every imaged plate: 
-* get_rep_ids
-* get_rep_ids_real
 
 new plates can be added here and deprecated plates can be commented out.
 

@@ -6,7 +6,6 @@ print('make sure you are running make_dataset on an instance that supports IBM b
 
 # 1. running incremental PCA on data and exporting an .Rds object
 # ====================================
-os.system('bsub -R "rusage[mem=150GB]" -q long ./src/models/FeatureAnalysis/run_pca.bsub \
-	-o src/models/FeatureAnalysis/run_pca_out.bsub \
-	-e src/models/FeatureAnalysis/run_pca_error.bsub')
-
+os.system('bsub -R "rusage[mem=150GB]" -q long ./src/models/bsub/run_pca.bsub \
+	-o src/models/bsub/run_pca_out.bsub \
+	-e src/models/bsub/run_pca_error.bsub')
