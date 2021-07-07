@@ -85,6 +85,15 @@ endif
 test_environment: dependencies
 	$(PYTHON_INTERPRETER) test_environment.py
 
+## Set up python interpreter environment
+export_environment:
+ifeq (True,$(HAS_CONDA))
+		@echo ">>> Detected conda, exporting conda environment."
+		conda list --explicit > conda_env.txt
+endif
+		@echo ">>> conda env exported. Import with:\nconda env create --file conda_env.txt --name $(PROJECT_NAME)"
+
+
 #################################################################################
 # CLUSTER RULES                                                                 #
 #################################################################################
@@ -130,9 +139,10 @@ load_modules:
 	module load libpng/1.6.37
 	module load gdal/3.0.2
 	module load pandoc/2.2.1
-	module load anaconda3/2019.07
+	#module load anaconda3/2019.07
 	module load R/3.6.2
 	module load gcc/7.2.0 
+	module load anaconda3/2020.11
 
 # ssh user@socket command < /path/to/file/on/local/machine
 

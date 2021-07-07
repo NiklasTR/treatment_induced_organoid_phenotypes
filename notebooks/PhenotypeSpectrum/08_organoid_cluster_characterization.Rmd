@@ -16,10 +16,25 @@ Based on the clustering I have produced, I want to visualize example objects bel
 source(here("R/display_organoid_complete.R"))
 ```
 
+<<<<<<< HEAD
+
+```{r}
+umap_sampled %>% 
+  ggplot(aes(v1, v2, color = factor(cluster))) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  #scale_color_brewer(type = "qual", palette = "Set2") +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+=======
 Now I create a list of organoids I am interested in. 
 
 ```{r}
 
+>>>>>>> f929c08bfcdc5501e94f05f8939c4c516193e13e
 ```
 
 

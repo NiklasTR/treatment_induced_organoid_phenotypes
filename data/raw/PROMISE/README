@@ -1,4 +1,7 @@
+# General notes
+
 This directory contains raw images as well as raw feature data. When processed, images are moved to the *inbox* directory directly from the INCELL 6000 microscope. 
 Please consult this wiki for more information: https://b110-sv6.inet.dkfz-heidelberg.de/wiki/pages/viewpage.action?spaceKey=boutroslab&title=PROMISE+Workflow
 
 The project setup has undergone some changes since the last time the PROMISE code was run on a new batch of plates. Please make sure to check wether all paths are set correctly when working with the PROMISE watchdog for the first time.
+
