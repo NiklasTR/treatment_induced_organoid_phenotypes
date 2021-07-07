@@ -94,7 +94,7 @@ Project Organization
     │
     └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
 
-
+# data
 ## data/raw/PROMISE (imaging)
 * hdf5dir - contains raw well-level hdf5 imaging data of each well (e.g. per object: 4 regions, 3 channels, 16 z-levels), ca. 1GB/well
 * hdf5projection - contains hdf5 objects with image projection information on a well level, ca. 50MB/well
@@ -130,5 +130,15 @@ the directory contains 3 larger ML projects that were started for particular pur
 	* umap_absolute_all_drugs_tidy.Rds - all included organoid objects in UMAP projection with metadata
 	* umap_absolute_all_drugs_sampled.Rds - a subset of the UMAP object above, that represents 5% of the original corpus, ca. 300k objects
 
+
+# src - source code required to process data and run models
+## src/data
+
+
+Utils.py contains two functions that have a manual annotation for every imaged plate: 
+* get_rep_ids
+* get_rep_ids_real
+
+new plates can be added here and deprecated plates can be commented out.
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
