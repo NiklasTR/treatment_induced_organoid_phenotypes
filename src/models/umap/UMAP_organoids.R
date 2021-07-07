@@ -80,12 +80,15 @@ pca_matrix <- pca_metadata %>% dplyr::select((PC1:PC25)) %>% as.data.frame() %>%
 cce <- new_cell_data_set(pca_matrix %>% t(),
                          cell_metadata = pca_anno_df)
 
+print("included lines:")
+print(pca_metadata$line %>% unique())
 
 ## I manually inject the PCA compression of the data into the object
 #reducedDims(ods)$PCA <- pca_matrix_harmony
 reducedDims(cce)$PCA <- pca_matrix
 
 ## Run UMAP embedding
+print("starting UMAP embedding")
 # ods <- reduce_dimension(ods,
 #                         reduction_method = "UMAP",
 #                         umap.min_dist = 0.1,
@@ -105,3 +108,5 @@ cce <- reduce_dimension(cce,
 # Save harmony result
 #saveRDS(ods, args[2])
 saveRDS(cce, args[3])
+print("saved files at:")
+print(args[3])
