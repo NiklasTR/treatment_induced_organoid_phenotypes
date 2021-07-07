@@ -56,7 +56,7 @@ Bene (all scripts are in notebooks/SCOPAnalysis/vignettes/):
 | br-gene_expression.Rmd          | Fig. 3g,h.                 | baseline expr. rda  |
 | br_gene_expression_gsk3i.Rmd    | -                          | CEL files on server |
 | br_gene_expression_meki.Rmd     | Fig. 5b                    | CEL files on server |
-| br_baseline_expression.Rmd      | -                          | CEL files on server |
+| src/data/make_expression.R      | -                          | CEL files on server |
 
 
 Project Organization
