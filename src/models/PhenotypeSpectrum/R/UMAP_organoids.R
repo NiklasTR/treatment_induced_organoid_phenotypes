@@ -1,10 +1,17 @@
 #!/usr/bin/Rscript
+# defining lib path
+.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
+print(.libPaths())
+
+# warning
+# after deciding against harmony normalization, I commented all code related to it
 
 # packages
 library(tidyverse)
 library(monocle3)
 library(readxl)
-library(harmony)
+#library(harmony)
+print("loaded libraries")
 
 # input
 args = commandArgs(trailingOnly=TRUE)
@@ -41,16 +48,16 @@ pca_metadata <- metadata %>%
               mutate(end = str_sub(end, 2,-1L)) , .) %>% 
   dplyr::select(everything(), screen_id = screen_ID, -start, -end)
 
-# Running Harmony on batches
-pca_harmony <- pca_metadata %>% dplyr::select(contains("PC"))
-metadata_harmony <- pca_metadata %>% dplyr::select(screen_id, line)
+# # Running Harmony on batches
+# pca_harmony <- pca_metadata %>% dplyr::select(contains("PC"))
+# metadata_harmony <- pca_metadata %>% dplyr::select(screen_id, line)
 
-harmony_id <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_id"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
+# harmony_id <- HarmonyMatrix(
+#   pca_harmony, metadata_harmony, c("screen_id"),
+#   do_pca = FALSE,
+#   verbose = TRUE, 
+#   return_object = TRUE
+# )
 
 # Import into Monocle 3
 ## generating metadata objects
@@ -66,26 +73,26 @@ pca_anno_df <- pca_metadata %>% dplyr::select(-(PC1:PC25)) %>%
 
 ## combining annotation data with harmonized PCA information
 pca_matrix <- pca_metadata %>% dplyr::select((PC1:PC25)) %>% as.data.frame() %>% magrittr::set_rownames(pca_anno_df$uuid) %>% magrittr::set_colnames(c(paste0("PC", c(1:25)))) %>% as.matrix()
-pca_matrix_harmony <- harmony_id$Z_corr %>% t() %>% magrittr::set_rownames(pca_anno_df$uuid) %>% magrittr::set_colnames(c(paste0("PC", c(1:25)))) %>% as.matrix()
+#pca_matrix_harmony <- harmony_id$Z_corr %>% t() %>% magrittr::set_rownames(pca_anno_df$uuid) %>% magrittr::set_colnames(c(paste0("PC", c(1:25)))) %>% as.matrix()
 
-ods <- new_cell_data_set(pca_matrix_harmony %>% t(),
-                         cell_metadata = pca_anno_df)
+# ods <- new_cell_data_set(pca_matrix_harmony %>% t(),
+#                          cell_metadata = pca_anno_df)
 cce <- new_cell_data_set(pca_matrix %>% t(),
                          cell_metadata = pca_anno_df)
 
 
 ## I manually inject the PCA compression of the data into the object
-reducedDims(ods)$PCA <- pca_matrix_harmony
+#reducedDims(ods)$PCA <- pca_matrix_harmony
 reducedDims(cce)$PCA <- pca_matrix
 
 ## Run UMAP embedding
-ods <- reduce_dimension(ods,
-                        reduction_method = "UMAP",
-                        umap.min_dist = 0.1,
-                        umap.n_neighbors = 15L,
-                        umap.fast_sgd=TRUE, 
-                        cores = parallel::detectCores(),
-                        verbose = TRUE)
+# ods <- reduce_dimension(ods,
+#                         reduction_method = "UMAP",
+#                         umap.min_dist = 0.1,
+#                         umap.n_neighbors = 15L,
+#                         umap.fast_sgd=TRUE, 
+#                         cores = parallel::detectCores(),
+#                         verbose = TRUE)
 
 cce <- reduce_dimension(cce,
                         reduction_method = "UMAP",
@@ -96,5 +103,5 @@ cce <- reduce_dimension(cce,
                         verbose = TRUE)
 
 # Save harmony result
-saveRDS(ods, args[2])
+#saveRDS(ods, args[2])
 saveRDS(cce, args[3])
