@@ -1,0 +1,1 @@
+I am currently in the process of merging the SCOPEAnalysis package with additional code I wrote during the revision period. To make things simpler, I decided to pull all notebooks into the base layer of the notebooks dir and gradually sort the rest of the code.
