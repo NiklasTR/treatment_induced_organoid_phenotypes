@@ -8,9 +8,16 @@ module load anaconda3/2019.07
 # run:
 # bsub -R "rusage[mem=200GB]" ./src/models/PhenotypeSpectrum/run_umap_all.bsub -o src/models/PhenotypeSpectrum/out.bsub -e src/models/PhenotypeSpectrum/error.bsub
 
-Rscript src/models/PhenotypeSpectrum/R/UMAP_organoids.R \
+# Arguments must be supplied (input file name , output filename harmony, output filename raw, seed, metadata)
+Rscript src/models/umap/UMAP_organoids.R \
         "data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds" \
         "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
         "123" \
         "references/Screenings_Imaging_Manuscript.xlsx"
+        
+# Arguments must be supplied (input file name, seed, sampling_rate)
+Rscript src/models/umap/tidy_umap.R \
+        "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds"
+        "123" \
+        "0.05"
