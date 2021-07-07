@@ -52,11 +52,11 @@ Bene (all scripts are in notebooks/SCOPAnalysis/vignettes/):
 
 | Script                          | Figures                    | Input               |
 |:------------------------------- |:--------------------------:|:------------------- |
-| 1.0-br-CTGAnalysis.Rmd          | Supp. Fig. 5, Fig. 3d      | SCOPE R package     |
-| br-gene_expression.Rmd          | Fig. 3g,h.                 | baseline expr. rda  |
-| br_gene_expression_gsk3i.Rmd    | -                          | CEL files on server |
-| br_gene_expression_meki.Rmd     | Fig. 5b                    | CEL files on server |
-| src/data/make_expression.R      | -                          | CEL files on server |
+| notebooks/1.0-br-CTGAnalysis.Rmd          | Supp. Fig. 5, Fig. 3d      | SCOPE R package     |
+| notebooks/br-gene_expression.Rmd          | Fig. 3g,h.                 | baseline expr. rda  |
+| notebooks/br_gene_expression_gsk3i.Rmd    | -                          | CEL files on server |
+| notebooks/br_gene_expression_meki.Rmd     | Fig. 5b                    | CEL files on server |
+| src/data/make_expression.R                | -                          | CEL files on server |
 
 
 Project Organization
