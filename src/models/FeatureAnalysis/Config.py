@@ -11,8 +11,8 @@ NUMFIELDS = 4
 # CUSTOM DIRECTORIES
 # These directories point to the two base directories needed for this module,
 # the directory for the analysis output and the directory for the data input
-BASEDIR = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/data/interim/FeatureAnalysis"
-PROMISEDIR = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/data/raw/PROMISE/data-10x-4t-c-16z"
+BASEDIR = "/omics/groups/OE0049/b110_data/B110-Isilon2/promise/data/interim/FeatureAnalysis"
+PROMISEDIR = "/omics/groups/OE0049/b110_data/B110-Isilon2/promise/data/raw/PROMISE/data-10x-4t-c-16z"
 
 # PROMISE
 # These directories describe the PROMISE folder structure.
