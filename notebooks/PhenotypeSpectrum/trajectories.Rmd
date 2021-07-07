@@ -35,6 +35,7 @@ source(here("src/models/PhenotypeSpectrum/R/pseudotime.R"))
 set.seed(123)
 
 gg_bortezomib <- umap_sampled %>%
+  filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -74,16 +75,83 @@ plot_df <- plot_df_raw %>%
 
 gg_bortezomib_traj <- draw_trajectory(plot_df)
 
-gg_bortezomib_traj
+gg_bortezomib_traj + 
+  coord_fixed()
+
+# e-7 good
+```
+
+```{r}
+plot_grid(gg_bortezomib + coord_fixed(), gg_bortezomib_traj + coord_fixed(),
+          labels = c('A', 'B'), label_size = 12, ncol = 2) +
+  ggsave(paste0(PATH, "reports/panel_bortezomib.pdf"), width = 8, height = 4)
+
+
+
+
+```
+
+
+# Irinotecan Transition
+
+I am repeating a similar plot with SN-38, the active metabolite of Irinotecan. 
+
+
+```{r}
+set.seed(123)
+
+gg_irinotecan <- umap_sampled %>%
+  filter(partition %in% c(1,2)) %>%
+  dplyr::select(-line, -concentration) %>%
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = umap_tidy %>%
+        filter(grepl(drug, pattern = "Irinotecan / SN-38")) %>%
+        filter(line %in% c("D007T01", "D019T01", "D018T01")) %>%
+        filter(concentration != "1.0") %>% # removing the maximum concentration as it is not adding further information
+    group_by(concentration) %>% 
+    sample_n(1000, replace = TRUE),
+  aes(color = line),alpha = 1, size = 0.35, shape=16) + 
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  facet_wrap( ~ concentration, ncol = 2) + 
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+  theme(legend.position = "none") +
+  theme_cowplot(font_size = 8) + 
+  coord_fixed()
+  
+gg_irinotecan
+```
+
+I am generating a pseudotime plot for Irinotecan, a toxic drug 
+
+```{r}
+set.seed(168763)
+
+plot_df_raw <- create_plot_df(drug_order = c("Irinotecan / SN-38"),
+                          loi = c("D007T01", "D010T01", "D013T01",  "D018T01", "D019T01", "D027T01", "D055T01"), 
+                          n_sample = 500,
+                          v1_cut = 5,
+                          stretch = 0.001) 
+
+plot_df <- plot_df_raw %>% 
+  filter(line %in% c("D007T01", "D019T01", "D018T01")) %>%
+  mutate(plot_trace = case_when(line == "D018T01" ~ purrr::map(plot, ~ .x$fit %>% .[1:2000,]),
+                                line == "D007T01" ~ purrr::map(plot, ~ .x$fit %>% .[1:1500,]),
+                                TRUE ~ purrr::map(plot, ~ .x$fit))) 
+
+gg_irinotecan_traj <- draw_trajectory(plot_df)
+
+gg_irinotecan_traj
 
 
 # e-7 good
 ```
 
 ```{r}
-plot_grid(gg_bortezomib, gg_bortezomib_traj + coord_fixed(),
+plot_grid(gg_irinotecan + coord_fixed(), gg_irinotecan_traj + coord_fixed(),
           labels = c('A', 'B'), label_size = 12, ncol = 2) +
-  ggsave(paste0(PATH, "reports/panel_bortezomib.pdf"), width = 8, height = 4)
+  ggsave(paste0(PATH, "reports/panel_irinotecan.pdf"), width = 8, height = 4)
 
 
 
@@ -93,6 +161,7 @@ plot_grid(gg_bortezomib, gg_bortezomib_traj + coord_fixed(),
 # 5 major drug induced phenotypes
 
 ```{r}
+set.seed(123)
 anno <- read_delim(here("references/layouts/Layouts.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% janitor::clean_names() %>% 
   dplyr::rename(drug = product_name) %>% 
   filter(library_id != 1) %>% 
@@ -118,23 +187,50 @@ activity = umap_tidy %>% distinct(line, drug) %>%
   unnest(activity)
   
 gg_big5_density <- umap_sampled %>%
+
+  filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
   stat_density_2d(geom = "polygon",
-                  
                   data = umap_tidy %>%
         semi_join(anno %>% filter(group != "other")) %>%
         left_join(anno) %>%
         semi_join(activity %>% filter(auc_mean >= 0.85 | drug == "DMSO")) %>%
-        filter(line %in% c("D007T01", "D019T01", "D027T01", "D046T01")) %>%
+        filter(line %in% c("D004T01", "D030T01")) %>% # "D007T01", "D030T01", "D027T01", "D046T01" # 4 / 7 / 19
         filter(concentration == "nan") %>% # keeping single dose drugs
-    group_by(drug) %>% 
-    sample_n(500, replace = TRUE),
+        filter(group %in% c("DMSO", "MEK", "mTOR", "CDK")) %>%
+    group_by(drug, line) %>% 
+    sample_n(1000, replace = TRUE),
     
   aes(alpha = ..level.., fill = group)) + 
   scale_fill_brewer(type = "qual", palette = "Set2") +
-  facet_wrap( ~ line, ncol = 2) + 
+  facet_grid(line ~ group) + # ~ line
+  labs(x = "UMAP 1",
+       y = "UMAP 2")+
+  theme(legend.position = "none") +
+  theme_cowplot(font_size = 8) + 
+  coord_fixed()
+
+gg_mekgsk_density <- umap_sampled %>%
+  filter(partition %in% c(1,2)) %>%
+  dplyr::select(-line, -concentration) %>%
+  ggplot(aes(v1, v2)) + 
+  geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  stat_density_2d(geom = "polygon",
+                  data = umap_tidy %>%
+        semi_join(anno %>% filter(group != "other")) %>%
+        left_join(anno) %>%
+        semi_join(activity %>% filter(auc_mean >= 0.85 | drug == "DMSO")) %>%
+        filter(line %in% c("D004T01", "D007T01", "D019T01")) %>% # "D007T01", "D030T01", "D027T01", "D046T01" # 4 / 7 / 19
+        filter(concentration == "nan") %>% # keeping single dose drugs
+        filter(group %in% c("DMSO", "MEK", "GSK")) %>%
+    group_by(drug, line) %>% 
+    sample_n(1000, replace = TRUE),
+    
+  aes(alpha = ..level.., fill = group)) + 
+  scale_fill_brewer(type = "qual", palette = "Set2") +
+  facet_grid(line ~ group) + # ~ line
   labs(x = "UMAP 1",
        y = "UMAP 2")+
   theme(legend.position = "none") +
@@ -147,7 +243,7 @@ gg_big5_density <- umap_sampled %>%
 
 ```{r}
 gg_mtor_all <- umap_tidy %>%
-    
+  filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
   filter(line %in% c("D027T01")) %>%
@@ -176,12 +272,17 @@ drug_order <- c("CHIR-98014", "DMSO")
 
 center_df <- umap_tidy %>%
     filter(drug %in% drug_order) %>%
+
+  filter(partition %in% c(1,2)) %>%
+
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
   group_by(drug, line, concentration) %>%
   sample_n(500, replace = TRUE) %>% ungroup()
 
 gg_gsk_all <- umap_tidy %>%
-    
+
+    filter(partition %in% c(1,2)) %>%
+
   filter(drug == "DMSO" | grepl(drug, pattern = drug_order[1])) %>%
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
   
@@ -221,6 +322,9 @@ drug_order <- c("Ulixertinib (BVD-523, VRT752271)",
 
 center_df <- umap_tidy %>% filter(concentration == "nan") %>%
     filter(drug %in% drug_order) %>%
+
+  filter(partition %in% c(1,2)) %>%
+
   group_by(drug, line, concentration) %>%
   sample_n(500, replace = TRUE) %>% 
   summarise(v1 = mean(v1),
@@ -295,6 +399,9 @@ gg_target
 
 ```{r}
 gg_target_density <- umap_sampled %>%
+
+  filter(partition %in% c(1,2)) %>%
+
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -345,7 +452,8 @@ plot_df_raw <- create_plot_df(drug_order = c("Binimetinib", "Trametinib"),
 plot_df <- plot_df_raw %>% 
   mutate(plot_trace = case_when(TRUE ~ purrr::map(plot, ~ .x$fit))) 
 
-gg_mek_traj_sel <- draw_trajectory_bulk(plot_df)
+
+gg_mek_traj_sel <- draw_trajectory_bulk(plot_df) + coord_fixed()
 
 gg_mek_traj_sel
 ```
@@ -368,14 +476,22 @@ traj_df %>%
   geom_point_rast() + 
   scale_color_viridis_d() + 
   theme_cowplot() + 
-  facet_wrap(~ drug)
+
+  facet_grid(line ~ drug) + 
+  coord_fixed() + 
+  labs(x = "UMAP 1", 
+       y = "UMAP 2")
 ```
 
 
 ```{r}
+
+doi = "Trametinib"
+loi = "D027T01"
+
 gg_traj_incl <- traj_df %>%
-  filter(drug == "Trametinib") %>%
-  filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
+  filter(drug == doi & line == loi) %>%
+  #filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
   filter(dist <= threshold) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(data = umap_sampled %>% dplyr::select(-line, -concentration), alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -383,11 +499,14 @@ gg_traj_incl <- traj_df %>%
   scale_color_viridis_c() + 
   theme_cowplot() + 
   facet_grid(~ line) + 
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom") + 
+  coord_fixed() + 
+  labs(x = "UMAP 1",
+       y = "UMAP 2")
 
 gg_size_pc <- traj_df %>% 
-  filter(drug == "Trametinib") %>%
-  filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
+  filter(drug == doi & line == loi) %>%
+ #filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
   ggplot(aes(lambda, size)) + 
   #geom_point() + 
   #scale_color_viridis_d() + 
@@ -395,12 +514,13 @@ gg_size_pc <- traj_df %>%
   geom_smooth(color = "black") + 
   geom_vline(xintercept = 8, linetype= "dashed") + 
   geom_vline(xintercept = 9.5, linetype= "dashed") + 
-  labs(x = "UMAP 1",
-       y = "UMAP 2")
+  labs(x = "lambda",
+       y = "size [pixels]")
 
 gg_conc_pc <- traj_df %>% 
-  filter(drug == "Trametinib") %>%
-  filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
+  filter(drug == doi & line == loi) %>%
+ # filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
+
   ggplot(aes(lambda, fill = concentration)) + 
   geom_density(alpha = 0.2, position = "fill") + 
   theme_cowplot() +
@@ -413,7 +533,7 @@ gg_conc_pc <- traj_df %>%
 plot_grid(plot_grid(gg_traj_incl,gg_size_pc, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_conc_pc,
           labels = c('', 'C'), label_size = 12, ncol = 1) + 
-  ggsave(paste0(PATH, "reports/pseudotime_meki.pdf"), width = 8, height = 8)
+  ggsave(paste0(PATH, "reports/pseudotime_meki_", loi, "_", doi, ".pdf"), width = 8, height = 8)
 ```
 
 
@@ -443,7 +563,9 @@ gg_mek_traj_sel  + ggsave(paste0(PATH, "reports/figures/gg_mek_traj_sel.pdf"), w
 gg_bini_traj_sel + ggsave(paste0(PATH, "reports/figures/gg_bini_traj_sel.pdf"), width = 4, height = 4)
 gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
 
-gg_big5_density + ggsave(paste0(PATH, "reports/figures/gg_big5_density.pdf"), width = 8, height = 8)
+
+gg_big5_density + ggsave(paste0(PATH, "reports/figures/gg_big5_density.pdf"), width = 16, height = 8)
+gg_mekgsk_density + ggsave(paste0(PATH, "reports/figures/gg_mekgsk_density.pdf"), width = 12, height = 12)
 ```
 
 

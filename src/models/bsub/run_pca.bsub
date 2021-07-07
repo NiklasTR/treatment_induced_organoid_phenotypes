@@ -1,0 +1,19 @@
+#! /usr/bin/bash
+
+module load R/3.6.2
+module load pandoc/2.2.1
+module load gdal/3.0.2
+module load anaconda3/2019.07
+
+# run:
+# bsub -R "rusage[mem=150GB]" src/features/FeatureAnalysis/run_pca.bsub -o /src/features/FeatureAnalysis/out.bsub -e /src/features/FeatureAnalysis/error.bsub
+
+# incremental PCA
+python src/models/FeatureAnalysis/PCAScaledFeatures.py
+# Aggregated features 6.6M x 486 and incrementalPCA projected features are stored in:  
+# data/interim/FeatureAnalysis/line_differences/human/all_drugs/results
+
+# convert the pca transformed object into an .Rds object locally
+Rscript src/models/umap/tidy_pca.R
+
+
