@@ -25,7 +25,7 @@ library(scico)
 
 # I wish I could solve my path problems with the here package. 
 #PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
-PATH = paste0(here::here(), "/",)
+PATH = paste0(here::here(), "/")
 
 # Loading data and formatting for easier access
 obj <- readRDS(paste0(PATH, args[1]))
