@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = T, message = F, warning = F, results = 'hide')
 
 ```{r}
 library(SummarizedExperiment)
+library(DESeq2) #optional
 library(glmnet)
 library(pheatmap)
 library(reshape2)
