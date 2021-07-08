@@ -30,6 +30,7 @@ references/layouts/qgel
 
 # temp files
 .#
+__pycache__
 
 ## conda
 env
