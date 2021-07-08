@@ -28,7 +28,7 @@ library(scico)
 PATH = here::here()
 
 # Loading data and formatting for easier access
-obj <- readRDS(paste0(PATH, args[1]))
+obj <- readRDS(paste0(PATH, "/", args[1]))
 # # Also, I load similarly processed data, where only DMSO treated organoids were included in PCA and/or Harmony was tested
 # obj_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds"))
 # dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
