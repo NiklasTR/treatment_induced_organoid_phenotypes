@@ -17,7 +17,4 @@ Rscript src/models/umap/UMAP_organoids.R \
         "references/Screenings_Imaging_Manuscript.xlsx"
         
 # Arguments must be supplied (input file name, seed, sampling_rate)
-Rscript src/models/umap/tidy_umap.R \
-        "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \ 
-        "123" \
-        "0.05"
+Rscript src/models/umap/tidy_umap.R "/data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" "123" "0.05"
