@@ -27,7 +27,7 @@ library(scico)
 #PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 PATH = paste0(here::here(), "/")
 
-# Loading data and formatting for easier access
+# Loading data and formatting for easier access, commented non-essential code
 obj <- readRDS(paste0(PATH, args[1]))
 # # Also, I load similarly processed data, where only DMSO treated organoids were included in PCA and/or Harmony was tested
 # obj_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds"))
@@ -43,6 +43,12 @@ pca_tidy <- reducedDims(obj)$PCA %>% cbind(colData(obj)) %>% as_tibble() %>% jan
 # ## Spiking in LDC classifier data to DMSO-only data
 # umap_tidy_dmso_h <- reducedDims(dmso_h)$UMAP %>% cbind(colData(dmso_h)) %>% as_tibble() %>% janitor::clean_names()
 # umap_tidy_dmso <- reducedDims(dmso)$UMAP %>% cbind(colData(dmso)) %>% as_tibble() %>% janitor::clean_names()
+
+## TODO refactor feature and LDC annotation
+# hacky way - extracting intensity features for objecy creation
+source(here::here("src/models/umap/LDC_organoids.R"))
+source(here::here("src/models/umap/annotate_features.R"))
+
 
 # adding intensity values to the umap/pca_tidy object
 intensity <- read_rds(paste0(PATH, "data/interim/FeatureAnalysis/feature_intensity.rds")) %>%
