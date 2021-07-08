@@ -63,7 +63,7 @@ promise_long <- assays(promise_expr)$expr %>%
   inner_join(as_tibble(colData(promise_expr), rownames = 'id')) %>%
   select(-chip_name)
 
-## exclude lines 15 and 52 due to potential contamination
+## adding phenotype information
 promise_long <- promise_long %>% 
   mutate(phenotype = ifelse(line %in% solid, 'solid', 
                      ifelse(line %in% cystic, 'cystic', 'other'))) %>% 
@@ -72,7 +72,7 @@ promise_long <- promise_long %>%
 
 # Quality control
 
-We perform a clustering to check if the samples are grouped correctly.
+We perform a clustering to check if the samples are grouped by line of origin.
 
 ```{r}
 ## make expr matrix
@@ -94,7 +94,9 @@ pheatmap(expr_mat[order(apply(expr_mat, 1, sd), decreasing = T)[1:500],],
          annotation_col = anno)
 ```
 
-'D021_2017-05-19' looks like a technical outlier so we exclude it from the data. We do not see a clear separation of cystic and solid organoid lines based on the clustering.
+'D021_2017-05-19' looks like a technical outlier so we exclude D021T01 from the data. We do not see a clear separation of cystic and solid organoid lines based on the clustering.
+
+D054T01 and D055T01 have been shown to be cross-contaminated, most likely from D046T01. We remove the samples from the dataset.
 
 ```{r}
 ## exclude outlier
@@ -199,7 +201,7 @@ drug_expr <- drug_expr %>% filter(symbol != '(Intercept)') %>%
   arrange(desc(coef))
 ```
 
-Check if therea re correlations in the gene expression data for some of the top coefficients.
+Check if there are correlations in the gene expression data for some of the top coefficients.
 
 ```{r}
 plot(filter(aucroc, drug == 'AZ 960')$auroc, x_lasso[,'KIT'])
