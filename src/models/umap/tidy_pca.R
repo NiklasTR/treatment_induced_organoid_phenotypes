@@ -10,6 +10,9 @@ pca_path <- here::here("data/interim/FeatureAnalysis/line_differences/human/all_
 h5ls(pca_path)
 hdf5_pca <- h5read(pca_path, "features_organoids") %>% as_tibble()
 hdf5_pca_meta <- h5read(pca_path, "metadata_organoids") %>% as.matrix %>% t() %>% as_tibble() %>% magrittr::set_colnames(h5read(pca_path, "metadata_names_organoids"))
+
+print(hdf5_pca_meta$Line %>% table())
+
 hdf5_pca <- cbind(hdf5_pca_meta, hdf5_pca) %>% 
   arrange(Line, Plate, Well) %>%
   janitor::clean_names() %>%
