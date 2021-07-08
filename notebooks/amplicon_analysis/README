@@ -1,0 +1,5 @@
+This complete analysis was done using a snakemake workflow. 
+The plots were generated using R.
+The whole analysis with input and output files is stored in the protected directory B110-Isilon3/valentini/amplicon_analysis
+In the current directory one can find only the scripts and the workflow for data protection reasons.
+
