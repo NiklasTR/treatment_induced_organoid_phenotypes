@@ -1,8 +1,13 @@
 #!/usr/bin/Rscript
 
+# defining lib path
+.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
+print(.libPaths())
+
 # packages
 library(tidyverse)
 library(monocle3)
+library(here)
 
 ## TODO reenable command line knobs after refactoring and removing script from tidy_umap.R
 # run:
