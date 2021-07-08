@@ -41,6 +41,14 @@ obj <- readRDS(paste0(PATH, args[1]))
 # dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
 # dmso <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_dmso.Rds"))
 
+# clustering UMAP data using graph-based clustering
+length_in = 1e-7
+print(paste0("resolution is ", length_in))
+  obj_graph = cluster_cells(obj, 
+                            verbose = TRUE, 
+                            resolution = length_in,
+                            random_seed = 1334)
+
 # Formatting UMAP tables for easy access
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() 
 pca_tidy <- reducedDims(obj)$PCA %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names()
@@ -70,6 +78,9 @@ umap_sampled <- umap_tidy%>%
 umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 pca_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
 umap_sampled %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+
+# write object to file
+obj %>% saveRDS(paste0(PATH, args[1]))
 
 # other output data for comparison
 # umap_tidy_h %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_tidy.Rds"))
