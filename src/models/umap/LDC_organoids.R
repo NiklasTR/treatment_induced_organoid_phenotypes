@@ -4,22 +4,25 @@
 library(tidyverse)
 library(monocle3)
 
+## TODO reenable command line knobs after refactoring and removing script from tidy_umap.R
 # run:
-args = commandArgs(trailingOnly=TRUE)
+#args = commandArgs(trailingOnly=TRUE)
 
 # not run: 
 # args <- c("data/interim/FeatureAnalysis/organoid_viability/human/results", "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds")
 
-print(args)
+#print(args)
 
-if (!length(args)==2) {
-  stop("Arguments must be supplied (input directory logs, input monocle object).n", call.=FALSE)
-} 
+#if (!length(args)==2) {
+#  stop("Arguments must be supplied (input directory logs, input monocle object).n", call.=FALSE)
+#} 
 
-
+# hacky way to define input
+ldc_input = "data/interim/FeatureAnalysis/organoid_viability/human/results" # args[1]
+monocle_input = "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" # args[2]
 
 # find classification_logs and aggregate results for UMAP filtering
-log <- list.files(args[1], full.names = TRUE, pattern = "log.csv") %>%
+log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
   as_tibble() %>% janitor::clean_names() %>%
   # reading logs
   mutate(data = purrr::map(value, ~ .x %>% read_csv)) %>% 
@@ -31,8 +34,15 @@ log <- list.files(args[1], full.names = TRUE, pattern = "log.csv") %>%
   mutate(n_log = purrr::map(data, ~ .x %>% nrow())) %>% 
   unnest(n_log)
 
+#117 removing lines D054T01 and D055T01, this is not an issue, as LDCs are trained on a line-level
+## TODO requires refactoring with line input
+print(log$line %>% table())
+print("dropping lines")
+log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01")))
+print(log$line %>% table())
+
 # accessing the monocle object
-obj <- readRDS(args[2])
+obj <- readRDS(monocle_input)
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names()
 
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
@@ -48,4 +58,4 @@ df <- log %>% dplyr::select(everything(), -n_log) %>%
 
 # I am saving my final result
 pData(obj) <- df
-obj %>% saveRDS(args[2])
+obj %>% saveRDS(monocle_input)
