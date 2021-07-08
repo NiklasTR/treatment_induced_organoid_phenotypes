@@ -466,7 +466,7 @@ def get_all_features(species):
 
 def process_all_organoids(species):
     """
-    This function does not remove outlier organoids with an autoencoder. 
+    This function does **not** remove outlier organoids with an autoencoder. 
     It runs this step of feature processing using a high-mem instance.
     :param species:
     :return:
