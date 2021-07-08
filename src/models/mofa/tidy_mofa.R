@@ -3,10 +3,51 @@ library(tidyverse)
 library(readxl)
 library(SummarizedExperiment)
 
-print("loading data")
+# gene expression
+print("loading gene expression data")
 load(here("data/processed/expression/promise_expr.rda"))
 
-# TODO integrate Common_Feautres_human.txt into all drugs
+organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
+  dplyr::select(line = organoid, morphology = visual_inspection_v2)
+
+## TODO simplify
+## annotate phenotype group
+solid <- c('D004', 'D007', 'D010', 'D019', 'D020', 
+           'D022', 'D046', 'D054', 'D055')
+cystic <- c('D013', 'D018', 'D021', 'D027', 'D030')
+
+## long data frame
+promise_long <- assays(promise_expr)$expr %>% 
+  as_tibble(rownames = 'probe') %>% 
+  pivot_longer(values_to = 'expr', names_to = 'id', -probe) %>%
+  left_join(as_tibble(rowData(promise_expr), rownames = 'probe')) %>%
+  inner_join(as_tibble(colData(promise_expr), rownames = 'id')) %>%
+  select(-chip_name)
+
+## adding phenotype information
+promise_long <- promise_long %>% 
+  mutate(phenotype = ifelse(line %in% solid, 'solid', 
+                     ifelse(line %in% cystic, 'cystic', 'other'))) %>% 
+  filter(phenotype != 'other')
+
+## exclude outlier
+promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
+
+## select most highly expressed probe to represent each gene
+select_probes <- promise_long %>% group_by(symbol, probe) %>% 
+  summarise(avg_probe = mean(expr)) %>% ungroup() %>%
+  group_by(symbol) %>% top_n(1, avg_probe) %>% ungroup() %>% pull(probe)
+
+## summarize replicates
+gene_expr <- promise_long %>% 
+  # group_by(line, symbol, probe, phenotype) %>%
+  # summarise(expr = mean(expr)) %>% ungroup() %>%
+  filter(probe %in% select_probes)
+
+# imaging features
+print('loading imaging data')
+
+# TODO #118 integrate Common_Feautres_human.txt into all drugs
 # TODO evaluate better source of features to avoid mean of means
 load(here("notebooks/SCOPEAnalysis/data/well_features.RData"))
 image_features <- read_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"), 
