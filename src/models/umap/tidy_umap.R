@@ -44,10 +44,12 @@ obj <- readRDS(paste0(PATH, args[1]))
 # clustering UMAP data using graph-based clustering
 length_in = 1e-7
 print(paste0("resolution is ", length_in))
-  obj_graph = cluster_cells(obj, 
-                            verbose = TRUE, 
-                            resolution = length_in,
-                            random_seed = 1334)
+obj = cluster_cells(obj, 
+                          reduction_method = "UMAP",
+                          cluster_method = "leiden",
+                          verbose = TRUE, 
+                          resolution = length_in,
+                          random_seed = 1334)
 
 # Formatting UMAP tables for easy access
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() 
