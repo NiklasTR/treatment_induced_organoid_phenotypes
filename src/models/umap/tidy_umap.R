@@ -73,6 +73,9 @@ pca_tidy <- cbind(pca_tidy, intensity)
 umap_tidy <- cbind(umap_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
 pca_tidy <- cbind(pca_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
 
+# chekcking structure
+print(str(umap_tidy))
+
 # I subsample parts of my data. 
 umap_sampled <- umap_tidy%>%
   sample_frac(size = as.numeric(args[3]),
