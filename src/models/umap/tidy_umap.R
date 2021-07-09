@@ -43,14 +43,17 @@ obj <- readRDS(paste0(PATH, args[1]))
 
 # TODO #119 implement an if statement to skip clustering 
 # clustering UMAP data using graph-based clustering
-#length_in = 1e-7
-#print(paste0("resolution is ", length_in))
-#obj = cluster_cells(obj, 
-#                          reduction_method = "UMAP",
-#                          cluster_method = "leiden",
-#                          verbose = TRUE, 
-#                          resolution = length_in,
-#                          random_seed = 1334)
+length_in = 1e-7
+print(paste0("resolution is ", length_in))
+obj = cluster_cells(obj, 
+                          reduction_method = "UMAP",
+                          cluster_method = "leiden",
+                          verbose = TRUE, 
+                          resolution = length_in,
+                          random_seed = 1334)
+
+# write object to file
+obj %>% saveRDS(paste0(PATH, args[1]))
 
 # Formatting UMAP tables for easy access
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() 
@@ -85,9 +88,6 @@ umap_sampled <- umap_tidy%>%
 umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 pca_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
 umap_sampled %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
-
-# write object to file
-obj %>% saveRDS(paste0(PATH, args[1]))
 
 # other output data for comparison
 # umap_tidy_h %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_tidy.Rds"))
