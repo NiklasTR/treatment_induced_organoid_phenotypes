@@ -41,15 +41,16 @@ obj <- readRDS(paste0(PATH, args[1]))
 # dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
 # dmso <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_dmso.Rds"))
 
+# TODO #119 implement an if statement to skip clustering 
 # clustering UMAP data using graph-based clustering
-length_in = 1e-7
-print(paste0("resolution is ", length_in))
-obj = cluster_cells(obj, 
-                          reduction_method = "UMAP",
-                          cluster_method = "leiden",
-                          verbose = TRUE, 
-                          resolution = length_in,
-                          random_seed = 1334)
+#length_in = 1e-7
+#print(paste0("resolution is ", length_in))
+#obj = cluster_cells(obj, 
+#                          reduction_method = "UMAP",
+#                          cluster_method = "leiden",
+#                          verbose = TRUE, 
+#                          resolution = length_in,
+#                          random_seed = 1334)
 
 # Formatting UMAP tables for easy access
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() 
@@ -74,7 +75,8 @@ pca_tidy <- cbind(pca_tidy, cluster = clusters(obj), partition = partitions(obj)
 
 # I subsample parts of my data. 
 umap_sampled <- umap_tidy%>%
-  sample_frac(args[3])
+  sample_frac(size = as.numeric(args[3]),
+              replace = FALSE)
 
 # write to file
 umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
