@@ -1,7 +1,6 @@
 ---
 title: "EDA organoid partition"
 author: "Niklas Rindtorff"
-date: !r Sys.Date()
 output:
   html_document:
     keep_md: true
@@ -33,13 +32,11 @@ library(gridExtra)
 
 # modeling
 library(nnet)
-```
 
-```{r}
+# parameter
+print("parameter input:")
 print(params$data)
-
 ```
-
 
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
 
