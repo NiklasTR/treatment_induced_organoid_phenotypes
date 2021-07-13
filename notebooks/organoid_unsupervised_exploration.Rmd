@@ -7,9 +7,17 @@ output:
   pdf_document: default
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  remote: TRUE
 ---
 
 ```{r setup, include=FALSE}
+# defining lib path
+if(params$remote == TRUE){
+  .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
+}
+print(.libPaths())
+
+
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       message = FALSE,
