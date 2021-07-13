@@ -20,6 +20,9 @@ library(cowplot)
 library(princurve)
 library(scico)
 library(ggridges)
+
+# modeling
+library(nnet)
 ```
 
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
@@ -38,7 +41,7 @@ organoid_morphology <- read_delim(here::here("references/imaging/visual_classifi
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
 ```
 
-# Data Filtering
+# Partition inspection
 
 We are able to observe 4 partitions in our data. 
 After manual inspection, it becomes cleat that the two smallest partitions are mostly consisting of 
@@ -63,6 +66,7 @@ umap_df %>%
   arrange(desc(ratio))
 ```
 
+
 I remove 2 partitions from all main figures for ease of reading. Below, it is easy to toggle the removal of partitions on and off to make sure this filtering step is robust
 
 
@@ -79,6 +83,8 @@ gg_size_dist <- umap_df %>%
 
 gg_size_dist_log <- gg_size_dist + 
   scale_x_log10() 
+
+gg_size_dist_log
 ```
 
 I add the eCDF.
