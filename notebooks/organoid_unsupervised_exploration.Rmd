@@ -75,8 +75,24 @@ umap_df %>%
   arrange(desc(ratio))
 ```
 
-
 I remove 2 partitions from all main figures for ease of reading. Below, it is easy to toggle the removal of partitions on and off to make sure this filtering step is robust
+
+```{r}
+gg_cluster <- umap_df %>%
+  filter(partition %in% c(1,2)) %>%
+  ggplot(aes(v1, v2, color = factor(cluster))) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_manual(values = c(RColorBrewer::brewer.pal(12, "Set3"), "#fb9a99")) +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_cluster + ggsave(here("reports/figures/gg_cluster.pdf"), width = 4, height = 4)
+
+```
 
 
 # Organoid Size Distributions
