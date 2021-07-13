@@ -22,7 +22,6 @@ reports/large_figures/
 *.rdb
 *.rdx
 *_cache
-*_files
 *unnamed-chunk*
 
 # industry projects

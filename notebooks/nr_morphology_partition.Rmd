@@ -1,15 +1,21 @@
 ---
 title: "EDA organoid partition"
 author: "Niklas Rindtorff"
+date: !r Sys.Date()
 output:
+  html_document:
+    keep_md: true
   pdf_document: default
-  html_document: default
+params:
+  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
 ---
 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+                      cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
 ```
 
 Loading packages
@@ -29,6 +35,12 @@ library(gridExtra)
 library(nnet)
 ```
 
+```{r}
+print(params$data)
+
+```
+
+
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
 
 ```{r}
@@ -39,7 +51,8 @@ loading input data and annotation. Note that on the central cluster, with access
 PATH = paste0(here::here(), "/")
 
 #umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+umap_df <- read_rds(here::here(params$data))
 
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
@@ -301,6 +314,12 @@ gg_multinomial_line <- df %>% ggplot(aes(line, coefficient, color = partition)) 
   
 gg_multinomial_line
 ```
+
+# conclusion
+1. after processing, organoids organize in 4 distinct phenotype partitions
+2. the distribution of organoids across these partitions is non-random
+2.1 drug treatment influences the distribution of organoids across the partitions
+2.1.1 DMSO control treatment are enriched in the 
 
 # figure
 
