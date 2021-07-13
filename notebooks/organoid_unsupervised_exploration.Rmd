@@ -451,7 +451,7 @@ gg_cystic
 gg_cystic + ggsave(paste0(PATH, "reports/figures/gg_cystic.pdf"), width = 4, height = 4)
 ```
 
-```{r}
+```{r, eval = FALSE}
 plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_size,
           plot_grid(gg_line, gg_cystic, labels = c('D', 'E'), label_size = 12, ncol = 2),
