@@ -9,16 +9,12 @@ params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE,
-                      message = FALSE,
-                      warning = FALSE)
-```
+
 
 Loading packages
 
-```{r}
+
+```r
 library(tidyverse)
 library(tidyr)
 library(here)
@@ -30,14 +26,24 @@ library(ggridges)
 
 # parameter
 print("parameter input:")
+```
+
+```
+## [1] "parameter input:"
+```
+
+```r
 print(params$data)
+```
+
+```
+## [1] "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
 ```
 
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
 
-```{r}
 
-
+```r
 # I wish I could solve my path problems with the here() package, but experienced unreliable behavior 
 # PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 PATH = paste0(here::here(), "/")
@@ -55,7 +61,8 @@ organoid_morphology <- read_delim(here::here("references/imaging/visual_classifi
 We are able to observe 4 partitions in our data. 
 After manual inspection, it becomes cleat that the two smallest partitions are mostly consisting of 
 
-```{r}
+
+```r
 umap_df %>% 
   ggplot(aes(v1, v2, color = factor(partition))) + 
   geom_point_rast(alpha = 0.5, size = 0.35) + 
@@ -68,11 +75,24 @@ umap_df %>%
     coord_fixed()
 ```
 
-```{r}
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
+
+
+```r
 umap_df %>% 
   dplyr::count(partition) %>% 
   mutate(ratio = n/sum(n)) %>% 
   arrange(desc(ratio))
+```
+
+```
+## # A tibble: 4 x 3
+##   partition      n   ratio
+##   <fct>      <int>   <dbl>
+## 1 1         283583 0.916  
+## 2 2          21320 0.0689 
+## 3 3           3385 0.0109 
+## 4 4           1228 0.00397
 ```
 
 
@@ -83,7 +103,8 @@ I remove 2 partitions from all main figures for ease of reading. Below, it is ea
 
 I plot a size-distribution. 
 
-```{r, eval = TRUE}
+
+```r
 gg_size_dist <- umap_df %>% 
   filter(partition %in% c(1,2)) %>%
   ggplot(aes(size)) + 
@@ -96,9 +117,12 @@ gg_size_dist_log <- gg_size_dist +
 gg_size_dist_log
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+
 I add the eCDF.
 
-```{r}
+
+```r
 df <- umap_df %>% filter(partition %in% c(1,2))
 
 gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
@@ -112,9 +136,12 @@ gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
 gg_ecdf
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+
 For more details about distributions, please refer to *reports/Phenotypespectrum/'xyz'_dist.pdf*.
 
-```{r}
+
+```r
 line_param <- umap_df %>% filter(partition %in% c(1,2)) %>% 
   nest(-line, -replicate) %>% 
   mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
@@ -153,8 +180,10 @@ gg_size_replicate <- df %>%
 gg_size_replicate
 ```
 
-```{r}
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
 
+
+```r
 organoid_size_factor_09 <- umap_df %>% filter(partition %in% c(1,2)) %>% group_by(line) %>% 
   summarise(x = quantile(size_log, 0.9)) %>% 
   #summarise(x = mean(size_log)) %>% 
@@ -177,7 +206,10 @@ gg_size_dist_morph_ridge <- umap_df %>% filter(partition %in% c(1,2)) %>% filter
 gg_size_dist_morph_ridge
 ```
 
-```{r}
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
+
+
+```r
 umap_size <- function(umap){
   umap %>%
   #filter(Size < 1000) %>%
@@ -200,8 +232,8 @@ gg_size <- umap_size(umap_df %>% filter(partition %in% c(1,2)))
 # Organoid Size during Drug Treatment
 
 
-```{r}
 
+```r
 drug_size <- umap_df %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>%
   #filter(morphological_class == "disorganized") %>% 
@@ -221,7 +253,10 @@ ggdrug_size <- ggplot(drug_size) +
 ggdrug_size 
 ```
 
-```{r}
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+
+
+```r
 drug_count <- drug_size %>%
   dplyr::count(concentration, line, replicate, well)
 
@@ -237,8 +272,11 @@ ggdrug_count <- ggplot(drug_count) +
 ggdrug_count
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
-```{r}
+
+
+```r
 set.seed(234)
 loi = c("D022T01", "D046T01")
 
@@ -274,9 +312,12 @@ gg_drug <- umap_df %>% filter(partition %in% c(1,2)) %>%
 gg_drug
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
 
-```{r}
+
+
+```r
 loi <- c("D022T01", "D055T01")
 
 drug_size_param <- drug_size %>% 
@@ -306,11 +347,14 @@ gg_size_drug <- df %>%
 gg_size_drug
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+
 # Organoid Heterogeneity
 
 I plot 2 organoid lines treated with DMSO control
 
-```{r}
+
+```r
 set.seed(234)
 
 
@@ -336,9 +380,12 @@ gg_cys_comp <- df %>%
 gg_cys_comp
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
+
 In general, DMSO treated organoid lines cover the same latent space than drug treated organoids. This is likely influenced by the large number of untreated organoids in the dataset.
 
-```{r}
+
+```r
 set.seed(123)
 
 df <- umap_df %>% filter(partition %in% c(1,2))
@@ -358,14 +405,17 @@ gg_size_supp <- df %>%
 gg_size_supp + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"))
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+
 # Organoid line differences
 
 I create a single plot showing the two extreme organoid lines and their distribution within the embedding. 
 
-```{r}
+
+```r
 set.seed(123)
 
-loi <- c("D046T01", "D007T01",  "D027T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
+loi <- c("D055T01", "D007T01",  "D027T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
 #loi <- umap_df$line %>% unique()
 
 df <- umap_df %>%
@@ -380,8 +430,8 @@ gg_line <- df %>% dplyr::select(-line) %>%
                     filter(drug == "DMSO") %>% 
                    # filter(line %in% c("D021T01")) %>%
     filter(line %in% loi) %>% 
-    mutate(line = factor(line, levels = loi)), #%>% 
-      #sample_frac(0.1),
+    mutate(line = factor(line, levels = loi)) %>% 
+      sample_frac(0.1),
     #mutate(line = factor(line, levels = c("D021T01"))),
   aes(color = line),alpha = .4, size = 0.35, shape=16) + 
   facet_wrap( ~ line, ncol =2) +
@@ -398,13 +448,16 @@ gg_line <- df %>% dplyr::select(-line) %>%
 gg_line + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"), width = 4, height = 4)
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
 I am focusing on cystic vs solid organoid lines
 
-```{r}
+
+```r
 #UMAP Cystic (Lines 18, 13, 27, 30) vs. Solid (others) treated with DMSO, for Figure 1 / matching expression analysis done for cystic vs. rest
 
 set.seed(123)
 
+# TODO reference morphology from
 cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
 dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
@@ -412,7 +465,7 @@ df <- umap_df %>%
   filter(drug == "DMSO") %>% 
   filter(partition %in% c(1,2)) %>%
   mutate(morphology = case_when(line %in% cystic_l ~ "cystic",
-                                line %in% dense_l ~ "solid",
+                                line %in% dense_l ~ "dense",
                                  TRUE ~ "other"))
 
 gg_cystic <- umap_df %>% 
@@ -424,14 +477,13 @@ gg_cystic <- umap_df %>%
   #     sample_frac(0.05),
   # aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
   
-  geom_density_2d(data = df %>% #geom_density_2d_filled
-    filter(morphology != "other"), # %>% 
-    #  sample_frac(0.05)
-    aes(fill = morphology), size = 1.5) +
+  geom_density_2d(data = df %>%
+    filter(morphology != "other") %>% 
+      sample_frac(0.05),
+  aes(color = morphology), size = 1.5) +
 
-  #scale_color_brewer(type = "qual", palette = "Set2") +
-  #scale_fill_manual(values = c("#0571b0", "#ca0020")) + 	
-  scale_color_manual(values = c("#0571b0", "#ca0020")) + 	
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  #scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F", "#24345E"))) + 	
   #geom_density2d(color = "black") + 
   theme_classic() +
   labs(x = "UMAP 1",
@@ -439,17 +491,19 @@ gg_cystic <- umap_df %>%
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8) + 
   #theme(legend.position = "nothing")  + 
-  coord_fixed() + 
-  scale_x_reverse()
+  coord_fixed()
 
 
 gg_cystic
 ```
 
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+
 
 # Plot Export
 
-```{r}
+
+```r
 #gg_size_dist + ggsave(paste0(PATH, "reports/figures/gg_size_dist.pdf"))
 #gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
 #ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
@@ -462,7 +516,10 @@ gg_cystic
 gg_cystic + ggsave(paste0(PATH, "reports/figures/gg_cystic.pdf"), width = 4, height = 4)
 ```
 
-```{r, eval = FALSE}
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
+
+
+```r
 plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_size,
           plot_grid(gg_line, gg_cystic, labels = c('D', 'E'), label_size = 12, ncol = 2),
@@ -476,12 +533,6 @@ plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size 
   ggsave(paste0(PATH, "reports/panels/panel_size_drug.pdf"), width = 8, height = 12)
 
 gg_size_supp
-
-```
-
-
-```{r}
-sessionInfo()
 ```
 
 
@@ -489,7 +540,8 @@ sessionInfo()
 
 Here I collect pieces of code that did not make it into the final analysis but can be run in theory. In order to access these peaces of code, you have to open the *.RMD* file. 
 
-```{r}
+
+```r
 knitr::knit_exit()
 ```
 
@@ -513,423 +565,29 @@ knitr::knit_exit()
 
 
 
-## Mixture modeling of Organoid size distribution
 
 
-I estimate a log-gaussian mixture model of organoid size.
 
-```{r, eval = TRUE}
-library(mixtools)
 
-df_mix <- normalmixEM(umap_df$size_log, k = 2)
 
-df_fus <- df %>% dplyr::select(size_log) %>% mutate(posterior = "joined") %>% 
-  rbind(data.frame(size_log = df_mix$x,
-                   posterior = df_mix$posterior %>% as.data.frame() %>% round() %>% .$comp.1))
 
-ggplot(df) + 
-  geom_density(aes(x = size_log, y=..count..), alpha = 0.2) + 
-  theme_cowplot()
 
-ggplot(df_fus) + 
-  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
-  theme_cowplot()
-```
 
-```{r, eval = TRUE}
-df_mix
-```
 
 
 
-I scale this approach to all other organoid lines. 
 
-```{r}
-set.seed(0123349)
 
-umap_mix <- umap_df %>% filter(drug == "DMSO")  %>% 
-  nest(-line, -replicate) %>%
-  mutate(mix_fit = map(data, ~ normalmixEM(.x$size_log, k = 2, maxit = 5000)),
-         prob = map(mix_fit, ~ .x$posterior %>% as.data.frame() %>% .$comp.1)) 
 
-umap_mix = umap_mix %>% unnest(prob, data) 
-```
 
-```{r}
-set.seed(0.1)
 
-df = umap_mix %>% mutate(posterior = round(prob)) %>% mutate(posterior = factor(posterior))
 
-df %>% 
-  sample_frac(0.01) %>%
-  ggplot(aes(prob_dead, fill = posterior)) + 
-  geom_histogram() + 
-  scale_fill_brewer(type= "qual") + 
-  scale_y_log10() + 
-  theme_cowplot()
 
-ggplot(df) + 
-  geom_density(aes(x = size_log, fill = posterior, group = replicate), alpha = 0.5) + 
-  facet_wrap(~ line) + 
-  labs(caption = "Plotted are Replicates, DMSO treated organoids",
-       x = "ln(size)") + 
-  theme(legend.position = "bottom") +
-  theme_cowplot()
 
 
-ggplot(df) + 
-  geom_density(aes(x = size_log, y=..count.., fill = posterior), alpha = 0.2) + 
-  theme_cowplot() + 
-  facet_wrap(~ line)
-```
 
-## Count distribution of Paclitaxel treated organoids 
 
 
 
-```{r}
-drug_count_param <- drug_count %>% 
-  nest(-concentration, -line) %>% 
-  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$n, "lnorm")))
-        # param = map(fit, ~ .x$estimate %>% broom::tidy()))
-
-drug_count_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>%
-  ggplot(aes(concentration, exp(x))) + 
-    geom_point() + 
-  theme_cowplot()
-```
-
-
-```{r}
-drug_count_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>% 
-  dplyr::select(concentration, line, count = x) %>% 
-  left_join(tram_size_param %>% unnest(param) %>% 
-  filter(names == "meanlog") %>% dplyr::select(concentration, line, size = x)) %>% 
-  
-  ggplot(aes(count, size, color = concentration)) + 
-  geom_point() + 
- # geom_path(aes(group = line)) +
-  scico::scale_color_scico_d() + 
-  theme_cowplot()
-
-
-```
-
-
-
-
-## Main Panel
-
-```{r}
-plot_grid(gg_size, 
-          plot_grid(gg_line,
-                    gg_bortezomib,
-                    ncol = 2),
-          labels = "AUTO",
-          ncol = 2) + 
-  gggsave(here::here("results/figures/panel_6.pdf"))
-```
-
-## Supplemental Panel
-
-```{r}
-plot_grid(gg_harmony_effect, 
-          gg_size_supp,
-          gg_size_dist
-          )
-```
-
-## Running harmony on batches
-
-We abandoned this approach as we did not screen organoid lines across batches. Reducing batch differences automatically led to a reduction of line specific effects. 
-
-
-First, I illustrate batch effects and how they are reduced
-
-```{r, eval = FALSE}
-set.seed(123)
-
-pca_metadata_frac <- pca_metadata %>% sample_frac(0.001)
-
-pca_harmony <- pca_metadata_frac %>% dplyr::select(contains("V"))
-metadata_harmony <- pca_metadata_frac %>% dplyr::select(screen_ID, Line)
-
-my_harmony_embeddings <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_ID"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
-
-umap_pre <- uwot::umap(my_harmony_embeddings$Z_orig %>% t() %>% as_tibble(), verbose = TRUE)
-umap_post <- uwot::umap(my_harmony_embeddings$Z_corr %>% t() %>% as_tibble(), verbose = TRUE)
-
-harmony_effect <- umap_pre %>% as_tibble() %>% mutate(status = "pre") %>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)%>%
-  rbind(.,umap_post %>% as_tibble() %>% mutate(status = "post")%>% cbind(id = 1:nrow(.)) %>% cbind(metadata_harmony)) 
-
-harmony_effect %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_effect.Rds"))
-```
-
-Here we can see the effect of Harmony on batch discordances.
-
-```{r, eval = TRUE}
-harmony_effect <- readRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_effect.Rds"))
-
-gg_harmony_effect <- harmony_effect %>% 
-  mutate(status = factor(status, levels = c("pre", "post"))) %>%
-  ggplot(aes(V1, V2, color = screen_ID)) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  theme_cowplot() + 
-  scale_color_brewer(type = "qual", palette = 2) +
-  facet_wrap( ~ status) + 
-  #ggsave(here::here("vignettes/07_organoid_unsupervised_exploration/pre_post_harmony.png")) + 
-  NULL
-```
-
-Still, line-specific differences are conserved in this method.
-
-```{r}
-harmony_effect %>% 
- filter(status == "post") %>%
-  ggplot(aes(V1, V2, color = screen_ID)) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  theme_cowplot() + 
-  facet_wrap( ~ Line) + 
-  scale_color_brewer(type = "qual") +
-  #ggsave(here::here("vignettes/07_organoid_unsupervised_exploration/post_harmony_line.png")) + 
-  NULL
-```
-
-
-## Running Harmony on replicate and on replicate+line level
-
-```{r, eval = FALSE}
-set.seed(123)
-
-pca_harmony <- pca_metadata %>% dplyr::select(contains("V"))
-metadata_harmony <- pca_metadata %>% dplyr::select(screen_ID, Line)
-
-harmony_id <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_ID"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
-
-harmony_id$Z_corr %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_pca_id.Rds"))
-```
-
-I load the Harmony results.
-
-```{r, eval = FALSE}
-harmony_id_corr <- readRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_pca_id.Rds"))
-```
-
-
-
-## Running harmony on both line and batch 
-
-```{r, eval = FALSE}
-harmony_id_line <- HarmonyMatrix(
-  pca_harmony, metadata_harmony, c("screen_ID", "Line"),
-  do_pca = FALSE,
-  verbose = TRUE, 
-  return_object = TRUE
-)
-
-
-harmony_id_line %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/harmony/harmony_pca_id_line.Rds"))
-
-```
-
-## Individual Pseudotimes
-
-
-```{r, eval = FALSE}
-set.seed(123)
-
-drug_order <- umap_df %>%
-  dplyr::select(drug) %>%
-    filter(grepl(drug, pattern = "__")) %>% .$drug %>% unique() %>% sort()
-
-curve_df <- umap_df %>%
-    filter(drug %in% drug_order) %>%
-  mutate(drug = factor(drug, levels =drug_order)) %>% 
-  arrange((drug)) %>% 
-  group_by(drug, line) %>%
-  sample_n(1000, replace = TRUE) %>% # adjust based on pan-line vs. line level 
-  ungroup() %>% 
-  # running the princcurve algorithm
-  separate(drug, c("compound", "concentration"), sep = "__", remove = FALSE) %>%
-  nest(-compound, -line) %>%
-  #head(10) %>% 
-  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
-
-curve_df %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/curve_df.Rds"))
-```
-
-
-```{r, eval = FALSE}
-set.seed(123)
-
-drug_order <- umap_df %>%
-  dplyr::select(drug) %>%
-    filter(grepl(drug, pattern = "__")) %>% .$drug %>% unique() %>% sort()
-
-curve_df <- umap_df %>%
-    filter(drug %in% drug_order) %>%
-  mutate(drug = factor(drug, levels =drug_order)) %>% 
-  arrange((drug)) %>% 
-  group_by(drug, line) %>%
-  sample_n(1000, replace = TRUE) %>% # adjust based on pan-line vs. line level 
-  ungroup() %>% 
-  # running the princcurve algorithm
-  separate(drug, c("compound", "concentration"), sep = "__", remove = FALSE) %>%
-  nest(-compound, -line) %>%
-  #head(10) %>% 
-  mutate(plot = purrr::map(data, ~ create_princurve_trace(.x)))
-
-curve_df %>% saveRDS(here::here("vignettes/07_organoid_unsupervised_exploration/curve_df.Rds"))
-```
-
-
-```{r, eval = FALSE}
-gg_curve_df <- curve_df %>% 
-  mutate(compound_line = paste0(compound, "__", line)) %>%
-  mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[, ])) %>% 
-  unnest(plot_trace) 
-
-gg_curve_df %>%
-  ggplot(aes(v1, v2)) + 
-  geom_point(data = curve_df %>% unnest(data),
-             aes(color = compound), alpha = 0.05, size = 0.35) +
-  
-  geom_path(aes(group = compound_line, color = compound_line), size = 1.5, arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
-  
-  facet_grid(~ compound) +
-   
-  theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2")+
-  theme(legend.position = "bottom")
-```
-
-## Plotting gigantic overview figure
-
-
-```{r, eval = FALSE}
-gg_line_overview <- plot_cells(ods, color_cells_by="morphological_class",
-           alpha = 0.05, label_cell_groups = FALSE,
-           rasterize = TRUE) + 
-  facet_wrap(~ Line) + 
-  theme(legend.position = "nothing") + 
-  scale_color_manual(values = rev(c("#A2549B", "#D80D12", "#6E1614","#69B563", "#A9CEE1","#1E3B87"))) 
-```
-
-I directly write this supplementary plot to disc. 
-
-```{r, eval = FALSE}
-gg_line_overview + 
-  ggsave(here("results/figures/single_organoid/line.pdf"), height = 8, width = 8)
-```
-
-## Running princurve on principle component data 
-
-
- In the past, I estimated a princurve directly from the UMAP embedding. I am not sure this is a good idea. Rather, I am going to test running the princurve algorithm on a set of PCs. 
-What is the %-Variance explained per PC?
-
-```{r}
-vars_pca <- apply(reducedDims(ods)$PCA, 2, var)
-vars_pca_scaled = vars_pca/sum(vars_pca)
-
-vars_pca_scaled %>% plot()
-```
-
-This is the PCA-based princurve function. 
-
-```{r}
-create_princurve_trace_pca <- function(df){
-  df_tmp_init <- df %>% 
-  group_by(drug) %>% 
-  summarise_at(vars(contains("pc")), funs(mean)) %>%
-  ungroup()
-  
-  fit <- principal_curve(x = df %>% dplyr::select(pc1:pc5) %>% as.matrix(),
-                       start = df_tmp_init %>% dplyr::select(pc1:pc5) %>% as.matrix(),
-                       approx_points = FALSE, 
-                       trace = TRUE, 
-                       plot_iterations = FALSE, 
-                       maxit = 30,
-                       stretch =2)
-  
-  plot(fit)
-  points(df_tmp_init%>% dplyr::select(pc1:pc5) %>% as.matrix())
-
-  result <- list()
-  
-  result$fit <- fit$s[fit$ord,] %>% as_tibble()
-  result$center <- df_tmp_init
-  result$input <- df
-  
-  return(result)
-}
-```
-
-
-```{r}
-set.seed(123)
-
-drug_order <- pca_tidy %>%
-  dplyr::select(drug) %>%
-    filter(grepl(drug, pattern = "__")) %>% .$drug %>% unique() %>% sort()
-
-curve_df <- pca_tidy %>%
-    filter(drug %in% drug_order) %>%
-  mutate(drug = factor(drug, levels =drug_order)) %>% 
-  arrange((drug)) %>% 
-  group_by(drug, line) %>%
-  sample_n(1000, replace = TRUE) %>% # adjust based on pan-line vs. line level 
-  ungroup() %>% 
-  # running the princcurve algorithm
-  separate(drug, c("compound", "concentration"), sep = "__", remove = FALSE) %>%
-  nest(-compound, -line) %>%
-  head(1) %>% 
-  mutate(plot = purrr::map(data, ~ create_princurve_trace_pca(.x)))
-```
-
-
-```{r}
-set.seed(123)
-
-gg_curve_df <- curve_df %>% 
-  mutate(compound_line = paste0(compound, "__", line)) %>%
-  mutate(plot_trace = purrr::map(plot, ~ .x$fit %>% .[, ])) %>% 
-  unnest(plot_trace) 
-
-pca_subset = pca_tidy %>% sample_frac(.01)
-sample_index = pca_subset$uuid
-
-
-curve_index = FNN::get.knnx(data = pca_subset %>% dplyr::select(pc1:pc5) %>% as.matrix(), gg_curve_df %>% dplyr::select(pc1:pc5) %>% as.matrix(), k=1, algorithm=c("kd_tree"))
-
-gg_curve_df = cbind(gg_curve_df, umap_df %>% filter(uuid %in% sample_index) %>% .[curve_index$nn.index,] %>% dplyr::select(v1, v2))
-
-gg_curve_df %>%
-  ggplot(aes(v1, v2)) + 
-  geom_point(data = curve_df %>% unnest(data) %>% dplyr::select(compound, line, uuid) %>% left_join(umap_df %>% dplyr::select(uuid, v1, v2)),
-             aes(color = compound), alpha = 0.05, size = 0.35) +
-  
-  #geom_path(aes(group = compound_line, color = compound_line), size = 1.5, arrow = arrow(angle = 10, ends = "last", type = "closed", length = unit(0.15, "inches"))) + 
-  geom_point(aes(group = compound_line, color = compound_line), size = 1.5) +
-  #facet_grid(~ compound) +
-  facet_wrap(~ compound_line) +
-  theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2")+
-  theme(legend.position = "bottom")
-```
 
 
