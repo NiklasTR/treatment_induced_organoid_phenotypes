@@ -87,3 +87,4 @@ po/*~
 notebooks/SCOPEAnalysis/inst/.DS_Store
 src/data/PROMISE/R/.Rhistory
 
+.Rproj.user
