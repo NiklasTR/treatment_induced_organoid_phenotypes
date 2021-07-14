@@ -143,6 +143,7 @@ load_modules:
 	module load R/3.6.2
 	module load gcc/7.2.0 
 	module load anaconda3/2020.11
+	module load tmux/3.1c
 
 # ssh user@socket command < /path/to/file/on/local/machine
 
