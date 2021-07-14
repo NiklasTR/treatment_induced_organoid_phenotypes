@@ -27,8 +27,10 @@ knitr::opts_chunk$set(echo = TRUE,
 Loading packages
 
 ```{r}
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
 library(tidyr)
+library(magrittr)
 library(here)
 library(ggrastr)
 library(cowplot)
