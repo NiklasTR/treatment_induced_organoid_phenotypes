@@ -8,6 +8,7 @@ output:
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
   remote: FALSE
+  cache: TRUE
 ---
 
 ```{r setup, include=FALSE}
@@ -19,7 +20,7 @@ print(.libPaths())
 
 
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE,
+                      cache = params$cache,
                       message = FALSE,
                       warning = FALSE)
 ```
