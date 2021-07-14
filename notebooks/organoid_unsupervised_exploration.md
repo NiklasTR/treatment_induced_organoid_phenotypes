@@ -20,6 +20,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(magrittr)
+library(purrr)
 library(readr)
 library(here)
 library(ggrastr)
@@ -580,88 +581,28 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-##  [1] magrittr_1.5    nnet_7.3-12     ggridges_0.5.3  scico_1.2.0    
-##  [5] princurve_2.1.4 cowplot_1.1.1   ggrastr_0.2.3   here_0.1       
-##  [9] forcats_0.4.0   stringr_1.4.0   dplyr_0.8.0.1   purrr_0.3.2    
-## [13] readr_1.3.1     tidyr_0.8.3     tibble_2.1.1    ggplot2_3.1.1  
-## [17] tidyverse_1.2.1
+##  [1] ggridges_0.5.3  scico_1.2.0     princurve_2.1.4 cowplot_1.1.1  
+##  [5] ggrastr_0.2.3   here_0.1        readr_1.3.1     purrr_0.3.2    
+##  [9] magrittr_1.5    tidyr_0.8.3     dplyr_0.8.0.1   ggplot2_3.1.1  
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] Rcpp_1.0.1         lubridate_1.7.4    lattice_0.20-38   
-##  [4] assertthat_0.2.1   rprojroot_1.3-2    digest_0.6.18     
-##  [7] R6_2.4.0           cellranger_1.1.0   plyr_1.8.4        
-## [10] backports_1.1.4    evaluate_0.13      httr_1.4.0        
-## [13] pillar_1.3.1       rlang_0.3.4        lazyeval_0.2.2    
-## [16] readxl_1.3.1       rstudioapi_0.10    Matrix_1.2-17     
-## [19] rmarkdown_1.12     labeling_0.3       splines_3.6.1     
-## [22] munsell_0.5.0      broom_0.5.2        compiler_3.6.1    
-## [25] vipor_0.4.5        modelr_0.1.4       xfun_0.6          
-## [28] pkgconfig_2.0.2    ggbeeswarm_0.6.0   htmltools_0.3.6   
-## [31] tidyselect_0.2.5   codetools_0.2-16   fitdistrplus_1.1-3
-## [34] viridisLite_0.3.0  crayon_1.3.4       withr_2.1.2       
-## [37] MASS_7.3-51.3      grid_3.6.1         nlme_3.1-139      
-## [40] jsonlite_1.6       gtable_0.3.0       scales_1.0.0      
-## [43] cli_1.1.0          stringi_1.4.3      xml2_1.2.0        
-## [46] generics_0.0.2     RColorBrewer_1.1-2 tools_3.6.1       
-## [49] Cairo_1.5-10       glue_1.3.1         beeswarm_0.3.1    
-## [52] hms_0.4.2          survival_2.44-1.1  yaml_2.2.0        
-## [55] colorspace_1.4-1   rvest_0.3.3        knitr_1.22        
-## [58] haven_2.1.0
+##  [1] beeswarm_0.3.1     tidyselect_0.2.5   xfun_0.6          
+##  [4] splines_3.6.1      lattice_0.20-38    generics_0.0.2    
+##  [7] colorspace_1.4-1   viridisLite_0.3.0  htmltools_0.3.6   
+## [10] yaml_2.2.0         utf8_1.1.4         survival_2.44-1.1 
+## [13] rlang_0.3.4        pillar_1.3.1       glue_1.3.1        
+## [16] withr_2.1.2        fitdistrplus_1.1-3 RColorBrewer_1.1-2
+## [19] plyr_1.8.4         stringr_1.4.0      munsell_0.5.0     
+## [22] gtable_0.3.0       codetools_0.2-16   evaluate_0.13     
+## [25] labeling_0.3       knitr_1.22         Cairo_1.5-10      
+## [28] vipor_0.4.5        fansi_0.4.0        broom_0.5.2       
+## [31] Rcpp_1.0.1         backports_1.1.4    scales_1.0.0      
+## [34] hms_0.4.2          digest_0.6.18      stringi_1.4.3     
+## [37] grid_3.6.1         rprojroot_1.3-2    cli_1.1.0         
+## [40] tools_3.6.1        lazyeval_0.2.2     tibble_2.1.1      
+## [43] crayon_1.3.4       pkgconfig_2.0.2    MASS_7.3-51.3     
+## [46] Matrix_1.2-17      ggbeeswarm_0.6.0   assertthat_0.2.1  
+## [49] rmarkdown_1.12     R6_2.4.0           nlme_3.1-139      
+## [52] compiler_3.6.1
 ```
-
-
-# Supplement
-
-Here I collect pieces of code that did not make it into the final analysis but can be run in theory. In order to access these peaces of code, you have to open the *.RMD* file. 
-
-
-```r
-knitr::knit_exit()
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
