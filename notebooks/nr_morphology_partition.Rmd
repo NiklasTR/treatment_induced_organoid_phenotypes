@@ -7,11 +7,12 @@ output:
   pdf_document: default
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  echo: FALSE
 ---
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
+knitr::opts_chunk$set(echo = params$echo,
                       cache = TRUE,
                       message = FALSE,
                       warning = FALSE)
@@ -29,6 +30,7 @@ library(princurve)
 library(scico)
 library(ggridges)
 library(gridExtra)
+library(platetools)
 
 # modeling
 library(nnet)
@@ -53,6 +55,11 @@ umap_df <- read_rds(here::here(params$data))
 
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
+
+model_intercept <- read_rds(here::here("models/cluster/model_intercept.rds"))
+model_line <- read_rds(here::here("models/cluster/model_line.rds"))
+model_plate  <- read_rds(here::here("models/cluster/model_plate.rds"))
+model_screenid <- read_rds(here::here("models/cluster/model_screenid.rds"))
 ```
 
 # Partition inspection
@@ -94,6 +101,19 @@ partition_table <- umap_df %>%
 
 grid.arrange(partition_table)
 ```
+
+```{r}
+df <- umap_df %>% 
+  dplyr::count(partition, plate, line) %>% 
+    group_by(plate) %>%
+  mutate(ratio = (n/sum(n))*100) %>% 
+  arrange(desc(ratio)) 
+
+df %>% ggplot(aes(line, ratio, color = partition)) + geom_jitter(width = 0.2) + cowplot::theme_cowplot() + 
+  geom_label(data = df %>% filter(ratio < 75 & ratio > 25), aes(label = plate), nudge_y = -7.5) + 
+  scale_color_brewer(type = "qual", palette = "Set1")
+```
+
 
 ## drug overrepresentation
 
@@ -254,26 +274,12 @@ gg_chi_plate_line
 
 ## multinomial regression
 
-We run a multinomial regression using the *nnet* package.
+We run a multinomial regression using the *nnet* package. I loaded the models in the beginning of the vignette.
 
 ```{r, eval = TRUE}
-# preparing data matrix and using partition 1 as reference level
-df <- umap_df %>% 
-  dplyr::select(drug, line, partition, plate, screen_id) %>% 
-  mutate(drug = factor(drug),
-         line = factor(line),
-         plate = factor(plate),
-         screen_id = factor(screen_id))
+aic_multinomial <- AIC(model_intercept, model_line, model_plate, model_screenid) %>% rownames_to_column("model") %>% arrange(AIC) 
 
-df$partition %>% table()
-
-model_intercept = multinom(partition ~ 1, data = df, model = TRUE)
-model_line = multinom(partition ~ line, data = df, model = TRUE)
-model_plate = multinom(partition ~ plate, data = df, model = TRUE)
-model_screenid = multinom(partition ~ screen_id, data = df, model = TRUE)
-#model_drug = multinom(partition ~ drug, data = df, model = TRUE)
-
-aic_multinomial <- AIC(model_intercept, model_line, model_plate, model_screenid) %>% rownames_to_column("model") %>% arrange(AIC) %>% 
+aic_multinomial <- aic_multinomial %>% 
   tableGrob(., theme = ttheme_default(), rows = NULL)
 
 ```
@@ -312,11 +318,77 @@ gg_multinomial_line <- df %>% ggplot(aes(line, coefficient, color = partition)) 
 gg_multinomial_line
 ```
 
+# plate inspection
+
+```{r}
+df <- umap_df %>% 
+  filter(plate %in% c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02", "D020T01P002L03")) %>%
+  dplyr::count(partition, plate, line, well) %>% 
+    group_by(plate, well) %>%
+  mutate(ratio = (n/sum(n))*100) %>% 
+  arrange(desc(ratio)) 
+
+df %>% ggplot(aes(well, ratio, color = partition)) + geom_jitter(width = 0.2) + cowplot::theme_cowplot() + 
+  #geom_label(data = df %>% filter(ratio < 75 & ratio > 25), aes(label = plate), nudge_y = -7.5) + 
+  scale_color_brewer(type = "qual", palette = "Set1") + 
+  facet_wrap(~ plate)
+
+df <- df %>% filter(partition == 1)
+
+platetools::raw_grid(data = df$ratio,
+                     well = df$well,
+                     plate_id = df$plate,
+                     plate = 384) + 
+  scale_fill_viridis_c() + 
+  labs(title = "proportion of objects belonging to partition 1",
+       caption = "D020T01P002L03  is a plate with one of the lowest chi-square residues")
+```
+
+```{r}
+df <- umap_df %>% 
+  dplyr::count(partition, plate, line, well) %>% 
+    group_by(plate, well) %>%
+  mutate(ratio = (n/sum(n))*100) %>% 
+  arrange(desc(ratio)) 
+
+df <- df %>% filter(partition == 1)
+
+platetools::raw_grid(data = df$ratio,
+                     well = df$well,
+                     plate_id = df$plate,
+                     plate = 384,
+                     ncols = 12) + 
+  scale_fill_viridis_c()
+```
+
+There appear to be three groups: 
+* almost all organoids are within partition one, holds true for D010, D020 and D046
+* 75% of objects are within partition one
+* almost no organoids are within partition one, this is true for the three plates previously identified and discussed below.
+
+# observation
+* after processing, organoids organize in 4 distinct phenotype partitions
+* the distribution of organoids across these partitions is non-random
+  * the screening plate influences the distribution of organoids across partitions, 3 plates show strong deviation from the expected distribution, both in a chi-square test **and** in a multinomial regression. The feature **plate** is more predictive than the organoid **line** or **screen_id**
+    * D027T01P906L03
+    * D020T01P906L03
+    * D013T01P001L02
+  * drug treatment influences the distribution of organoids across the partitions
+    * DMSO control treatment are depleted in sector 2, sector 2 has previously been shown to contain dead and small organoids
+    * SN38 and bortezomib are enriched in sector 2
+  
 # conclusion
-1. after processing, organoids organize in 4 distinct phenotype partitions
-2. the distribution of organoids across these partitions is non-random
-2.1 drug treatment influences the distribution of organoids across the partitions
-2.1.1 DMSO control treatment are enriched in the 
+* given the patterns above, I believe it is most likely we are seeing systematic errors (not dependent on the biological axes of line and drug) in plates:
+  * D027T01P906L03
+  * D020T01P906L03
+  * D013T01P001L02
+* in addition we are observing deviations that are drug dependent, that I consider signal
+
+# next steps
+* inspect the three plates manually
+* remove data in case there is more evidence for otherwise non-recoverable systematic noise
+
+
 
 # figure
 

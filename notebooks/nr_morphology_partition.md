@@ -1,13 +1,13 @@
 ---
 title: "EDA organoid partition"
 author: "Niklas Rindtorff"
-date: !r Sys.Date()
 output:
   html_document:
     keep_md: true
   pdf_document: default
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  echo: FALSE
 ---
 
 
@@ -16,46 +16,17 @@ params:
 Loading packages
 
 
-```r
-library(tidyverse)
-library(tidyr)
-library(here)
-library(ggrastr)
-library(cowplot)
-library(princurve)
-library(scico)
-library(ggridges)
-library(gridExtra)
-
-# modeling
-library(nnet)
 ```
-
-
-```r
-print(params$data)
+## [1] "parameter input:"
 ```
 
 ```
 ## [1] "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
 ```
 
-
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
 
 
-```r
-# I wish I could solve my path problems with the here() package, but experienced unreliable behavior 
-# PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
-PATH = paste0(here::here(), "/")
-
-#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
-umap_df <- read_rds(here::here(params$data))
-
-organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
-  dplyr::select(line = organoid, morphology = visual_inspection_v2)
-```
 
 # Partition inspection
 
@@ -63,109 +34,17 @@ We are able to observe 4 partitions in our data.
 After manual inspection, it becomes cleat that the two smallest partitions are mostly consisting of 
 
 
-```r
-umap_partition <- umap_df %>% 
-  ggplot(aes(v1, v2, color = factor(partition))) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  scale_color_brewer(type = "qual", palette = "Set2") +
-  theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2",
-       color = "partition") + 
-  theme(legend.position = "bottom") + 
-    coord_fixed()
-```
 
-
-```r
-partition_table <- umap_df %>% 
-  dplyr::count(partition) %>% 
-  mutate(ratio = n/sum(n)*100) %>% 
-  arrange(desc(ratio)) %>% 
-  left_join(
-    # adding the max and min proportion
-    umap_df %>% 
-  dplyr::count(partition, plate) %>% 
-    group_by(plate) %>%
-  mutate(ratio = (n/sum(n))*100) %>% 
-  arrange(desc(ratio)) %>%
-  group_by(partition) %>% 
-  summarise(min_ratio = min(ratio) %>% round(3),
-            max_ratio = max(ratio) %>% round(3))
-  ) %>%
-  mutate(ratio = ratio %>% round(3)) %>%
-  tableGrob(., theme = ttheme_default(), rows = NULL)
-
-grid.arrange(partition_table)
-```
+![](nr_morphology_partition_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
+
 ## drug overrepresentation
-
-
-```r
-df <- umap_df %>% 
-  dplyr::select(drug, line, partition) %>% 
-  count(drug, partition) %>% 
-  arrange(n) 
-
-levels_df <- df %>% filter(partition == 1) %>% arrange(desc(n)) %>% .$drug
-
-df <- df %>% mutate(drug = factor(drug, levels = levels_df)) %>% 
-  mutate(group = case_when(drug == "DMSO" ~ "control",
-                           TRUE ~ "other"))
-
-partition_count_drug = df %>% 
-  ggplot(aes(drug, n+1, color = group)) + 
-  geom_point() + 
-  facet_wrap(~ partition) + 
-  scale_y_log10() + 
-  theme_cowplot() + 
-  theme(axis.text.x = element_blank()) + 
-  labs(title = "number of objects in leiden partition per drug") + 
-  geom_label(data = df %>% filter(drug == "DMSO"), aes(label = drug), nudge_x = 70, nudge_y = -.3, color = "black") + 
-  scale_color_manual(values = c("#0F9D58", "black")) + 
-  theme(legend.position = "nothing")
-
-partition_count_drug
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
 
 
-
-
-```r
-df <- umap_df %>% 
-  dplyr::select(plate, drug, line, partition) %>% 
-  count(plate, partition) %>% 
-  arrange(n) 
-
-levels_df <- df %>% filter(partition == 1) %>% arrange(desc(n)) %>% .$plate
-
-df <- df %>% mutate(plate = factor(plate, levels = levels_df))
-
-## conditional formatting
-df <- df %>%
-  mutate(group = case_when(partition == 2 & n < 100 ~ "underrepresented in partition 2",
-                           partition == 3 & n > 100 ~ "overrepresented in partition 4",
-                           partition == 4 & n > 10 ~ "overrepresented in partition 4",
-                           TRUE ~ "other"))
-
-partition_count_plate = df %>% 
-  ggplot(aes(plate, n+1, color = group)) + 
-  geom_point() + 
-  facet_wrap(~ partition) + 
-  scale_y_log10() + 
-  theme_cowplot() + 
-  theme(axis.text.x = element_blank()) + 
-  labs(title = "number of objects in leiden partition per plate") + 
-  scale_color_manual(values = c("black", "#DB4437", "#4285F4")) + 
-  theme(legend.position = "nothing")
-
-partition_count_plate
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
 
@@ -175,75 +54,13 @@ partition_count_plate
 I wonder wether certain batches or organoid lines are overrepresented in each section. 
 
 
-```r
-chi_drug <- umap_df %>% 
-  dplyr::select(drug, line, partition) %>% 
-  count(drug, partition) %>%
-  spread(key = partition, value = n, fill = 0) %>%
-  as.data.frame() %>% 
-  column_to_rownames("drug") %>% 
-  as.matrix() %>% 
-  chisq.test()
-  
-chi_drug <- chi_drug$residuals %>% as.data.frame() %>% 
-  rownames_to_column("drug") %>%
-  gather("partition", "residual", -drug) %>% 
-  arrange(residual)
-
-gg_chi_drug <- chi_drug %>% 
-  ggplot(aes(residual)) + 
-  geom_histogram() + 
-  cowplot::theme_cowplot() + 
-  labs(title = "chi square (partition x drug)",
-        x = "chi square pearson residual")
-```
-
-
-```r
-chi_drug_table <- rbind(chi_drug %>% head(5), chi_drug %>% tail(5)) %>% tableGrob(., theme = ttheme_default(), rows = NULL)
-
-chi_drug_table %>% grid.arrange()
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 ## line overrepresentation
 
 
-```r
-partition_count = umap_df %>% 
-  dplyr::select(drug, plate, partition) %>% 
-  count(plate, partition) %>%
-  #mutate(n = n +5) %>% # adding fudge factor # no difference to result
-  #spread(key = partition, value = n, fill = 5) %>% # adding fudge factor # no difference to result
-  spread(key = partition, value = n, fill = 0)
 
-chi_line <- partition_count %>%
-  as.data.frame() %>% 
-  column_to_rownames("plate") %>% 
-  as.matrix() %>% 
-  chisq.test()
-  
-chi_line <- chi_line$residuals %>% as.data.frame() %>% 
-  rownames_to_column("plate") %>%
-  gather("partition", "residual", -plate) %>% 
-  arrange(desc(residual))
-
-gg_chi_line <- chi_line %>% 
-  ggplot(aes(residual)) + 
-  geom_histogram() + 
-    cowplot::theme_cowplot() + 
-  labs(title = "chi square (partition x plate)",
-        x = "chi square pearson residual")
-```
-
-
-
-```r
-chi_line_table <- rbind(chi_line %>% head(5), chi_line %>% tail(5)) %>% tableGrob(., theme = ttheme_default(), rows = NULL)
-
-chi_line_table %>% grid.arrange()
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
@@ -251,26 +68,6 @@ chi_line_table %>% grid.arrange()
 I plot chisq residuals for each plate
 
 I recognize no difference between reimaged plates (leading digit is "9", plates were reimaged due to errors during the first pass) and plates that were not reimaged.
-
-
-```r
-df <- chi_line %>% left_join(umap_df %>% distinct(plate, line) ) %>%
-  mutate(leading_9 = substr(plate, 9,9))
-
-
-
-gg_chi_plate_line <- df %>% 
-  ggplot(aes(line, residual, color = partition)) + 
-  geom_hline(yintercept = 0) +
-  geom_jitter() + 
-  geom_text(data = df %>% filter(residual > 100), aes(label = plate), nudge_y = -20) + 
-  scale_color_brewer(type = "qual", palette = "Set1") + 
-  
-  cowplot::theme_cowplot() + 
-  theme(legend.position = "bottom")
-
-gg_chi_plate_line
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
@@ -280,26 +77,10 @@ gg_chi_plate_line
 We run a multinomial regression using the *nnet* package.
 
 
-```r
-# preparing data matrix and using partition 1 as reference level
-df <- umap_df %>% 
-  dplyr::select(drug, line, partition, plate, screen_id) %>% 
-  mutate(drug = factor(drug),
-         line = factor(line),
-         plate = factor(plate),
-         screen_id = factor(screen_id))
-
-df$partition %>% table()
-```
-
 ```
 ## .
 ##      1      2      3      4 
 ## 283583  21320   3385   1228
-```
-
-```r
-model_intercept = multinom(partition ~ 1, data = df, model = TRUE)
 ```
 
 ```
@@ -308,10 +89,6 @@ model_intercept = multinom(partition ~ 1, data = df, model = TRUE)
 ## iter  10 value 103934.587764
 ## final  value 103929.549407 
 ## converged
-```
-
-```r
-model_line = multinom(partition ~ line, data = df, model = TRUE)
 ```
 
 ```
@@ -331,10 +108,6 @@ model_line = multinom(partition ~ line, data = df, model = TRUE)
 ## stopped after 100 iterations
 ```
 
-```r
-model_plate = multinom(partition ~ plate, data = df, model = TRUE)
-```
-
 ```
 ## # weights:  316 (234 variable)
 ## initial  value 429080.285479 
@@ -352,10 +125,6 @@ model_plate = multinom(partition ~ plate, data = df, model = TRUE)
 ## stopped after 100 iterations
 ```
 
-```r
-model_screenid = multinom(partition ~ screen_id, data = df, model = TRUE)
-```
-
 ```
 ## # weights:  36 (24 variable)
 ## initial  value 429080.285479 
@@ -370,89 +139,43 @@ model_screenid = multinom(partition ~ screen_id, data = df, model = TRUE)
 ## converged
 ```
 
-```r
-#model_drug = multinom(partition ~ drug, data = df, model = TRUE)
 
-aic_multinomial <- AIC(model_intercept, model_line, model_plate, model_screenid) %>% rownames_to_column("model") %>% arrange(AIC) %>% 
-  tableGrob(., theme = ttheme_default(), rows = NULL)
-```
-
-
-
-
-```r
-anno_col = umap_df %>% 
-  distinct(plate, line, replicate) %>%
-  mutate(plate = paste0("plate", plate)) %>% 
-  as.data.frame() %>% 
-  column_to_rownames("plate")
-  
-coef(model_plate) %>% as.matrix() %>% pheatmap::pheatmap(annotation_col = anno_col, cluster_cols = TRUE, cluster_rows = FALSE)
-```
 
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
 
 
 
-
-```r
-df <- coef(model_plate) %>% as.data.frame() %>% rownames_to_column("partition") %>% 
-  gather("plate", "coefficient", -partition) %>% 
-  filter(plate != "(Intercept)") %>% 
-  mutate(plate = substr(plate, 6, nchar(.))) %>% 
-  left_join(umap_df %>% 
-  distinct(plate, line, replicate))
-
-gg_multinomial_line <- df %>% ggplot(aes(line, coefficient, color = partition)) + 
-  geom_hline(yintercept = 0) +
-  geom_jitter(width = 0.2) + 
-  geom_text(data = df %>% filter(abs(coefficient) > 10 & partition %in% c(3, 4)), aes(label = plate), nudge_y = -2, nudge_x = 1) + 
-  cowplot::theme_cowplot() + 
-  theme(legend.position = "bottom") + 
-  labs(title = "multinomial regression coefficients for partition = f(plate)") + 
-  scale_color_manual(values = RColorBrewer::brewer.pal(4, "Set1")[2:4])
-  
-gg_multinomial_line
-```
-
 ![](nr_morphology_partition_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
+# observation
+* after processing, organoids organize in 4 distinct phenotype partitions
+* the distribution of organoids across these partitions is non-random
+  * the screening plate influences the distribution of organoids across partitions, 3 plates show strong deviation from the expected distribution, both in a chi-square test **and** in a multinomial regression. The feature **plate** is more predictive than the organoid **line** or **screen_id**
+    * D027T01P906L03
+    * D020T01P906L03
+    * D013T01P001L02
+  * drug treatment influences the distribution of organoids across the partitions
+    * DMSO control treatment are depleted in sector 2, sector 2 has previously been shown to contain dead and small organoids
+    * SN38 and bortezomib are enriched in sector 2
+  
 # conclusion
-1. after processing, organoids organize in 4 distinct phenotype partitions
-2. the distribution of organoids across these partitions is non-random
-2.1 drug treatment influences the distribution of organoids across the partitions
-2.1.1 DMSO control treatment are enriched in the 
+* given the patterns above, I believe it is most likely we are seeing systematic errors (not dependent on the biological axes of line and drug) in plates:
+  * D027T01P906L03
+  * D020T01P906L03
+  * D013T01P001L02
+* in addition we are observing deviations that are drug dependent, that I consider signal
+
+# next steps
+* inspect the three plates manually
+* 
+    
 
 # figure
 
 
-```r
-plot_grid(umap_partition, grid.arrange(partition_table),
-          partition_count_drug, partition_count_plate,
-          gg_chi_drug, chi_drug_table %>% grid.arrange(),
-          gg_chi_plate_line, chi_line_table %>% grid.arrange(),
-          aic_multinomial %>% grid.arrange(), gg_multinomial_line, 
-          label_size = 12, 
-          align = "hv",
-          # scale = c(1.5, .5,
-          #           1.5, 1.5, 
-          #           1, .5,
-          #           1, .5, 
-          #           .5, 1),
-          labels = "AUTO",
-          ncol = 2) + 
-  ggsave(here::here("reports/panels/morphology_partition.pdf"),
-         width = 210, 
-         height = 297, 
-          units = "mm")
-```
 
 
 
-
-```r
-sessionInfo()
-```
 
 ```
 ## R version 3.6.1 (2019-07-05)
