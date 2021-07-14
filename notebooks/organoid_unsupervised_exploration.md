@@ -7,6 +7,7 @@ output:
   pdf_document: default
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  remote: FALSE
 ---
 
 
@@ -15,8 +16,11 @@ Loading packages
 
 
 ```r
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
 library(tidyr)
+library(magrittr)
+library(readr)
 library(here)
 library(ggrastr)
 library(cowplot)
@@ -95,8 +99,26 @@ umap_df %>%
 ## 4 4           1228 0.00397
 ```
 
-
 I remove 2 partitions from all main figures for ease of reading. Below, it is easy to toggle the removal of partitions on and off to make sure this filtering step is robust
+
+
+```r
+gg_cluster <- umap_df %>%
+  filter(partition %in% c(1,2)) %>%
+  ggplot(aes(v1, v2, color = factor(cluster))) + 
+  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_manual(values = c(RColorBrewer::brewer.pal(12, "Set3"), "#fb9a99")) +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "partition") + 
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_cluster + ggsave(here("reports/figures/gg_cluster.pdf"), width = 4, height = 4)
+```
+
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
 
 # Organoid Size Distributions
@@ -117,7 +139,7 @@ gg_size_dist_log <- gg_size_dist +
 gg_size_dist_log
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
 
 I add the eCDF.
 
@@ -136,7 +158,7 @@ gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
 gg_ecdf
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
 
 For more details about distributions, please refer to *reports/Phenotypespectrum/'xyz'_dist.pdf*.
 
@@ -180,7 +202,7 @@ gg_size_replicate <- df %>%
 gg_size_replicate
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
 
 ```r
@@ -206,7 +228,7 @@ gg_size_dist_morph_ridge <- umap_df %>% filter(partition %in% c(1,2)) %>% filter
 gg_size_dist_morph_ridge
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 
 ```r
@@ -253,7 +275,7 @@ ggdrug_size <- ggplot(drug_size) +
 ggdrug_size 
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
 
 ```r
@@ -272,7 +294,7 @@ ggdrug_count <- ggplot(drug_count) +
 ggdrug_count
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
 
 
@@ -312,7 +334,7 @@ gg_drug <- umap_df %>% filter(partition %in% c(1,2)) %>%
 gg_drug
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
 
 
 
@@ -347,7 +369,7 @@ gg_size_drug <- df %>%
 gg_size_drug
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
 
 # Organoid Heterogeneity
 
@@ -380,7 +402,7 @@ gg_cys_comp <- df %>%
 gg_cys_comp
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
 In general, DMSO treated organoid lines cover the same latent space than drug treated organoids. This is likely influenced by the large number of untreated organoids in the dataset.
 
@@ -405,7 +427,7 @@ gg_size_supp <- df %>%
 gg_size_supp + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"))
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
 
 # Organoid line differences
 
@@ -415,7 +437,7 @@ I create a single plot showing the two extreme organoid lines and their distribu
 ```r
 set.seed(123)
 
-loi <- c("D055T01", "D007T01",  "D027T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
+loi <- c("D046T01", "D007T01",  "D027T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
 #loi <- umap_df$line %>% unique()
 
 df <- umap_df %>%
@@ -430,8 +452,8 @@ gg_line <- df %>% dplyr::select(-line) %>%
                     filter(drug == "DMSO") %>% 
                    # filter(line %in% c("D021T01")) %>%
     filter(line %in% loi) %>% 
-    mutate(line = factor(line, levels = loi)) %>% 
-      sample_frac(0.1),
+    mutate(line = factor(line, levels = loi)), #%>% 
+      #sample_frac(0.1),
     #mutate(line = factor(line, levels = c("D021T01"))),
   aes(color = line),alpha = .4, size = 0.35, shape=16) + 
   facet_wrap( ~ line, ncol =2) +
@@ -448,7 +470,8 @@ gg_line <- df %>% dplyr::select(-line) %>%
 gg_line + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"), width = 4, height = 4)
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+
 I am focusing on cystic vs solid organoid lines
 
 
@@ -457,7 +480,6 @@ I am focusing on cystic vs solid organoid lines
 
 set.seed(123)
 
-# TODO reference morphology from
 cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
 dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
@@ -465,7 +487,7 @@ df <- umap_df %>%
   filter(drug == "DMSO") %>% 
   filter(partition %in% c(1,2)) %>%
   mutate(morphology = case_when(line %in% cystic_l ~ "cystic",
-                                line %in% dense_l ~ "dense",
+                                line %in% dense_l ~ "solid",
                                  TRUE ~ "other"))
 
 gg_cystic <- umap_df %>% 
@@ -477,13 +499,14 @@ gg_cystic <- umap_df %>%
   #     sample_frac(0.05),
   # aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
   
-  geom_density_2d(data = df %>%
-    filter(morphology != "other") %>% 
-      sample_frac(0.05),
-  aes(color = morphology), size = 1.5) +
+  geom_density_2d(data = df %>% #geom_density_2d_filled
+    filter(morphology != "other"), # %>% 
+    #  sample_frac(0.05)
+    aes(fill = morphology), size = 1.5) +
 
-  scale_color_brewer(type = "qual", palette = "Set2") +
-  #scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F", "#24345E"))) + 	
+  #scale_color_brewer(type = "qual", palette = "Set2") +
+  #scale_fill_manual(values = c("#0571b0", "#ca0020")) + 	
+  scale_color_manual(values = c("#0571b0", "#ca0020")) + 	
   #geom_density2d(color = "black") + 
   theme_classic() +
   labs(x = "UMAP 1",
@@ -491,13 +514,14 @@ gg_cystic <- umap_df %>%
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8) + 
   #theme(legend.position = "nothing")  + 
-  coord_fixed()
+  coord_fixed() + 
+  scale_x_reverse()
 
 
 gg_cystic
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
 
 
 # Plot Export
@@ -516,7 +540,7 @@ gg_cystic
 gg_cystic + ggsave(paste0(PATH, "reports/figures/gg_cystic.pdf"), width = 4, height = 4)
 ```
 
-![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
+![](organoid_unsupervised_exploration_files/figure-html/unnamed-chunk-19-1.png)<!-- -->
 
 
 ```r
@@ -533,6 +557,56 @@ plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size 
   ggsave(paste0(PATH, "reports/panels/panel_size_drug.pdf"), width = 8, height = 12)
 
 gg_size_supp
+```
+
+
+
+```r
+sessionInfo()
+```
+
+```
+## R version 3.6.1 (2019-07-05)
+## Platform: x86_64-apple-darwin13.4.0 (64-bit)
+## Running under: macOS  10.16
+## 
+## Matrix products: default
+## BLAS/LAPACK: /Users/rindtorf/github/promise/env/lib/R/lib/libRblas.dylib
+## 
+## locale:
+## [1] C
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+##  [1] magrittr_1.5    nnet_7.3-12     ggridges_0.5.3  scico_1.2.0    
+##  [5] princurve_2.1.4 cowplot_1.1.1   ggrastr_0.2.3   here_0.1       
+##  [9] forcats_0.4.0   stringr_1.4.0   dplyr_0.8.0.1   purrr_0.3.2    
+## [13] readr_1.3.1     tidyr_0.8.3     tibble_2.1.1    ggplot2_3.1.1  
+## [17] tidyverse_1.2.1
+## 
+## loaded via a namespace (and not attached):
+##  [1] Rcpp_1.0.1         lubridate_1.7.4    lattice_0.20-38   
+##  [4] assertthat_0.2.1   rprojroot_1.3-2    digest_0.6.18     
+##  [7] R6_2.4.0           cellranger_1.1.0   plyr_1.8.4        
+## [10] backports_1.1.4    evaluate_0.13      httr_1.4.0        
+## [13] pillar_1.3.1       rlang_0.3.4        lazyeval_0.2.2    
+## [16] readxl_1.3.1       rstudioapi_0.10    Matrix_1.2-17     
+## [19] rmarkdown_1.12     labeling_0.3       splines_3.6.1     
+## [22] munsell_0.5.0      broom_0.5.2        compiler_3.6.1    
+## [25] vipor_0.4.5        modelr_0.1.4       xfun_0.6          
+## [28] pkgconfig_2.0.2    ggbeeswarm_0.6.0   htmltools_0.3.6   
+## [31] tidyselect_0.2.5   codetools_0.2-16   fitdistrplus_1.1-3
+## [34] viridisLite_0.3.0  crayon_1.3.4       withr_2.1.2       
+## [37] MASS_7.3-51.3      grid_3.6.1         nlme_3.1-139      
+## [40] jsonlite_1.6       gtable_0.3.0       scales_1.0.0      
+## [43] cli_1.1.0          stringi_1.4.3      xml2_1.2.0        
+## [46] generics_0.0.2     RColorBrewer_1.1-2 tools_3.6.1       
+## [49] Cairo_1.5-10       glue_1.3.1         beeswarm_0.3.1    
+## [52] hms_0.4.2          survival_2.44-1.1  yaml_2.2.0        
+## [55] colorspace_1.4-1   rvest_0.3.3        knitr_1.22        
+## [58] haven_2.1.0
 ```
 
 
