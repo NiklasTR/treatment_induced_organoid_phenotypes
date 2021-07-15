@@ -12,9 +12,8 @@ organoid_morphology <- read_delim(here::here("references/imaging/visual_classifi
 
 ## TODO simplify
 ## annotate phenotype group
-solid <- c('D004', 'D007', 'D010', 'D019', 'D020', 
-           'D022', 'D046', 'D054', 'D055')
-cystic <- c('D013', 'D018', 'D021', 'D027', 'D030')
+cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
+dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
 ## long data frame
 promise_long <- assays(promise_expr)$expr %>% 
@@ -26,9 +25,8 @@ promise_long <- assays(promise_expr)$expr %>%
 
 ## adding phenotype information
 promise_long <- promise_long %>% 
-  mutate(phenotype = ifelse(line %in% solid, 'solid', 
-                     ifelse(line %in% cystic, 'cystic', 'other'))) %>% 
-  filter(phenotype != 'other')
+  mutate(phenotype = ifelse(line %in% dense_l, 'solid', 
+                      ifelse(line %in% cystic_l, 'cystic', 'other')))
 
 ## exclude outlier
 promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
