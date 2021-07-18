@@ -6,6 +6,7 @@ print(.libPaths())
 
 # packages
 library(tidyr)
+library(readr)
 library(dplyr)
 library(magrittr)
 library(monocle3)
@@ -46,6 +47,7 @@ log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
 
 colnames(log)
 
+
 # accessing the monocle object
 obj <- readRDS(monocle_input)
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names()
@@ -55,6 +57,7 @@ df <- log %>% dplyr::select(everything(), -n_log) %>%
   unnest(data) %>% 
   dplyr::select(-line) %>% janitor::clean_names() %>% 
   cbind(colData(obj), .) 
+
 
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
