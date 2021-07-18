@@ -31,9 +31,8 @@ library(scico)
 PATH = paste0(here::here(), "/")
 
 ## TODO the two scripts need to be un-commented for renewed execution of the code
-## TODO refactor feature and LDC annotation
 # hacky way - extracting intensity features for objecy creation
-#source(here::here("src/models/umap/LDC_organoids.R"))
+source(here::here("src/models/umap/LDC_organoids.R"))
 source(here::here("src/models/umap/annotate_features.R"))
 
 
@@ -78,6 +77,8 @@ pca_tidy <- cbind(pca_tidy, intensity)
 # adding cluster and segment-level data
 umap_tidy <- cbind(umap_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
 pca_tidy <- cbind(pca_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
+
+# adding LDC values
 
 # chekcking structure
 print(str(umap_tidy))
