@@ -27,7 +27,10 @@ library(here)
 
 # hacky way to define input
 ldc_input = "data/interim/FeatureAnalysis/organoid_viability/human/results" # args[1]
-monocle_input = "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" # args[2]
+monocle_input = "data/interim/PhenotypeSpectrum/archive_pre_qc/hdf5_umap_absolute_all_drugs.Rds" # args[2]
+
+drop_lines = c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01")
+drop_plates = c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")
 
 # find classification_logs and aggregate results for UMAP filtering
 log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
@@ -42,15 +45,8 @@ log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
   mutate(n_log = purrr::map(data, ~ .x %>% nrow())) %>% 
   unnest(n_log)
 
-#117 removing lines D054T01 and D055T01, this is not an issue, as LDCs are trained on a line-level
-## TODO requires refactoring with line input
-head(log)
-print(log$line %>% table())
-print("dropping lines and tables")
+colnames(log)
 
-log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01")))
-
-print(log$line %>% table())
 
 # accessing the monocle object
 obj <- readRDS(monocle_input)
@@ -61,20 +57,15 @@ log <- log %>% dplyr::select(everything(), -n_log) %>%
   unnest(data) %>% 
   dplyr::select(-line) %>% janitor::clean_names()
 
-log  %>%
-  head(10)
-  
+df <- log %>% cbind(colData(obj), .) 
+
+
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
 ldc_n <- log %>% dplyr::select(line, n = n_log)
 stopifnot(obj_n == ldc_n)
 
-# 
-df <- log %>% cbind(colData(obj), .)
-
 # I am saving my final result
 pData(obj) <- df
 obj %>% saveRDS(monocle_input)
-
- %>% 
-  dplyr::filter(!(plate %in% c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")))
+df %>% write_csv(here::here("data/processed/ldc_viability.csv"))
