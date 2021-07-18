@@ -45,27 +45,33 @@ log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
 ## TODO requires refactoring with line input
 colnames(log)
 print(log$line %>% table())
-print(log$plate %>% table())
 print("dropping lines and tables")
-log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01"))) %>% 
-  dplyr::filter(!(plate %in% c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")))
+
+log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01")))
+
 print(log$line %>% table())
 
 # accessing the monocle object
 obj <- readRDS(monocle_input)
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names()
-
+  
+# write object with added LDC information.
+log <- log %>% dplyr::select(everything(), -n_log) %>% 
+  unnest(data) %>% 
+  dplyr::select(-line) %>% janitor::clean_names() %>%
+  head()
+  
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
 ldc_n <- log %>% dplyr::select(line, n = n_log)
 stopifnot(obj_n == ldc_n)
-  
-# write object with added LDC information.
-df <- log %>% dplyr::select(everything(), -n_log) %>% 
-  unnest(data) %>% 
-  dplyr::select(-line) %>% janitor::clean_names() %>%
-  cbind(colData(obj), .)
+
+# 
+df <- log %>% cbind(colData(obj), .)
 
 # I am saving my final result
 pData(obj) <- df
 obj %>% saveRDS(monocle_input)
+
+ %>% 
+  dplyr::filter(!(plate %in% c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")))
