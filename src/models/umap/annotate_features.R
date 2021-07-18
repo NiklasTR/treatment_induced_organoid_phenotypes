@@ -3,7 +3,9 @@
 print(.libPaths())
 
 library(rhdf5)
-library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(magrittr)
 library(here)
 
 path = here("data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/ReducedFeatures_all_drugs_human.h5")
