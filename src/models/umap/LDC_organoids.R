@@ -5,7 +5,9 @@
 print(.libPaths())
 
 # packages
-library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(magrittr)
 library(monocle3)
 library(here)
 
@@ -41,9 +43,12 @@ log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
 
 #117 removing lines D054T01 and D055T01, this is not an issue, as LDCs are trained on a line-level
 ## TODO requires refactoring with line input
+colnames(log)
 print(log$line %>% table())
-print("dropping lines")
-log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01")))
+print(log$plate %>% table())
+print("dropping lines and tables")
+log <- log %>% dplyr::filter(!(line %in% c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01"))) %>% 
+  dplyr::filter(!(plate %in% c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")))
 print(log$line %>% table())
 
 # accessing the monocle object
