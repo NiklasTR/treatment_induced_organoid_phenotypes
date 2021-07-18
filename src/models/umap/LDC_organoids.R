@@ -6,6 +6,7 @@ print(.libPaths())
 
 # packages
 library(tidyr)
+library(readr)
 library(dplyr)
 library(magrittr)
 library(monocle3)
@@ -43,7 +44,7 @@ log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
 
 #117 removing lines D054T01 and D055T01, this is not an issue, as LDCs are trained on a line-level
 ## TODO requires refactoring with line input
-colnames(log)
+head(log)
 print(log$line %>% table())
 print(log$plate %>% table())
 print("dropping lines and tables")
