@@ -58,7 +58,6 @@ df <- log %>% dplyr::select(everything(), -n_log) %>%
   dplyr::select(-line) %>% janitor::clean_names() %>% 
   cbind(colData(obj), .) 
 
-
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
 ldc_n <- log %>% dplyr::select(line, n = n_log)
