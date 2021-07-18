@@ -1,13 +1,16 @@
 #!/usr/bin/Rscript
 # defining lib path
-.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
+.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
 print(.libPaths())
 
 # warning
 # after deciding against harmony normalization, I commented all code related to it
 
 # packages
-library(tidyverse)
+library(tidyr)
+library(tibble)
+library(dplyr)
+library(magrittr)
 library(monocle3)
 library(readxl)
 #library(harmony)
