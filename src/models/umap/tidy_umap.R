@@ -15,7 +15,10 @@ set.seed(args[2])
 
 
 # libraries
-library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(magrittr)
+library(readr)
 library(here)
 library(monocle3)
 library(ggrastr)
@@ -31,7 +34,7 @@ PATH = paste0(here::here(), "/")
 ## TODO refactor feature and LDC annotation
 # hacky way - extracting intensity features for objecy creation
 #source(here::here("src/models/umap/LDC_organoids.R"))
-#source(here::here("src/models/umap/annotate_features.R"))
+source(here::here("src/models/umap/annotate_features.R"))
 
 
 # Loading data and formatting for easier access, commented non-essential code
