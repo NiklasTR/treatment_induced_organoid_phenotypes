@@ -66,4 +66,4 @@ stopifnot(obj_n == ldc_n)
 # I am saving my final result
 pData(obj) <- df
 obj %>% saveRDS(monocle_input)
-df %>% write_csv(here::here("data/processed/ldc_viability.csv"))
+df %>% write_rds(here::here("data/processed/ldc_viability.rds"))
