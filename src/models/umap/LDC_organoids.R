@@ -59,8 +59,10 @@ umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% j
 # write object with added LDC information.
 log <- log %>% dplyr::select(everything(), -n_log) %>% 
   unnest(data) %>% 
-  dplyr::select(-line) %>% janitor::clean_names() %>%
-  head()
+  dplyr::select(-line) %>% janitor::clean_names()
+
+log  %>%
+  head(10)
   
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
