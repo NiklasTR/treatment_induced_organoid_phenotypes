@@ -19,6 +19,7 @@ library(tidyr)
 library(dplyr)
 library(magrittr)
 library(readr)
+library(stringr)
 library(here)
 library(monocle3)
 library(ggrastr)
@@ -78,7 +79,8 @@ pca_tidy <- cbind(pca_tidy, intensity)
 umap_tidy <- cbind(umap_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
 pca_tidy <- cbind(pca_tidy, cluster = clusters(obj), partition = partitions(obj)) %>% as_tibble()
 
-# adding LDC values
+
+# TODO adding LDC values
 
 # chekcking structure
 print(str(umap_tidy))
