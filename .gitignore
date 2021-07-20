@@ -4,6 +4,9 @@
 **/.DS_Store
 core.48991
 
+# cython
+*cpython-37.pyc
+
 # R
 .Rproj*
 *.Rproj
