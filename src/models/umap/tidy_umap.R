@@ -26,6 +26,7 @@ library(ggrastr)
 library(cowplot)
 library(princurve)
 library(scico)
+library(rhdf5) 
 
 # I wish I could solve my path problems with the here package. 
 #PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
