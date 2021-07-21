@@ -4,8 +4,8 @@ print(.libPaths())
 
 # input
 args = commandArgs(trailingOnly=TRUE)
-if (!length(args)==3) {
-  stop("Arguments must be supplied (input file name, seed, sampling_rate).n", call.=FALSE)
+if (!length(args)==4) {
+  stop("Arguments must be supplied (input file name, seed, sampling_rate, source for feature intensity function).n", call.=FALSE)
 } 
 
 print(args)
@@ -36,6 +36,7 @@ PATH = paste0(here::here(), "/")
 source(here::here("src/models/umap/LDC_organoids.R"))
 source(here::here("src/models/umap/annotate_features.R"))
 
+annotate_features(here::here(args[4]))
 
 # Loading data and formatting for easier access, commented non-essential code
 obj <- readRDS(paste0(PATH, args[1]))
