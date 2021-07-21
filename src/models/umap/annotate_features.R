@@ -36,6 +36,7 @@ annotate_features = function(path){
   df %>% write_rds(here("data/interim/FeatureAnalysis/feature_intensity.rds"))
 
   print(head(df))
+  print(nrow(df))
 
 
 }
