@@ -10,6 +10,10 @@ load(here("data/processed/expression/promise_expr.rda"))
 print("loading morphology annotation")
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
+
+print("loading imaging metadata")
+morph_metadata = read_excel("references/Screenings_Imaging_Manuscript.xlsx")
+
 ## annotate phenotype group
 cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line 
 dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line 
@@ -55,8 +59,6 @@ print('loading imaging data')
 load(here("notebooks/SCOPEAnalysis/data/well_features.RData"))
 image_features <- read_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"), 
                                  col_names = TRUE)
-# read imaging metadata
-morph_metadata = read_excel("references/Screenings_Imaging_Manuscript.xlsx")
 
 print("preparing data")
 # the overwhelming majority of samples has 1-2 probes per gene on the HG-U133 chip.
