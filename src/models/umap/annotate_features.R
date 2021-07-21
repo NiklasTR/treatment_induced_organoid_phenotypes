@@ -8,7 +8,7 @@ library(dplyr)
 library(magrittr)
 library(here)
 
-path = here("data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/ReducedFeatures_all_drugs_human.h5")
+path = here("data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/filtered_lenient/ReducedFeatures_all_drugs_human.h5")
 
 print('extracting annotation')
 
