@@ -29,7 +29,8 @@ promise_long <- promise_long %>%
                       ifelse(line %in% cystic_l, 'cystic', 'other')))
 
 ## exclude outlier
-promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
+promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021')) %>% 
+  filter(!line %in% c('D046', 'D010'))
 
 ## select most highly expressed probe to represent each gene
 select_probes <- promise_long %>% group_by(symbol, probe) %>% 
