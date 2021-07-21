@@ -16,5 +16,5 @@ module load anaconda3/2019.07
 #        "123" \
 #        "references/Screenings_Imaging_Manuscript.xlsx"
         
-# Arguments must be supplied (input file name, seed, sampling_rate)
-Rscript src/models/umap/tidy_umap.R "/data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" "123" "0.05"
+# Arguments must be supplied (input file name, seed, sampling_rate, source for feature intensity extraction)
+Rscript src/models/umap/tidy_umap.R "/data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" "123" "0.05" "data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/filtered_lenient/ReducedFeatures_all_drugs_human.h5"
