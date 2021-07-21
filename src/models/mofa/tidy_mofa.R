@@ -3,18 +3,22 @@ library(tidyverse)
 library(readxl)
 library(SummarizedExperiment)
 
-# gene expression
+# load assets
 print("loading gene expression data")
 load(here("data/processed/expression/promise_expr.rda"))
 
+print("loading morphology annotation")
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
+## annotate phenotype group
+cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line 
+dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line 
 
 ## TODO simplify
-## annotate phenotype group
-cystic_l <- organoid_morphology %>% filter(morphology == "cystic") %>%.$line %>% paste0(., "01")
-dense_l <- organoid_morphology %>% filter(morphology == "solid") %>%.$line %>% paste0(., "01")
 
+
+
+# gene expression
 ## long data frame
 promise_long <- assays(promise_expr)$expr %>% 
   as_tibble(rownames = 'probe') %>% 
@@ -28,9 +32,9 @@ promise_long <- promise_long %>%
   mutate(phenotype = ifelse(line %in% dense_l, 'solid', 
                       ifelse(line %in% cystic_l, 'cystic', 'other')))
 
-## exclude outlier
-promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021')) %>% 
-  filter(!line %in% c('D046', 'D010'))
+## exclude outlier - using a leftjoin for that
+# promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021')) %>% 
+#   filter(!line %in% c('D046', 'D010'))
 
 ## select most highly expressed probe to represent each gene
 select_probes <- promise_long %>% group_by(symbol, probe) %>% 
