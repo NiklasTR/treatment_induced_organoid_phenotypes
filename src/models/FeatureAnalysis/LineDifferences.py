@@ -499,13 +499,13 @@ def process_all_organoids(species):
     feats_fn = os.path.join(
         results_dir, "ReducedFeaturesPCA_all_drugs_components{}.h5".format(species))
     OrganoidFeatures.save_features(
-        features=eigenvector,
+        features=pd.DataFrame(eigenvector),
         metadata=dmso_md, filename=feats_fn)
         
     feats_fn = os.path.join(
         results_dir, "ReducedFeaturesPCA_all_drugs_variance{}.h5".format(species))
     OrganoidFeatures.save_features(
-        features=eigenvalue,
+        features=pd.DataFrame(eigenvalue),
         metadata=dmso_md, filename=feats_fn)
 
     # Save original and PCA features
