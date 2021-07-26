@@ -61,6 +61,7 @@ harmony_id <- HarmonyMatrix(
   pca_harmony, metadata_harmony, c("screen_id"),
   do_pca = FALSE,
   verbose = TRUE,
+  nclust = 5, # dead, cystic, solid, intermediate, other
   return_object = TRUE
 )
 
