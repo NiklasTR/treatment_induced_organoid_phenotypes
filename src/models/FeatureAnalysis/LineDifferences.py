@@ -490,6 +490,23 @@ def process_all_organoids(species):
         columns=["PC{}".format(ii+1) for ii in
                  range(dmso_feats.shape[1])],
         index=dmso_feats.index)
+        
+    print("preparing eigenvalues")
+    eigenvector = pca.components_.T 
+    eigenvalue = pca.explained_variance_
+    
+    # Hacking my way to export the PCA components
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeaturesPCA_all_drugs_components{}.h5".format(species))
+    OrganoidFeatures.save_features(
+        features=eigenvector,
+        metadata=dmso_md, filename=feats_fn)
+        
+    feats_fn = os.path.join(
+        results_dir, "ReducedFeaturesPCA_all_drugs_variance{}.h5".format(species))
+    OrganoidFeatures.save_features(
+        features=eigenvalue,
+        metadata=dmso_md, filename=feats_fn)
 
     # Save original and PCA features
     feats_fn = os.path.join(
