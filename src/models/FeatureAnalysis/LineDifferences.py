@@ -497,16 +497,13 @@ def process_all_organoids(species):
     
     # Hacking my way to export the PCA components
     feats_fn = os.path.join(
-        results_dir, "ReducedFeaturesPCA_all_drugs_components{}.h5".format(species))
-    OrganoidFeatures.save_features(
-        features=pd.DataFrame(eigenvector),
-        metadata=dmso_md, filename=feats_fn)
+        results_dir, "ReducedFeaturesPCA_all_drugs_components{}.csv".format(species))
+    pd.DataFrame(eigenvector).to_csv(feats_fn)
         
     feats_fn = os.path.join(
-        results_dir, "ReducedFeaturesPCA_all_drugs_variance{}.h5".format(species))
-    OrganoidFeatures.save_features(
-        features=pd.DataFrame(eigenvalue),
-        metadata=dmso_md, filename=feats_fn)
+        results_dir, "ReducedFeaturesPCA_all_drugs_variance{}.csv".format(species))
+    pd.DataFrame(eigenvalue).to_csv(feats_fn)
+
 
     # Save original and PCA features
     feats_fn = os.path.join(
