@@ -35,7 +35,7 @@ Gene expression
 * raw data is stored in .CEL format under data/raw/expression, data relating to the latest manuscript is separated under microarray_manuscript
 * a normalized file, also deposited at GEO, is generated
     
-    
+the complete project is running on R3.6    
     
     
 Analysis Pipeline
@@ -117,8 +117,8 @@ Project Organization
 * segmentationhtmldir - visualization of segmentation masks
 * features - storage of feature extraction results on a plate level with 3 elements
 	* wells/ - directory with well-level feature data
-	* features - a plate level aggregation of well-level features
-	* processedFeatures - these data have been pre-processed, including the following steps
+	* features - a plate level aggregation of raw well-level features
+	* processedFeatures - these data have been pre-processed, including the following steps (see below, well-level aggregates exist in _averaged_features)
 		* removing objects at the well boundary
 		* removing objects that are out of focus
 		* removing objects with unexpected size
@@ -128,7 +128,7 @@ the directory contains 3 larger ML projects that were started for particular pur
 * **line_differences** - a collection of common features across all organoid lines, followed by PCA for Unsupervised Learning and EDA
 	* Features_human_all_drugs.h5 - 27GB large file containing all features across lines
 	* results/ReducedFeatures_all_drugs_human.h5 - 27GB large file containing all shared features across lines
-	* results/ReducedFeaturesPCA_all_drugs_human.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines
+	* results/ReducedFeaturesPCA_all_drugs_human.h5 - 5G large file containing results of a PCA with 25 preserved components across all analyzed lines
 * **drug_effects** - a project to estimate the effect of each drug treatment on every individual organoid line. Common features across lines are identified, features for each line are scaled to their DMSO control and PCA is being performed.
 	* TransformedFeatures_human_25components.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines, the **important difference to ReducedFeaturesPCA_all_drugs_human.h5** is that input features were scaled to each line's respective DMSO control.
 	* incrementalPCA - pickle of PCA model
