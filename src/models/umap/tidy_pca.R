@@ -1,8 +1,13 @@
 # defining lib path
-.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
+.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
 print(.libPaths())
 
-library(tidyverse)
+# libraries
+library(tidyr)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(stringr)
 library(rhdf5)
 library(here)
 
