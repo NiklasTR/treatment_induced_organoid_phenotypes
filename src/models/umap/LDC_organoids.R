@@ -52,11 +52,6 @@ colnames(log)
 obj <- readRDS(monocle_input)
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names()
   
-# write object with added LDC information.
-df <- log %>% dplyr::select(everything(), -n_log) %>% 
-  unnest(data) %>% 
-  dplyr::select(-line) %>% janitor::clean_names() %>% 
-  cbind(colData(obj), .) 
 
 # TEST: the number of objects in the log file has to match the number of objects in the monocle object.
 obj_n <- umap_tidy %>% dplyr::count(line)
@@ -64,6 +59,14 @@ ldc_n <- log %>% dplyr::select(line, n = n_log)
 stopifnot(obj_n == ldc_n)
 
 # I am saving my final result
-pData(obj) <- df
-obj %>% saveRDS(monocle_input)
+## monocle object
+# write object with added LDC information.
+df <- log %>% dplyr::select(everything(), -n_log) %>% 
+  unnest(data) %>% 
+  dplyr::select(-line) %>% janitor::clean_names() %>% 
+  cbind(colData(obj), .) 
+#pData(obj) <- df
+#obj %>% saveRDS(monocle_input)
+
+## dedicated ldc object
 df %>% write_rds(here::here("data/processed/ldc_viability.rds"))

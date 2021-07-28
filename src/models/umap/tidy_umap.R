@@ -98,6 +98,13 @@ umap_tidy_h <- cbind(umap_tidy_h, cluster = clusters(obj_h), partition = partiti
 pca_tidy_h <- cbind(pca_tidy_h, cluster = clusters(obj_h), partition = partitions(obj_h)) %>% as_tibble()
 
 # TODO adding LDC values
+ldc = readRDS(here::here("data/processed/ldc_viability.rds")) %>%
+  as.data.frame() %>% dplyr::select(uuid, prediction, prob_dead, prob_live)
+
+umap_tidy <- left_join(umap_tidy, ldc, by = "uuid")
+pca_tidy  <- left_join(pca_tidy, ldc, by = "uuid")
+umap_tidy_h <- left_join(umap_tidy_h, ldc, by = "uuid")
+pca_tidy_h  <- left_join(pca_tidy_h, ldc, by = "uuid")
 
 # checking structure
 print(str(umap_tidy))
