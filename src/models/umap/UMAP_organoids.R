@@ -7,6 +7,7 @@ print(.libPaths())
 # after deciding against harmony normalization, I commented all code related to it
 
 # packages
+library(harmony)
 library(tidyr)
 library(tibble)
 library(dplyr)
@@ -15,7 +16,6 @@ library(stringr)
 library(magrittr)
 library(monocle3)
 library(readxl)
-#library(harmony)
 print("loaded libraries")
 
 # input
