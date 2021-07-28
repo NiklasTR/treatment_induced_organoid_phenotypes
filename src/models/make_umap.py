@@ -18,7 +18,7 @@ print('make sure you are running make_dataset on an instance that supports IBM b
 # 	-e src/models/bsub/error.bsub')
 
 # generate umap embedding with or without harmony correction on all PCA transformed organoid features
-os.system('bsub -R "rusage[mem=200GB]" -q verylong ./src/models/bsub/run_umap_all_drugs.bsub \
+os.system('bsub -R "rusage[mem=300GB]" -q verylong ./src/models/bsub/run_umap_all_drugs.bsub \
 	-o src/models/bsub/out.bsub \
 	-e src/models/bsub/error.bsub')
 

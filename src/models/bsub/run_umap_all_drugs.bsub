@@ -11,7 +11,7 @@ module load libpng/1.6.37
 # bsub -R "rusage[mem=200GB]" ./src/models/PhenotypeSpectrum/run_umap_all.bsub -o src/models/PhenotypeSpectrum/out.bsub -e src/models/PhenotypeSpectrum/error.bsub
 
 # Arguments must be supplied (input file name , output filename harmony, output filename raw, seed, metadata)
-Rscript src/models/umap/UMAP_organoids.R \
+Rscript --vanilla src/models/umap/UMAP_organoids.R \
         "data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds" \
         "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
@@ -19,4 +19,4 @@ Rscript src/models/umap/UMAP_organoids.R \
         "references/Screenings_Imaging_Manuscript.xlsx"
         
 # Arguments must be supplied (input file name, seed, sampling_rate, source for feature intensity extraction)
-Rscript src/models/umap/tidy_umap.R "/data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" "123" "0.05" "data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/filtered_moderate/ReducedFeatures_all_drugs_human.h5"
+Rscript --vanilla src/models/umap/tidy_umap.R "/data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" "123" "0.05" "data/interim/FeatureAnalysis/line_differences/human/all_drugs/results/filtered_moderate/ReducedFeatures_all_drugs_human.h5"
