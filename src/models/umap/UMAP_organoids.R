@@ -65,6 +65,8 @@ harmony_id <- HarmonyMatrix(
   return_object = TRUE
 )
 
+saveRDS(harmony_id, here::here("data/interim/PhenotypeSpectrum/harmony_object.Rds"))
+
 # Import into Monocle 3
 ## generating metadata objects
 pca_anno_df <- pca_metadata %>% dplyr::select(-(PC1:PC25)) %>% 
@@ -112,7 +114,6 @@ cce <- reduce_dimension(cce,
                         verbose = TRUE)
 
 # Save harmony result
-saveRDS(harmony_id, here::here("data/interim/PhenotypeSpectrum/harmony_object.Rds"))
 saveRDS(ods, args[2])
 saveRDS(cce, args[3])
 print("saved files at:")
