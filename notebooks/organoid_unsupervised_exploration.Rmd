@@ -187,6 +187,9 @@ df <- line_param %>% unnest(param) %>%
   ungroup() %>%
   mutate(line = factor(line, levels = .$line %>% unique()))
 
+organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+
 organoid_size_factor <- df$line %>% levels()
 
 df <- df %>% 
@@ -504,8 +507,7 @@ gg_morph <- df %>% dplyr::select(-line) %>%
   labs(x = "UMAP 1",
        y = "UMAP 2")+
        #caption = "control treated organoids") + 
-  theme_cowplot(font_size = 8) + 
-  theme(legend.position = "nothing")
+  theme_cowplot(font_size = 8)
 
 gg_morph + ggsave(paste0(PATH, "reports/figures/gg_morphology.pdf"), width = 4, height = 4)
 
@@ -526,7 +528,7 @@ gg_screen_id <- df %>% dplyr::select(-line) %>%
       #sample_frac(0.1),
     #mutate(line = factor(line, levels = c("D021T01"))),
   aes(color = screen_id),alpha = .4, size = 0.35, shape=16) + 
-  facet_wrap( ~ line, ncol =2) +
+  facet_wrap( ~ line, ncol =4) +
   scale_color_brewer(type = "qual", palette = "Set2") +
   #scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F", "#24345E"))) + 	
   #geom_density2d(color = "black") + 
@@ -535,7 +537,7 @@ gg_screen_id <- df %>% dplyr::select(-line) %>%
        y = "UMAP 2")+
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8) + 
-  theme(legend.position = "nothing")
+  theme(legend.position = "bottom")
 
 gg_screen_id + ggsave(paste0(PATH, "reports/figures/gg_screen_id.pdf"), width = 4, height = 4)
 

@@ -8,7 +8,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, message = F, warning = F, results = 'hide')
+knitr::opts_chunk$set(echo = T, message = F, warning = F)
 ```
 
 # Dependencies
@@ -119,10 +119,10 @@ gene_expr <- promise_long %>%
   # summarise(expr = mean(expr)) %>% ungroup() %>%
   filter(probe %in% select_probes)
 
-## get to 500 variable genes, do PCA
+## get to 1000 variable genes, do PCA
 gene_expr_mat <- gene_expr %>% acast(symbol ~ line + rep, 
                                      value.var = 'expr')
-pca <- prcomp(t(gene_expr_mat[order(apply(gene_expr_mat, 1, sd), decreasing = T)[1:500],]))
+pca <- prcomp(t(gene_expr_mat[order(apply(gene_expr_mat, 1, sd), decreasing = T)[1:1000],]))
 
 ## annotate and plot pca results
 pca_res <- as_tibble(pca$x, rownames = 'id') %>% select(id, PC1:PC5) %>% 
@@ -135,6 +135,13 @@ pca_res %>% ggplot(aes(PC1, PC2, color = IGF, shape = phenotype)) +
   ggrepel::geom_text_repel(aes(label = id), min.segment.length = 0) + 
   scale_color_gradient(low = '#cccccc', high = '#111111')
 ```
+
+```{r}
+top_genes = select_probes %>% length()
+top_genes = top_genes * 0.05
+top_genes
+```
+
 
 I plot H19/IGF2 imprinting genes across lines.
 
@@ -154,6 +161,7 @@ promise_long %>% filter(symbol %in% c('PEG10') | (probe == '214218_s_at')) %>%
   facet_wrap(~ symbol + probe, ncol = 1) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
 
 # Expression markers
 

@@ -23,7 +23,7 @@ library(ggridges)
 PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
 umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/filtered_moderate/umap_absolute_all_drugs_sampled.Rds"))
 
 source(here("src/models/PhenotypeSpectrum/R/pseudotime.R"))
 ```
@@ -242,7 +242,7 @@ gg_mekgsk_density <- umap_sampled %>%
 
 
 ```{r}
-gg_mtor_all <- umap_tidy %>%
+gg_mtor_all <- umap_sampled %>%
   filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
