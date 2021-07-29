@@ -1,5 +1,5 @@
 ---
-title: "DMSO organoid phenotypes"
+title: "UMAP EDA"
 output: html_document
 ---
 

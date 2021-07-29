@@ -6,9 +6,9 @@ output:
     keep_md: true
   pdf_document: default
 params:
-  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  data: "data/processed/PhenotypeSpectrum/filtered_radical/umap_absolute_all_drugs_sampled.Rds"
   remote: FALSE
-  cache: TRUE
+  cache: FALSE
 ---
 
 
@@ -43,7 +43,7 @@ print(params$data)
 ```
 
 ```
-## [1] "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"
+## [1] "data/processed/PhenotypeSpectrum/filtered_radical/umap_absolute_all_drugs_sampled.Rds"
 ```
 
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
@@ -92,13 +92,11 @@ umap_df %>%
 ```
 
 ```
-## # A tibble: 4 x 3
-##   partition       n   ratio
-##   <fct>       <int>   <dbl>
-## 1 1         5674332 0.917  
-## 2 2          423267 0.0684 
-## 3 3           68256 0.0110 
-## 4 4           24459 0.00395
+## # A tibble: 2 x 3
+##   partition      n  ratio
+##   <fct>      <int>  <dbl>
+## 1 1         213667 0.914 
+## 2 2          19979 0.0855
 ```
 
 I remove 2 partitions from all main figures for ease of reading. Below, it is easy to toggle the removal of partitions on and off to make sure this filtering step is robust
@@ -570,16 +568,15 @@ sessionInfo()
 ```
 ## R version 4.0.0 (2020-04-24)
 ## Platform: x86_64-pc-linux-gnu (64-bit)
-## Running under: CentOS Linux 7 (Core)
+## Running under: Ubuntu 20.04.2 LTS
 ## 
 ## Matrix products: default
-## BLAS:   /usr/lib64/libblas.so.3.4.2
-## LAPACK: /usr/lib64/liblapack.so.3.4.2
+## BLAS/LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.8.so
 ## 
 ## locale:
-##  [1] LC_CTYPE=C                 LC_NUMERIC=C              
+##  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
 ##  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
-##  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+##  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=C             
 ##  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
 ##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
 ## [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
@@ -588,25 +585,24 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-##  [1] ggridges_0.5.2  scico_1.2.0     princurve_2.1.5 cowplot_1.1.0  
-##  [5] ggrastr_0.2.1   here_0.1        readr_1.4.0     purrr_0.3.4    
-##  [9] magrittr_1.5    tidyr_1.1.3     dplyr_1.0.2     ggplot2_3.3.2  
+##  [1] ggridges_0.5.2  scico_1.1.0     princurve_2.1.4 cowplot_1.0.0  
+##  [5] ggrastr_0.2.3   here_0.1        readr_1.3.1     purrr_0.3.4    
+##  [9] magrittr_1.5    tidyr_1.1.0     dplyr_1.0.0     ggplot2_3.3.1  
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] beeswarm_0.2.3     tidyselect_1.1.0   xfun_0.19          lattice_0.20-41   
-##  [5] splines_4.0.0      colorspace_2.0-0   vctrs_0.3.8        generics_0.1.0    
-##  [9] viridisLite_0.3.0  htmltools_0.5.0    mgcv_1.8-33        yaml_2.2.1        
-## [13] utf8_1.1.4         survival_3.2-7     rlang_0.4.11       isoband_0.2.2     
-## [17] pillar_1.4.6       glue_1.4.2         withr_2.3.0        fitdistrplus_1.1-3
+##  [1] beeswarm_0.2.3     tidyselect_1.1.0   xfun_0.14          lattice_0.20-41   
+##  [5] splines_4.0.0      colorspace_1.4-1   vctrs_0.3.1        generics_0.0.2    
+##  [9] viridisLite_0.3.0  htmltools_0.4.0    mgcv_1.8-31        yaml_2.2.1        
+## [13] utf8_1.1.4         survival_3.1-12    rlang_0.4.6        isoband_0.2.1     
+## [17] pillar_1.4.4       glue_1.4.1         withr_2.2.0        fitdistrplus_1.1-1
 ## [21] RColorBrewer_1.1-2 lifecycle_0.2.0    plyr_1.8.6         stringr_1.4.0     
-## [25] munsell_0.5.0      gtable_0.3.0       evaluate_0.14      labeling_0.4.2    
-## [29] knitr_1.30         Cairo_1.5-12.2     ps_1.4.0           vipor_0.4.5       
-## [33] fansi_0.4.1        broom_0.7.2        Rcpp_1.0.5         scales_1.1.1      
-## [37] backports_1.2.0    farver_2.0.3       hms_0.5.3          digest_0.6.27     
-## [41] stringi_1.5.3      grid_4.0.0         rprojroot_1.3-2    cli_2.1.0         
-## [45] tools_4.0.0        tibble_3.0.4       crayon_1.3.4       pkgconfig_2.0.3   
-## [49] MASS_7.3-53        Matrix_1.2-18      ellipsis_0.3.1     ggbeeswarm_0.6.0  
-## [53] assertthat_0.2.1   rmarkdown_2.5      rstudioapi_0.12    R6_2.5.0          
-## [57] nlme_3.1-150       compiler_4.0.0
+## [25] munsell_0.5.0      gtable_0.3.0       evaluate_0.14      labeling_0.3      
+## [29] knitr_1.28         Cairo_1.5-12       vipor_0.4.5        fansi_0.4.1       
+## [33] broom_0.5.6        Rcpp_1.0.4.6       scales_1.1.1       backports_1.1.7   
+## [37] farver_2.0.3       hms_0.5.3          digest_0.6.25      stringi_1.4.6     
+## [41] grid_4.0.0         rprojroot_1.3-2    cli_2.0.2          tools_4.0.0       
+## [45] tibble_3.0.1       crayon_1.3.4       pkgconfig_2.0.3    MASS_7.3-51.5     
+## [49] Matrix_1.2-18      ellipsis_0.3.1     ggbeeswarm_0.6.0   assertthat_0.2.1  
+## [53] rmarkdown_2.2      R6_2.4.1           nlme_3.1-147       compiler_4.0.0
 ```
 

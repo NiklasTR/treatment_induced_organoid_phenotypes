@@ -1,19 +1,30 @@
 ---
-title: "EDA organoid partition"
+title: "EDA clustering partitions"
 author: "Niklas Rindtorff"
 output:
+  pdf_document: default
   html_document:
     keep_md: true
-  pdf_document: default
 params:
-  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  data: "data/processed/PhenotypeSpectrum/filtered_lenient/umap_absolute_all_drugs_sampled.Rds"
   echo: FALSE
+  cache: FALSE
 ---
+
+```{r, include = FALSE, eval=FALSE}
+#not run
+for (i in c("data/processed/PhenotypeSpectrum/filtered_lenient/umap_absolute_all_drugs_sampled.Rds",
+            "data/processed/PhenotypeSpectrum/filtered_moderate/umap_absolute_all_drugs_sampled.Rds")) {
+  rmarkdown::render(here::here("notebooks/nr_morphology_partition.Rmd"), 
+                    params = list(data = i),
+                    output_file= #TODO)
+}
+```
 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = params$echo,
-                      cache = TRUE,
+                      cache = params$cache,
                       message = FALSE,
                       warning = FALSE)
 ```
@@ -78,6 +89,8 @@ umap_partition <- umap_df %>%
        color = "partition") + 
   theme(legend.position = "bottom") + 
     coord_fixed()
+
+umap_partition
 ```
 
 ```{r}
@@ -120,7 +133,7 @@ df %>% ggplot(aes(line, ratio, color = partition)) + geom_jitter(width = 0.2) + 
 ```{r}
 df <- umap_df %>% 
   dplyr::select(drug, line, partition) %>% 
-  count(drug, partition) %>% 
+  dplyr::count(drug, partition) %>% 
   arrange(n) 
 
 levels_df <- df %>% filter(partition == 1) %>% arrange(desc(n)) %>% .$drug
@@ -149,7 +162,7 @@ partition_count_drug
 ```{r}
 df <- umap_df %>% 
   dplyr::select(plate, drug, line, partition) %>% 
-  count(plate, partition) %>% 
+  dplyr::count(plate, partition) %>% 
   arrange(n) 
 
 levels_df <- df %>% filter(partition == 1) %>% arrange(desc(n)) %>% .$plate
@@ -185,7 +198,7 @@ I wonder wether certain batches or organoid lines are overrepresented in each se
 ```{r}
 chi_drug <- umap_df %>% 
   dplyr::select(drug, line, partition) %>% 
-  count(drug, partition) %>%
+  dplyr::count(drug, partition) %>%
   spread(key = partition, value = n, fill = 0) %>%
   as.data.frame() %>% 
   column_to_rownames("drug") %>% 
@@ -216,7 +229,7 @@ chi_drug_table %>% grid.arrange()
 ```{r}
 partition_count = umap_df %>% 
   dplyr::select(drug, plate, partition) %>% 
-  count(plate, partition) %>%
+  dplyr::count(plate, partition) %>%
   #mutate(n = n +5) %>% # adding fudge factor # no difference to result
   #spread(key = partition, value = n, fill = 5) %>% # adding fudge factor # no difference to result
   spread(key = partition, value = n, fill = 0)
@@ -286,7 +299,7 @@ aic_multinomial <- aic_multinomial %>%
 
 
 
-```{r}
+```{r, eval = TRUE}
 anno_col = umap_df %>% 
   distinct(plate, line, replicate) %>%
   mutate(plate = paste0("plate", plate)) %>% 
