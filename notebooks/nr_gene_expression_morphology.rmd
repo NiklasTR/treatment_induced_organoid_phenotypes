@@ -198,7 +198,7 @@ summary(pca_hco)$importance %>% as.data.frame() %>%
   labs(y = "Variance explained")
 ```
 
-```{r}
+```{r, eval = FALSE}
 df = promise_long %>% mutate(symbol = ifelse(probe == '202410_x_at', 'IGF2', symbol)) %>% 
   group_by(probe, line, symbol, phenotype) %>% summarise(expr = mean(expr))
 
@@ -451,7 +451,7 @@ go <- pairwise_termsim(gse_go)
 emapplot(go)
 ```
 
-```{r}
+```{r, eval = FALSE}
 ## Reactome enrichment analysis
 gse_reactome <- gsePathway(
   geneList = ranks,
