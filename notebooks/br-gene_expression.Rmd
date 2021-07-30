@@ -2,8 +2,10 @@
 title: "Differential gene expression across organoid phenotypes"
 author: "Benedikt Rauscher"
 date: "11/15/2020"
-output: html_document
-editor_options: 
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
   chunk_output_type: console
 ---
 
@@ -163,7 +165,7 @@ promise_long %>% filter(symbol %in% c('PEG10') | (probe == '214218_s_at')) %>%
 ```
 
 
-# Expression markers
+# Expression markers of drug response
 
 Do any of the gene expression probes predict whether an organoid line will respond to a drug treatment? I fit a penalized regression model with the AUROC curve from the SVM analysis as dependent and the gene expression measurements as independent variables. I use a LASSO appraoch to cut down on the number of coefficients since my sample sizes are very low.
 
@@ -223,7 +225,7 @@ plot(filter(aucroc, drug == 'WYE-125132 (WYE-132)')$auroc, x_lasso[,'H19'])
 
 I load drug target annotations from file. Do the same drugs have the same targets?
 
-```{r}
+```{r, eval = FALSE}
 ## load drug annotation
 drug_anno <- readxl::read_excel('data/Compound_Annotation_Libraries_New.xlsx') %>% distinct(drug = `Compound name`, target = `Primary Target`)
 
@@ -233,7 +235,7 @@ drug_expr <- drug_expr %>% left_join(drug_anno)
 
 Generate network diagram.
 
-```{r}
+```{r, eval = FALSE}
 library(tidygraph)
 library(ggraph)
 
