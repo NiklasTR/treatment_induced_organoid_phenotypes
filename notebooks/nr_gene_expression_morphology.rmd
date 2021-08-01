@@ -204,7 +204,7 @@ summary(pca_hco)$importance %>% as.data.frame() %>%
 ```
 
 ```{r, eval = FALSE}
-df = promise_long %>% mutate(symbol = ifelse(probe == '202410_x_at', 'IGF2', symbol)) %>% 
+df = promise_long %>% 
   group_by(probe, line, symbol, phenotype) %>% summarise(expr = mean(expr))
 
 plot_df = pca_hco$rotation %>% as.data.frame() %>% rownames_to_column("id") %>% 
@@ -264,7 +264,6 @@ pca_size
 
 ```{r}
 df = promise_long %>% 
-  mutate(symbol = ifelse(probe == '202410_x_at', 'IGF2', symbol)) %>%
   filter(symbol %in% c("IGF2")) %>% 
   dplyr::select(organoid =line, expr, line = rep)
 
@@ -308,7 +307,6 @@ toptable_size %>% ggplot(aes(P.Value)) +
 
 ```{r}
 toptable_size %>% 
-  mutate(symbol = ifelse(id == '202410_x_at', 'IGF2', symbol)) %>%
   filter(adj.P.Val <= 0.05) %>%
   arrange(desc(t))
 ```
@@ -316,8 +314,7 @@ toptable_size %>%
 
 ```{r}
 promise_long %>% 
-  mutate(symbol = ifelse(probe == '202410_x_at', 'IGF2', symbol)) %>%
-  filter(symbol %in% c("H19", "MIR483", "IRS1", "IGF2")) %>% arrange(expr) %>% arrange(line) %>% 
+  filter(symbol %in% c("H19", "IRS1", "IGF2", "SGPP2")) %>% arrange(expr) %>% arrange(line) %>% 
   group_by(line, rep, symbol) %>% 
   summarise(expr = mean(expr)) %>% 
   left_join(organoid_size_fit) %>% 
@@ -422,7 +419,7 @@ toptable_morph %>%
 
 ```{r}
 promise_long %>% 
-  filter(symbol %in% c("DACH1", "SERPINA1", "DKK1", "IFITM1")) %>% arrange(expr) %>% arrange(line) %>% 
+  filter(symbol %in% c("DACH1", "PLA2G2A", "FZD7", "IFITM1")) %>% arrange(expr) %>% arrange(line) %>% 
   group_by(line, rep, symbol, phenotype) %>% 
   summarise(expr = mean(expr)) %>% 
   left_join(organoid_size_fit) %>% 
