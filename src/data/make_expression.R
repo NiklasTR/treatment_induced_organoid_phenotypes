@@ -1,12 +1,14 @@
 # title: "Generation of baseline expression file for PROMISE manuscript"
-# author: "Benedikt Rauscher"
+# author: "Benedikt Rauscher, Niklas Rindtorff"
 # date: "7/2/2021"
 # note: refactored from "br_baseline_expression.Rmd"
 
 # defining lib path
-
-.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
-print(.libPaths())
+args = commandArgs(trailingOnly=TRUE)
+if (args[1] == "remote") {
+  .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
+  print(.libPaths())
+} 
 
 library(tidyverse)
 library(affy)
@@ -57,7 +59,7 @@ full_exp_mat <- ex_bl %>% exprs()
 ## sample object
 samples_nb <- tibble(filenames = fn, sample_names = sn) %>% 
   mutate(chip_name = basename(filenames)) %>% 
-  extract(filenames, 'line', 
+  tidyr::extract(filenames, 'line', 
           regex = '[PD]*0*(\\d{1,3}).+$', 
           remove=F) %>%
   group_by(line) %>%
@@ -65,6 +67,39 @@ samples_nb <- tibble(filenames = fn, sample_names = sn) %>%
   ungroup() %>%
   mutate(line = ifelse(nchar(line) == 2, paste0('D0', line), paste0('D00', line)),
          id = paste(line, rep, sep='_'))
+
+# Generate improved probe annotation using biomart
+# ====================================
+
+## pulling probes from biomart
+require("biomaRt")
+mart <- useMart("ENSEMBL_MART_ENSEMBL")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+annotLookup <- getBM(
+  mart=mart,
+  attributes=c(
+    "affy_hg_u133_plus_2",
+    "ensembl_gene_id",
+    "gene_biotype",
+    "entrezgene_id",
+    "external_gene_name"),
+  filter = "affy_hg_u133_plus_2",
+  values = rownames(log_expr), uniqueRows=TRUE)
+
+# formatting
+id_mapping_u133_mart <- annotLookup %>% as_tibble() %>% 
+  dplyr::select(probe = affy_hg_u133_plus_2, 
+                ensg = ensembl_gene_id, 
+                entrez = entrezgene_id, 
+                symbol = external_gene_name) %>% 
+  arrange(probe, entrez, symbol, ensg) %>% distinct() %>% group_by(probe) %>% dplyr::slice(1) %>% ungroup() 
+
+row_data_mart = tibble(probe = rownames(log_expr)) %>% 
+  left_join(id_mapping_u133_mart)
+stopifnot(identical(row_data_mart$probe, rownames(log_expr)))
+
+print("missing annotation statistic")
+print(row_data_mart %>% mutate(missing = is.na(symbol)) %>% dplyr::count(missing))
 
 
 # Generate summarized experiment object.
@@ -77,10 +112,15 @@ identical(samples_nb$sample_names, colnames(log_expr))
 colnames(log_expr) <- samples_nb$id
 
 ## row data
-row_data <- tibble(probe = rownames(log_expr)) %>% 
-  left_join(distinct(id_mapping_u133) %>%
-              group_by(probe) %>% dplyr::slice(1) %>% ungroup())
-identical(row_data$probe, rownames(log_expr))
+row_data <- row_data_mart
+#### manual annotation
+# row_data <- tibble(probe = rownames(log_expr)) %>% 
+#   left_join(distinct(id_mapping_u133) %>%
+#               group_by(probe) %>% dplyr::slice(1) %>% ungroup())
+# identical(row_data$probe, rownames(log_expr))
+
+# print("missing annotation statistic")
+# print(row_data %>% mutate(missing = is.na(symbol)) %>% dplyr::count(missing))
 
 ## col data
 col_data <- samples_nb %>% dplyr::select(id, line, rep, chip_name) %>% 
@@ -93,6 +133,8 @@ promise_expr <- SummarizedExperiment::SummarizedExperiment(
   rowData = row_data %>% as.data.frame() %>% column_to_rownames('probe'),
   colData = col_data
 )
+
+
 
 save(promise_expr, file = here::here('data/processed/expression/promise_expr.rda'))
 
