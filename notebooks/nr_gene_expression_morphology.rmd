@@ -68,8 +68,8 @@ cystic <- organoid_morphology %>%
 
 ## organoid size
 organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
-  #filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
-  filter(!line %in% c('D055T01','D020T02')) %>% 
+  filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
+  #filter(!line %in% c('D055T01','D020T02')) %>% 
   mutate(line = as.character(line)) %>% 
   dplyr::select(line, size = x, rep = replicate) %>% 
   distinct() %>% arrange(line) %>%
@@ -95,8 +95,8 @@ promise_long <- assays(promise_expr)$expr %>%
   select(-chip_name)
 
 ## exclude outlier
-#promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
-promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055'))
+promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
+#promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055'))
 
 ## adding phenotype information
 promise_long <- promise_long %>% 
@@ -563,6 +563,11 @@ MOFAobject <- create_mofa(input_df)
 print("created MOFA object")
 plot_data_overview(MOFAobject)
 ```
+
+```{r}
+run_mofa(MOFAmodel, outfile, use_basilisk = TRUE)
+```
+
 
 ```{r}
 # MOFAobject <- prepare_mofa(

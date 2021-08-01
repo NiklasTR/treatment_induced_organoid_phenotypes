@@ -3,6 +3,10 @@ promise
 
 Human Cancer Organoid Profiling Project at the German Cancer Research Center
 
+link to manuscript for authors: 
+https://docs.google.com/document/d/1PZgywYY0v0Rzy_qjCTxaqY-T9Bdu5FLd_Ny_gSiy16w/edit?usp=sharing
+
+
 
 Hackathon agenda: 
 * manuscript
