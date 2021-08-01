@@ -3,9 +3,6 @@
 .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
 print(.libPaths())
 
-# warning
-# after deciding against harmony normalization, I commented all code related to it
-
 # packages
 library(harmony)
 library(tidyr)
@@ -65,8 +62,6 @@ harmony_id <- HarmonyMatrix(
   return_object = TRUE
 )
 
-saveRDS(harmony_id, here::here("data/interim/PhenotypeSpectrum/harmony_object.Rds"))
-
 # Import into Monocle 3
 ## generating metadata objects
 pca_anno_df <- pca_metadata %>% dplyr::select(-(PC1:PC25)) %>% 
@@ -95,27 +90,10 @@ print(pca_metadata$line %>% unique())
 reducedDims(ods)$PCA <- pca_matrix_harmony
 reducedDims(cce)$PCA <- pca_matrix
 
-## Run UMAP embedding
-print("starting UMAP embedding")
-ods <- reduce_dimension(ods,
-                        reduction_method = "UMAP",
-                        umap.min_dist = 0.1,
-                        umap.n_neighbors = 15L,
-                        umap.fast_sgd=TRUE,
-                        cores = parallel::detectCores(),
-                        verbose = TRUE)
-
-cce <- reduce_dimension(cce,
-                        reduction_method = "UMAP",
-                        umap.min_dist = 0.1,
-                        umap.n_neighbors = 15L,
-                        umap.fast_sgd=TRUE, 
-                        cores = parallel::detectCores(),
-                        verbose = TRUE)
-
-# Save harmony result
+# save intermediate result
 saveRDS(ods, args[2])
 saveRDS(cce, args[3])
-print("saved files at:")
+print("saved monocle objects at:")
 print(args[2])
 print(args[3])
+

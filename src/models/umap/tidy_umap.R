@@ -34,7 +34,7 @@ PATH = paste0(here::here(), "/")
 
 ## TODO the two scripts need to be un-commented for renewed execution of the code
 # hacky way - extracting intensity features for objecy creation
-source(here::here("src/models/umap/LDC_organoids.R"))
+source(here::here("src/models/umap/annotate_ldc.R"))
 source(here::here("src/models/umap/annotate_features.R"))
 
 annotate_features(here::here(args[5]))
