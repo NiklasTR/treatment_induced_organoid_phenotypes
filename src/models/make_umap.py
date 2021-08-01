@@ -4,10 +4,10 @@ import os
 # cd /dkfz/groups/shared/OE0049/B110-Isilon2/promise
 print('make sure you are running make_dataset on an instance that supports IBM bsub')
 
-# 2. create UMAP embedding on all organoid data
+# create UMAP embedding on all organoid data
 # ====================================
 
-# # generate umap embedding with or without harmony correction on PCA transformed DMSO-treated organoid features
+# # generate umap embedding DMSO-treated organoid features in PCA space
 # os.system('bsub -R "rusage[mem=100GB]" -q long ./src/models/bsub/run_umap_dmso.bsub \
 # 	-o src/models/bsub/out.bsub \
 # 	-e src/models/bsub/error.bsub')
