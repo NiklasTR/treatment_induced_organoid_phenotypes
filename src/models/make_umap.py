@@ -1,10 +1,10 @@
 import os
 ######################################
-# ONLY runs on system with IBM Cluster, e.g. ssh rindtorf@odcf-lsf01.dkfz.de
+# ONLY runs on system with IBM LSF Cluster, e.g. ssh rindtorf@odcf-lsf01.dkfz.de
 # cd /dkfz/groups/shared/OE0049/B110-Isilon2/promise
 print('make sure you are running make_dataset on an instance that supports IBM bsub')
 
-# create UMAP embedding on all organoid data
+# 2. create UMAP embedding on all organoid data
 # ====================================
 
 # # generate umap embedding DMSO-treated organoid features in PCA space
