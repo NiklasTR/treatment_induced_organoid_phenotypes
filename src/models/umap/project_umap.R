@@ -4,14 +4,14 @@ print(.libPaths())
 
 # input
 args = commandArgs(trailingOnly=TRUE)
-if (!length(args)==3) {
-  stop("Arguments must be supplied (raw input file name, harmony input file name, seed).n", call.=FALSE)
+if (!length(args)==2) {
+  stop("Arguments must be supplied (input file name, seed).n", call.=FALSE)
 } 
 
 print(args)
 
 # seed
-set.seed(args[3])
+set.seed(args[2])
 
 # packages
 library(harmony)
@@ -25,17 +25,10 @@ library(monocle3)
 library(readxl)
 print("loaded libraries")
 
-# input
-args = commandArgs(trailingOnly=TRUE)
-if (!length(args)==3) {
-  stop("Arguments must be supplied (filename harmony, filename raw, seed).n", call.=FALSE)
-} 
-
 PATH = paste0(here::here(), "/")
 
 # read object from file
 obj <- readRDS(paste0(PATH, args[1]))
-obj_h <- readRDS(paste0(PATH, args[2]))
 
 ## Run UMAP embedding
 print("starting UMAP embedding")
@@ -47,18 +40,8 @@ obj <- reduce_dimension(obj,
                         umap.fast_sgd=TRUE,
                         cores = parallel::detectCores(),
                         verbose = TRUE)
-# non-harmony
-obj_h <- reduce_dimension(obj_h,
-                        reduction_method = "UMAP",
-                        umap.min_dist = 0.1,
-                        umap.n_neighbors = 15L,
-                        umap.fast_sgd=TRUE, 
-                        cores = parallel::detectCores(),
-                        verbose = TRUE)
 
 # Save harmony result
 saveRDS(obj, args[1])
-saveRDS(obj_h, args[2])
 print("saved UMAP projected objects at:")
 print(args[1])
-print(args[2])
