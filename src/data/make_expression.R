@@ -68,6 +68,11 @@ samples_nb <- tibble(filenames = fn, sample_names = sn) %>%
   mutate(line = ifelse(nchar(line) == 2, paste0('D0', line), paste0('D00', line)),
          id = paste(line, rep, sep='_'))
 
+## matrix
+log_expr <- full_exp_mat %>% log()
+stopifnot(identical(samples_nb$sample_names, colnames(log_expr)))
+colnames(log_expr) <- samples_nb$id
+
 # Generate improved probe annotation using biomart
 # ====================================
 
@@ -104,12 +109,6 @@ print(row_data_mart %>% mutate(missing = is.na(symbol)) %>% dplyr::count(missing
 
 # Generate summarized experiment object.
 # ====================================
-
-
-## matrix
-log_expr <- full_exp_mat %>% log()
-identical(samples_nb$sample_names, colnames(log_expr))
-colnames(log_expr) <- samples_nb$id
 
 ## row data
 row_data <- row_data_mart
