@@ -41,7 +41,6 @@ annotate_features(here::here(args[5]))
 
 # Loading data and formatting for easier access, commented non-essential code
 obj <- readRDS(paste0(PATH, args[1]))
-# # Also, I load similarly processed data, where only DMSO treated organoids were included in PCA and/or Harmony was tested
 obj_h <- readRDS(paste0(PATH, args[2]))
 # dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
 # dmso <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_dmso.Rds"))
