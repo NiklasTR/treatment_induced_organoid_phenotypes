@@ -14,34 +14,34 @@ module load libpng/1.6.37
 # generate a monocle object for UMAP projection and run harmony
 # Arguments must be supplied (input file name , output filename harmony, output filename raw, seed, metadata)
 
-Rscript --vanilla src/models/umap/prepare_umap.R \
-        "data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds" \
-        "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
-        "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
-        "123" \
-        "references/Screenings_Imaging_Manuscript.xlsx"
+# Rscript --vanilla src/models/umap/prepare_umap.R \
+#         "data/interim/PhenotypeSpectrum/hdf5_pca_absolute_all_drugs.Rds" \
+#         "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
+#         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
+#         "123" \
+#         "references/Screenings_Imaging_Manuscript.xlsx"
 
-##### UMAP       
-# run UMAP algorithm for dimensionality reduction - harmony
-Rscript --vanilla src/models/umap/project_umap.R \
-        "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
-        "123"
+# ##### UMAP       
+# # run UMAP algorithm for dimensionality reduction - harmony
+# Rscript --vanilla src/models/umap/project_umap.R \
+#         "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
+#         "123"
 
-# run UMAP algorithm for dimensionality reduction - non-harmony
-Rscript --vanilla src/models/umap/project_umap.R \
-        "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
-        "123"
+# # run UMAP algorithm for dimensionality reduction - non-harmony
+# Rscript --vanilla src/models/umap/project_umap.R \
+#         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
+#         "123"
 
-##### Clustering
-# run leiden clustering on UMAP projection
-Rscript --vanilla src/models/umap/cluster_umap.R \
-        "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
-        "123"
+# ##### Clustering
+# # run leiden clustering on UMAP projection
+# Rscript --vanilla src/models/umap/cluster_umap.R \
+#         "data/interim/PhenotypeSpectrum/harmony_umap_absolute_all_drugs.Rds" \
+#         "123"
 
-# run leiden clustering on UMAP projection
-Rscript --vanilla src/models/umap/cluster_umap.R \
-        "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
-        "123"
+# # run leiden clustering on UMAP projection
+# Rscript --vanilla src/models/umap/cluster_umap.R \
+#         "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_all_drugs.Rds" \
+#         "123"
 
 # annotate objects with external information, such as viability and feature intensity, perform sampling        
 # Arguments must be supplied (input file name, seed, sampling_rate, source for feature intensity extraction)
