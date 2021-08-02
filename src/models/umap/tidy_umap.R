@@ -34,40 +34,16 @@ PATH = paste0(here::here(), "/")
 
 ## TODO the two scripts need to be un-commented for renewed execution of the code
 # hacky way - extracting intensity features for objecy creation
-source(here::here("src/models/umap/LDC_organoids.R"))
+source(here::here("src/models/umap/annotate_ldc.R"))
 source(here::here("src/models/umap/annotate_features.R"))
 
 annotate_features(here::here(args[5]))
 
 # Loading data and formatting for easier access, commented non-essential code
 obj <- readRDS(paste0(PATH, args[1]))
-# # Also, I load similarly processed data, where only DMSO treated organoids were included in PCA and/or Harmony was tested
 obj_h <- readRDS(paste0(PATH, args[2]))
 # dmso_h <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/harmony_umap_absolute_dmso.Rds"))
 # dmso <- readRDS(paste0(PATH, "data/interim/PhenotypeSpectrum/hdf5_umap_absolute_dmso.Rds"))
-
-# TODO #119 implement an if statement to skip clustering 
-# clustering UMAP data using graph-based clustering
-length_in = 1e-7
-print(paste0("resolution is ", length_in))
-
-obj = cluster_cells(obj, 
-                          reduction_method = "UMAP",
-                          cluster_method = "leiden",
-                          verbose = TRUE, 
-                          resolution = length_in,
-                          random_seed = 1334)
-
-obj_h = cluster_cells(obj_h, 
-                    reduction_method = "UMAP",
-                    cluster_method = "leiden",
-                    verbose = TRUE, 
-                    resolution = length_in,
-                    random_seed = 1334)
-
-# write object to file
-obj %>% saveRDS(paste0(PATH, args[1]))
-obj_h %>% saveRDS(paste0(PATH, args[2]))
 
 # Formatting UMAP tables for easy access
 umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() 

@@ -29,8 +29,8 @@ library(here)
 ldc_input = "data/interim/FeatureAnalysis/organoid_viability/human/results" # args[1]
 monocle_input = "data/interim/PhenotypeSpectrum/archive_pre_qc/hdf5_umap_absolute_all_drugs.Rds" # args[2]
 
-drop_lines = c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01")
-drop_plates = c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")
+#drop_lines = c("D054T01", "D055T01", "D046T01", "D020T02", "D010T01")
+#drop_plates = c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")
 
 # find classification_logs and aggregate results for UMAP filtering
 log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
