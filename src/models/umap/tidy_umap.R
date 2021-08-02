@@ -91,7 +91,7 @@ umap_sampled <- umap_tidy %>%
               replace = FALSE)
 
 pca_sampled <- pca_tidy %>%
-  sample_frac(size = as.numeric(args[4]),
+  sample_frac(size = as.numeric(args[4])/2, # pca object is larger and requires lower sampling rate
               replace = FALSE)
 
 umap_sampled_h <- umap_tidy_h %>%
@@ -99,7 +99,7 @@ umap_sampled_h <- umap_tidy_h %>%
               replace = FALSE)
 
 pca_sampled_h <- pca_tidy_h %>%
-  sample_frac(size = as.numeric(args[4]),
+  sample_frac(size = as.numeric(args[4])/2,
               replace = FALSE)
 # write to file
 umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
