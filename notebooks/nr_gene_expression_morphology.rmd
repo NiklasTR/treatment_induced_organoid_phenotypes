@@ -1,8 +1,8 @@
 ---
 title: "Gene Expression Morphology"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -50,23 +50,21 @@ theme_set(theme_cowplot())
 
 We load the gene expression data from an Rdata object from file.
 
-```{r}
+```{r, eval = TRUE}
 load(here('data/processed/expression/promise_expr.rda'))
+promise_expr_filtered <- readRDS(here::here('data/processed/expression/promise_expr_filtered.rds'))
+promise_expr_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_top.rds'))
 
+promise_long <- readRDS(here::here('data/processed/expression/promise_expr_tidy.rds'))
+promise_long_filtered <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy.rds'))
+promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
+
+# others
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2) %>%
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(morphology = if_else(is.na(morphology), "other", morphology))
 
-## annotate phenotype group
-solid <- organoid_morphology  %>% 
-  filter(morphology == "solid") %>%
-  .$line
-cystic <- organoid_morphology %>% 
-  filter(morphology == "cystic") %>%
-  .$line
-
-## organoid size
 organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
   filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
   #filter(!line %in% c('D055T01','D020T02')) %>% 
@@ -75,34 +73,6 @@ organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size
   distinct() %>% arrange(line) %>%
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(rep = paste0("r", rep))
-
-# adding metadata and filtering the promise_expr object
-new_col <- colData(promise_expr) %>% as.data.frame() %>%
-  left_join(., left_join(
-             organoid_size_fit, 
-             organoid_morphology)) %>% 
-  dplyr::select(-(line:chip_name))
-colData(promise_expr) <- cbind(colData(promise_expr), new_col)
-
-promise_expr_filtered <- promise_expr[,promise_expr$line %in% (organoid_size_fit$line %>% unique())]
-
-## long data frame
-promise_long <- assays(promise_expr)$expr %>% 
-  as_tibble(rownames = 'probe') %>% 
-  pivot_longer(values_to = 'expr', names_to = 'id', -probe) %>%
-  left_join(as_tibble(rowData(promise_expr), rownames = 'probe')) %>%
-  inner_join(as_tibble(colData(promise_expr), rownames = 'id')) %>%
-  select(-chip_name)
-
-## exclude outlier
-promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055', 'D021'))
-#promise_long <- promise_long %>% filter(!line %in% c('D054', 'D055'))
-
-## adding phenotype information
-promise_long <- promise_long %>% 
-  mutate(phenotype = ifelse(line %in% solid, 'solid', 
-                     ifelse(line %in% cystic, 'cystic', 'other'))) %>% 
-  filter(phenotype != 'other')
 ```
 
 # Quality control
@@ -114,7 +84,7 @@ We perform a clustering to check if the samples are grouped by line of origin.
 expr_mat <- assays(promise_expr_filtered)$expr
 
 ## generate heatmap annotation
-anno <- promise_long %>% 
+anno <- promise_long_filtered %>% 
   distinct(line, rep, phenotype) %>% 
   unite(id, line, rep) %>% 
   mutate_all(as.factor) %>%
@@ -128,11 +98,6 @@ pheatmap(as.matrix(dist(t(expr_mat))),
 pheatmap(expr_mat[order(apply(expr_mat, 1, sd), decreasing = T)[1:100],], 
          annotation_col = anno)
 ```
-
-```{r, eval = FALSE}
-boxplot(log(expr)[sample(1:nrow(expr), 2000),])
-```
-
 
 ## Feature Selection
 
@@ -162,21 +127,8 @@ abline(v = thresh_n)
 ```
 
 
-Keeping the top 5% probes based on the coefficient of variance. This corresponds to this number of genes:
-
 ```{r}
-top_n
-```
-
-
-```{r}
-promise_expr_filtered = promise_expr_filtered[rowData(promise_expr_filtered) %>% rownames() %in% names(keep_probes),]
-```
-
-
-
-```{r}
-pca_hco <- assays(promise_expr_filtered)$expr %>% t() %>% prcomp(., scale = TRUE)
+pca_hco <- assays(promise_expr_filtered_top)$expr %>% t() %>% prcomp(., scale = TRUE)
 summary(pca_hco)
 
 #Build colnames 
@@ -286,15 +238,13 @@ pca_igf
 
 
 ```{r}
-promise_expr_filtered
+size_mat <- model.matrix(~size, colData(promise_expr_filtered_top))
 
-size_mat <- model.matrix(~size, colData(promise_expr_filtered))
-
-size_fit <- limma::lmFit(assays(promise_expr_filtered)$expr, design = size_mat)
+size_fit <- limma::lmFit(assays(promise_expr_filtered_top)$expr, design = size_mat)
 size_fit_bayes <- limma::eBayes(size_fit)
 
 toptable_size = topTable(size_fit_bayes, number = Inf, coef = "size") %>% rownames_to_column("id") %>% 
-  left_join(rowData(promise_expr_filtered) %>% as.data.frame() %>% rownames_to_column("id"))
+  left_join(rowData(promise_expr_filtered_top) %>% as.data.frame() %>% rownames_to_column("id"))
 
 toptable_size %>% ggplot(aes(P.Value)) + 
   geom_histogram(bins = 100) + 
@@ -391,15 +341,13 @@ custom_barcode_plot(ranks, signature_genes,
 # Organoid morphology
 
 ```{r}
-promise_expr_filtered
+morph_mat <- model.matrix(~morphology, colData(promise_expr_filtered_top))
 
-morph_mat <- model.matrix(~morphology, colData(promise_expr_filtered))
-
-morph_fit <- limma::lmFit(assays(promise_expr_filtered)$expr, design = morph_mat)
+morph_fit <- limma::lmFit(assays(promise_expr_filtered_top)$expr, design = morph_mat)
 morph_fit_bayes <- limma::eBayes(morph_fit)
 
 toptable_morph <- topTable(morph_fit_bayes, number = Inf, coef = "morphologysolid") %>% rownames_to_column("id") %>% 
-  left_join(rowData(promise_expr_filtered) %>% as.data.frame() %>% rownames_to_column("id"))
+  left_join(rowData(promise_expr_filtered_top) %>% as.data.frame() %>% rownames_to_column("id"))
 
 toptable_morph %>% ggplot(aes(P.Value)) + 
   geom_histogram(bins = 100) + 
@@ -456,7 +404,7 @@ go <- pairwise_termsim(gse_go)
 emapplot(go)
 ```
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 ## Reactome enrichment analysis
 gse_reactome <- gsePathway(
   geneList = ranks,
@@ -521,62 +469,6 @@ gseaplot2(
 )
 ```
 
-# MOFA
-
-```{r}
-library(MOFA2)
-
-input_df = promise_long %>% 
-  # renaming columns
-  dplyr::select(sample = line,
-                feature = probe,
-                value = expr) %>% 
-  mutate(view = "expression") %>% 
-  # averaging feature value
-  group_by(feature, sample, view) %>%
-  summarise(value = mean(value)) %>%
-  # renaming feature jic
-  mutate(feature = paste0(feature, "_", view)) %>%
-  dplyr::select(sample, feature, view, value) %>% 
-  drop_na() %>%
-  data.table::as.data.table()
-```
-
-```{r}
-file <- system.file("extdata", "test_data.RData", package = "MOFA2")
-load(file) 
-dt[,group:=NULL]
-
-dt$value <- input_df$value[1:nrow(dt)]
-dt$feature <- input_df$feature[1:nrow(dt)]
-
-MOFAmodel <- create_mofa_from_df(dt)
-plot_data_overview(MOFAmodel)
-```
-
-
-```{r}
-MOFAobject <- create_mofa(input_df)
-print("created MOFA object")
-plot_data_overview(MOFAobject)
-```
-
-```{r}
-run_mofa(MOFAmodel, outfile, use_basilisk = TRUE)
-```
-
-
-```{r}
-# MOFAobject <- prepare_mofa(
-#   object = MOFAobject,
-#   data_options = data_opts,
-#   model_options = model_opts,
-#   training_options = train_opts
-# )
-
-outfile = file.path(getwd(),"model.hdf5")
-MOFAobject.trained <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
-```
 
 
 # Organoid size and morphology
