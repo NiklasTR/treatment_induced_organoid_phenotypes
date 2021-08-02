@@ -526,7 +526,14 @@ gseaplot2(
 ```{r}
 library(MOFA2)
 
-input_df = promise_long %>% 
+mofa_size <- organoid_size_fit %>% 
+  group_by(line) %>% summarise(value = mean(size)) %>% 
+  mutate(feature = "size",
+         view = "size_view") %>% 
+  drop_na() %>% 
+  dplyr::select(sample = line, feature, view, value)
+
+mofa_expression <- promise_long %>% 
   # renaming columns
   dplyr::select(sample = line,
                 feature = probe,
@@ -538,33 +545,19 @@ input_df = promise_long %>%
   # renaming feature jic
   mutate(feature = paste0(feature, "_", view)) %>%
   dplyr::select(sample, feature, view, value) %>% 
-  drop_na() %>%
+  drop_na() # 
+
+input_df = rbind(mofa_size,
+                 mofa_expression) %>% 
   data.table::as.data.table()
 ```
 
-```{r}
-file <- system.file("extdata", "test_data.RData", package = "MOFA2")
-load(file) 
-dt[,group:=NULL]
-
-dt$value <- input_df$value[1:nrow(dt)]
-dt$feature <- input_df$feature[1:nrow(dt)]
-
-MOFAmodel <- create_mofa_from_df(dt)
-plot_data_overview(MOFAmodel)
-```
-
 
 ```{r}
-MOFAobject <- create_mofa(input_df)
+MOFAobject <- create_mofa(input_df, verbose = TRUE)
 print("created MOFA object")
 plot_data_overview(MOFAobject)
 ```
-
-```{r}
-run_mofa(MOFAmodel, outfile, use_basilisk = TRUE)
-```
-
 
 ```{r}
 # MOFAobject <- prepare_mofa(
@@ -574,7 +567,7 @@ run_mofa(MOFAmodel, outfile, use_basilisk = TRUE)
 #   training_options = train_opts
 # )
 
-outfile = file.path(getwd(),"model.hdf5")
+outfile = file.path(here::here("model.hdf5"))
 MOFAobject.trained <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
 ```
 
