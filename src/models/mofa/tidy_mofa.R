@@ -1,6 +1,7 @@
 # packages
 library(MOFA2)
 library(tidyverse)
+#library(here)
 
 # input 
 promise_long_filtered <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy.rds'))
@@ -42,8 +43,34 @@ input_df = rbind(mofa_size,
 
 MOFAobject <- create_mofa(input_df, verbose = TRUE)
 print("created MOFA object")
-plot_data_overview(MOFAobject) + ggsave(here::here("reports/figures/mofa_object.pdf"))
+plot_data_overview(MOFAobject) #%>% ggsave(here::here("reports/figures/mofa_object.pdf"))
+system("mv Rplots.pdf reports/figures/mofa_object.pdf")
 
+## setting option
+data_opts <- get_default_data_options(MOFAobject)
+data_opts$scale_views = FALSE # default is TRUE
+print(data_opts)
+
+model_opts <- get_default_model_options(MOFAobject)
+model_opts$num_factors = 5 # default is 15
+print(model_opts)
+
+train_opts <- get_default_training_options(MOFAobject)
+train_opts$verbose = TRUE
+train_opts$maxiter = 1000 # 1000 is default
+train_opts$stochastic <- FALSE # default FALSE
+train_opts$save_interrupted <- TRUE
+print(train_opts)
+
+stochastic_opts <- get_default_stochastic_options(MOFAobject)
+print(stochastic_opts)
+
+# running model
 outfile = file.path(here::here("models/mofa/model.hdf5"))
-MOFAobject.trained <- run_mofa(MOFAobject, outfile, use_basilisk = TRUE)
-
+MOFAobject <- prepare_mofa(
+  object = MOFAobject,
+  data_options = data_opts,
+  model_options = model_opts,
+  #stochastic_options = stochastic_opts, # comment out if not running stochastic inference
+  training_options = train_opts
+)
