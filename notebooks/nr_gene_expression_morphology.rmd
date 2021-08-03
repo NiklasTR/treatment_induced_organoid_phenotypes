@@ -79,7 +79,7 @@ organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size
 
 We perform a clustering to check if the samples are grouped by line of origin.
 
-```{r}
+```{r, eval = FALSE}
 ## make expr matrix
 expr_mat <- assays(promise_expr_filtered)$expr
 
