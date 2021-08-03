@@ -1,10 +1,48 @@
 ---
 title: "UMAP EDA"
-output: html_document
+author: Niklas Rindtorff
+output:
+  pdf_document: default
+  html_document:
+    keep_md: true
+params:
+  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  data_harmony: "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_sampled.Rds"
+  remote: FALSE
+  cache: FALSE
 ---
 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = params$cache,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(magrittr)
+library(purrr)
+library(readr)
+library(here)
+library(ggrastr)
+library(cowplot)
+library(princurve)
+library(scico)
+library(ggridges)
+library(cowplot)
+library(tibble)
+library(grDevices)
+library(stats)
+
+# parameter
+print("parameter input:")
+print(params$data)
+print(params$data_harmony)
 ```
 
 
@@ -26,73 +64,20 @@ Further, we added the following steps:
 In this vignette we are interested in the overall structure of the embedding and the effect of *Harmony*. We compare pre-processed data run through *Harmony* with data that was directly projected using UMAP.
 
 ```{r, message = FALSE}
-library(tidyverse)
-library(here)
-library(monocle3)
-library(ggrastr)
-library(cowplot)
-library(princurve)
-library(scico)
-
-# I wish I could solve my path problems with the here package. 
-PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
-
-# umap_tidy <- reducedDims(obj)$UMAP %>% cbind(colData(obj)) %>% as_tibble() %>% janitor::clean_names() %>% 
-#   left_join(., umap_tidy_h %>% dplyr::select(uuid, prob_live, prob_dead))
-
-umap_sampled_h <- umap_tidy_h %>%
-  sample_frac(.01)
-umap_sampled_dmso_h <- umap_tidy_dmso_h %>%
-  sample_frac(.1)
-umap_sampled_dmso <- umap_tidy_dmso %>%
-  sample_frac(.1)
-
-```
-
-# Line Differences
-
-The data does not cluster by obvious phenotype. We hypothesize there is a bias by varying proportions of dead/missegmented organoids.
-I evaluated 
-
-```{r}
-
-plot_pca_heatmap <- function(object, title, cut = 6){
-
-  set.seed(1234234)
-  
-  pca_line_mat <- reducedDims(object)$PCA %>% cbind(colData(object)) %>% as_tibble() %>% janitor::clean_names() %>% 
-    left_join(., umap_tidy_h %>% filter(drug == "DMSO") %>% dplyr::select(uuid, prob_live, prob_dead)) %>%
-  #filter(prob_live >= 0.9) %>%
-  filter(drug == "DMSO") %>% 
-  filter(line != "D020T01") %>%
-  group_by(line) %>% 
-  summarize_at(vars(contains("pc")), funs(mean))
-  
-  pca_line_anno <- colData(object) %>% as_tibble() %>% janitor::clean_names()
-
-pca_line_mat %>% as.data.frame() %>% 
-  column_to_rownames("line") %>% 
-  t() %>% 
-  #head() %>%
-  pheatmap::pheatmap(cluster_rows = FALSE,
-                     cutree_cols = cut,
-                     main = title)
-}
 
 
-plot_pca_heatmap(obj_h, "Harmony normalised, All data")
-```
+organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
+  dplyr::select(line = organoid, morphology = visual_inspection_v2) %>% 
+  expand_grid(., version = c("01", "02")) %>%
+  mutate(line = paste0(line, version)) %>% 
+  dplyr::select(-version)
 
-```{r}
-plot_pca_heatmap(obj, "All data")
-```
+umap_sampled <- read_rds(here::here(params$data)) %>% left_join(organoid_morphology)
+umap_sampled_h <- read_rds(here::here(params$data_harmony)) %>% left_join(organoid_morphology)
 
-```{r}
-plot_pca_heatmap(dmso_h, "Harmony normalised, DMSO data")
-```
+umap_df <- rbind(pca_df_raw %>% mutate(status = "raw"),
+                pca_df_harmony %>% mutate(status = "harmony"))
 
-```{r}
-plot_pca_heatmap(dmso, "DMSO data")
 ```
 
 
@@ -117,16 +102,16 @@ umap_size <- function(umap, main){
 
 p1 <- umap_size(umap_sampled_h, "Harmony normalised, All data")
 p2 <- umap_size(umap_sampled, "Raw Data, All data")
-p3 <- umap_size(umap_sampled_dmso_h, "Harmony normalised, DMSO")
-p4 <- umap_size(umap_sampled_dmso, "Raw Data, DMSO")
+# p3 <- umap_size(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_size(umap_sampled_dmso, "Raw Data, DMSO")
 
 plot_grid(
   p1, p2,
-  p3, p4,
+#  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_size_panel.pdf"), 
+) +  ggsave(here::here("reports/gg_size_panel.pdf"), 
             width = 8,
-            height = 8)
+            height = 4)
 ```
 
 
@@ -150,26 +135,26 @@ umap_ldc <- function(umap, main){
 
 p1 <- umap_ldc(umap_sampled_h, "Harmony normalised, All data")
 p2 <- umap_ldc(umap_sampled, "Raw Data, All data")
-p3 <- umap_ldc(umap_sampled_dmso_h, "Harmony normalised, DMSO")
-p4 <- umap_ldc(umap_sampled_dmso, "Raw Data, DMSO")
+# p3 <- umap_ldc(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_ldc(umap_sampled_dmso, "Raw Data, DMSO")
 
 
 plot_grid(
   p1, p2,
-  p3, p4,
+#  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_ldc_panel.pdf"),
+) +  ggsave(here::here("gg_ldc_panel.pdf"),
             width = 8,
-            height = 8)
+            height = 4)
 
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_ldc.pdf"), width = 4, height = 4)
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_ldc.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
 umap_morph <- function(umap, main){
   umap %>%
   #filter(Size < 1000) %>%
-  ggplot(aes(v1, v2, color = morphological_class)) + 
+  ggplot(aes(v1, v2, color = morphology)) + 
   geom_point_rast(alpha = 0.5, size = 0.35) + 
   scale_color_brewer(type = "qual") + #lajolla #vikO
   theme_cowplot() +
@@ -181,19 +166,19 @@ umap_morph <- function(umap, main){
 
 p1 <- umap_morph(umap_sampled_h, "Harmony normalised, All data")
 p2 <- umap_morph(umap_sampled, "Raw Data, All data")
-p3 <- umap_morph(umap_sampled_dmso_h, "Harmony normalised, DMSO")
-p4 <- umap_morph(umap_sampled_dmso, "Raw Data, DMSO")
+# p3 <- umap_morph(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_morph(umap_sampled_dmso, "Raw Data, DMSO")
 
 
 plot_grid(
   p1, p2,
-  p3, p4,
+#  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph_panel.pdf"),
+) +  ggsave(here::here("gg_morph_panel.pdf"),
             width = 8,
-            height = 8)
+            height = 4)
 
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph.pdf"))
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph.pdf"))
 ```
 
 
@@ -213,19 +198,52 @@ umap_line <- function(umap, main){
 
 p1 <- umap_line(umap_sampled_h, "Harmony normalised, All data")
 p2 <- umap_line(umap_sampled, "Raw Data, All data")
-p3 <- umap_line(umap_sampled_dmso_h, "Harmony normalised, DMSO")
-p4 <- umap_line(umap_sampled_dmso, "Raw Data, DMSO")
+# p3 <- umap_line(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_line(umap_sampled_dmso, "Raw Data, DMSO")
 
 
 plot_grid(
   p1, p2,
-  p3, p4,
+#  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_line_panel.pdf"), 
+) +  ggsave(here::here("gg_line_panel.pdf"),
             width = 8,
-            height = 8)
+            height = 4)
 
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_line.pdf"))
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_line.pdf"))
+```
+
+
+```{r}
+umap_replicate <- function(umap, main){
+  umap %>%
+  #filter(Size < 1000) %>%
+  ggplot(aes(v1, v2, color = replicate)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_brewer(type = "qual") + #lajolla #vikO
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       title = main,
+       color = "Screen ID") + 
+  theme(legend.position = "bottom")
+}
+
+p1 <- umap_replicate(umap_sampled_h, "Harmony normalised, All data")
+p2 <- umap_replicate(umap_sampled, "Raw Data, All data")
+# p3 <- umap_screen(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_screen(umap_sampled_dmso, "Raw Data, DMSO")
+
+
+plot_grid(
+  p1, p2,
+#  p3, p4,
+  labels = "AUTO", ncol = 2
+) +  ggsave(here::here("gg_replicate_panel.pdf"),
+            width = 8,
+            height = 4)
+
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen.pdf"), width = 4, height = 4)
 ```
 
 
@@ -246,25 +264,25 @@ umap_screen <- function(umap, main){
 
 p1 <- umap_screen(umap_sampled_h, "Harmony normalised, All data")
 p2 <- umap_screen(umap_sampled, "Raw Data, All data")
-p3 <- umap_screen(umap_sampled_dmso_h, "Harmony normalised, DMSO")
-p4 <- umap_screen(umap_sampled_dmso, "Raw Data, DMSO")
+# p3 <- umap_screen(umap_sampled_dmso_h, "Harmony normalised, DMSO")
+# p4 <- umap_screen(umap_sampled_dmso, "Raw Data, DMSO")
 
 
 plot_grid(
   p1, p2,
-  p3, p4,
+#  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen_panel.pdf"), 
+) +  ggsave(here::here("gg_screen_panel.pdf"),
             width = 8,
-            height = 8)
+            height = 4)
 
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen.pdf"), width = 4, height = 4)
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_screen.pdf"), width = 4, height = 4)
 ```
 
 # Dye Intensity
 
 ```{r}
-umap_sample %>%
+umap_sampled %>%
   ggplot(aes(actin, fill = screen_id)) +
   geom_density(alpha = 0.5) + 
   scale_fill_brewer(type = 'qual') +
@@ -273,7 +291,7 @@ umap_sample %>%
 ```
 
 ```{r}
-df %>%
+umap_sampled %>%
   ggplot(aes(permeability, fill = screen_id)) +
   geom_density(alpha = 0.5) + 
   scale_fill_brewer(type = 'qual') +
@@ -282,7 +300,7 @@ df %>%
 ```
 
 ```{r}
-df %>%
+umap_sampled %>%
   ggplot(aes(dapi, fill = screen_id)) +
   geom_density(alpha = 0.5) + 
   scale_fill_brewer(type = 'qual') +
@@ -293,9 +311,9 @@ df %>%
 ```{r}
 set.seed(123)
 
-df %>%
+umap_sampled %>%
   filter(drug == "DMSO") %>%
-  sample_n(10000) %>%
+  #sample_n(10000) %>%
   ggplot(aes(v1, v2, color = actin)) + 
   geom_point_rast(alpha = 0.75, size = 0.35) +
    scale_colour_gradient(low = "white", high = "red") + 
@@ -304,11 +322,11 @@ df %>%
        y = "UMAP 2",
        title = "Actin staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(paste0(PATH, "reports/figures/gg_actin.pdf"), width = 4, height = 4)
+  ggsave(here::here("reports/figures/gg_actin.pdf"), width = 4, height = 4)
 
-df %>%
+umap_sampled %>%
   filter(drug == "DMSO") %>%
-  sample_n(10000) %>%
+  #sample_n(10000) %>%
   ggplot(aes(v1, v2, color = dapi)) + 
   geom_point_rast(alpha = 0.75, size = 0.35) +
    scale_colour_gradient(low = "white", high = "blue") + 
@@ -317,7 +335,7 @@ df %>%
        y = "UMAP 2",
        title = "Nuclear staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(paste0(PATH, "reports/figures/gg_dapi.pdf"), width = 4, height = 4)
+  ggsave(here::here("reports/figures/gg_dapi.pdf"), width = 4, height = 4)
 
 ```
 
@@ -329,7 +347,7 @@ df %>%
 umap_morph_filter <- function(umap, line_vis, main){
   umap %>%
   #filter(Size < 1000) %>%
-  ggplot(aes(v1, v2, color = morphological_class)) + 
+  ggplot(aes(v1, v2, color = morphology)) + 
   geom_point_rast(alpha = 0.5, size = 0.35, color = "grey") +
   geom_point_rast(data = umap %>% filter(line == line_vis), alpha = 0.5, size = 0.35) +
   scale_color_brewer(type = "qual") + #lajolla #vikO
@@ -342,26 +360,25 @@ umap_morph_filter <- function(umap, line_vis, main){
 
 loi_morph <- function(loi){
 p1 <- umap_morph_filter(umap_sampled_h, loi, paste0("Harmony, All data, ", loi))
-p2 <- umap_morph_filter(umap_sampled, "Raw Data, All data")
-p3 <- umap_morph_filter(umap_sampled_dmso_h, loi, paste0("Harmony, DMSO, ", loi))
-p4 <- umap_morph_filter(umap_sampled_dmso, loi, paste0("Raw Data, DMSO, ", loi))
+p2 <- umap_morph_filter(umap_sampled, loi, "Raw Data, All data")
+# p3 <- umap_morph_filter(umap_sampled_dmso_h, loi, paste0("Harmony, DMSO, ", loi))
+# p4 <- umap_morph_filter(umap_sampled_dmso, loi, paste0("Raw Data, DMSO, ", loi))
 
 plot_grid(
   p1, p2,
-  p3, p4,
-  labels = "AUTO", ncol = 2) +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph_panel", loi, ".pdf"), 
+ # p3, p4,
+  labels = "AUTO", ncol = 2) +  ggsave(here::here(paste0("gg_morph_panel", loi, ".pdf")), 
             width = 8,
             height = 8)
 
-p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph.pdf"))
+#p2 +  ggsave(paste0(PATH, "notebooks/PhenotypeSpectrum/gg_morph.pdf"))
 
 }
 
 loi_morph("D007T01")
 
-lapply(umap_tidy_h$line %>% unique(), loi_morph)
+lapply(umap_sampled_h$line %>% unique(), loi_morph)
 ```
-
 
 # Characterizing organoid regions
 
