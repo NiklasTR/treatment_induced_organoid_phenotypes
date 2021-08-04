@@ -93,7 +93,7 @@ data_opts$scale_views = TRUE # default is TRUE
 print(data_opts)
 
 model_opts <- get_default_model_options(MOFAobject)
-model_opts$num_factors = 5 # default is 15
+model_opts$num_factors = 3 # default is 15
 print(model_opts)
 
 train_opts <- get_default_training_options(MOFAobject)
