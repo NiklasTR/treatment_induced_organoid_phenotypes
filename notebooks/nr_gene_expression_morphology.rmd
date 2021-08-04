@@ -209,6 +209,7 @@ pca_size <- pca_hco$x_anno %>%
   #scale_color_viridis_c() +
   scale_color_gradient(low="blue", high="red") +
   #scale_colour_gradient2() +
+  ggrepel::geom_text_repel() +
   ggtitle("PCA on probe level - organoid size")
 
 pca_size
@@ -228,6 +229,7 @@ pca_igf <- pca_hco$x_anno %>%
   ylab(pca_percent[2]) +
   theme(legend.position = "bottom") + 
   scale_color_viridis_c() +
+  ggrepel::geom_text_repel() +
   #scale_color_gradient(low="blue", high="red") +
   #scale_colour_gradient2() +
   ggtitle("PCA on probe level - IGF2 expression")

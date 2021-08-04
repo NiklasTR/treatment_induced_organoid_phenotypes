@@ -21,10 +21,13 @@ library(biomaRt)
 # input
 model <- load_model(here("models/mofa/model.hdf5"))
 
+# gene expression data
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
 
+# organoid morphology
 umap_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 
+# organoid size
 organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
   filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
   #filter(!line %in% c('D055T01','D020T02')) %>% 
@@ -34,15 +37,23 @@ organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(rep = paste0("r", rep))
 
+# morphology classification
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2) %>%
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(morphology = if_else(is.na(morphology), "other", morphology))
 
+# drug activity data
 data('aucroc', package = 'SCOPEAnalysis')
 drug_activity <- aucroc %>% filter(!line %in% c('D055T01', 'D021T01', 'D054T01'))
 
-# fomrmatting model output
+# gene expression annotation 
+intestinal_sig <- readxl::read_excel(here('data/external/expression/merloz-suarez_sigantures.xls'), 
+                                     sheet = 1, skip = 4) %>% .[,1:4] %>%
+  gather(signature, symbol) %>% drop_na() %>% 
+  mutate(symbol = gsub('\\*', '', symbol))
+
+
 weights <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_size <- model@expectations$W$size_view %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_expression <- model@expectations$W$expression %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
@@ -186,72 +197,7 @@ weights %>%
   theme_cowplot()
 ```
 
-
-# factor 1
-
-
-```{r}
-plot_top_weights(model,
-  view = "expression",
-  factor = 1,
-  nfeatures = 30,
-  scale = FALSE
-)
-```
-
-```{r}
-loadings_expression %>% arrange(desc(factor1)) %>% head(100) %>% 
-  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
-  arrange(desc(id)) %>%
-  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor1_top.csv"))
-
-loadings_expression %>% arrange(desc(factor2)) %>% head(100) %>% 
-  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
-  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor2_top.csv"))
-
-loadings_expression %>% arrange(desc(factor3)) %>% head(100) %>% 
-  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
-  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor3_top.csv"))
-```
-
-
-```{r}
-plot_weights(model,
-  view = "expression",
-  factor = 1,
-  nfeatures = 14,     # Number of features to highlight
-  scale = T,          # Scale weights from -1 to 1
-  abs = F             # Take the absolute value?
-)
-```
-growth control via IGF signaling
-cell adhesion via FYN signaling, high fibronectin expression
-DLX- TGFb and BMP inhibiting transcription factor
-
-
-```{r}
-plot_weights(model,
-  view = "expression",
-  factor = 2,
-  nfeatures = 14,     # Number of features to highlight
-  scale = T,          # Scale weights from -1 to 1
-  abs = F             # Take the absolute value?
-)
-```
-
-
-```{r}
-plot_weights(model,
-  view = "expression",
-  factor = 3,
-  nfeatures = 14,     # Number of features to highlight
-  scale = T,          # Scale weights from -1 to 1
-  abs = F             # Take the absolute value?
-)
-```
-NRX cell adhesion
-xenobiotic metabolism
-
+## drug response
 
 
 ```{r}
@@ -281,6 +227,8 @@ loadings_drug_activity_tidy <- loadings_drug_activity %>%
 #   column_to_rownames("drug") %>% 
 #   pheatmap::pheatmap()
 ```
+
+
 ```{r}
 drug_activity_test <- loadings_drug_activity_tidy %>% semi_join(loadings_drug_activity_tidy %>% 
                                             dplyr::count(target) %>% 
@@ -310,9 +258,170 @@ drug_activity_test_result %>% filter(p.value <= 0.2) %>%
   filter(term != "(Intercept)") %>% 
   arrange(factor, statistic)
 ```
-## factor 1 
-EGFR inhibitor activity has a significant negative contribution to the factor. This means that lines with a high factor1 score, show little to no activity when treated with EGFR inhibitors.
 
+
+
+## exporting factors loadings for enrichment
+
+```{r}
+# top 100 genes
+loadings_expression %>% arrange(desc(factor1)) %>% head(100) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  arrange(desc(id)) %>%
+  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor1_top.csv"))
+
+loadings_expression %>% arrange(desc(factor2)) %>% head(100) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor2_top.csv"))
+
+loadings_expression %>% arrange(desc(factor3)) %>% head(100) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  dplyr::select(id) %>% write_csv(here::here("reports/tables/factor3_top.csv"))
+
+# all genes
+loadings_expression %>% arrange(desc(factor1)) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  arrange(desc(id)) %>%
+  dplyr::select(id, factor1) %>% write_csv(here::here("reports/tables/factor1_all.csv"))
+
+loadings_expression %>% arrange(desc(factor2)) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  dplyr::select(id, factor2) %>% write_csv(here::here("reports/tables/factor2_all.csv"))
+
+loadings_expression %>% arrange(desc(factor3)) %>% 
+  dplyr::mutate(id = substr(id, 1, nchar(id)-11)) %>% 
+  dplyr::select(id, factor3) %>% write_csv(here::here("reports/tables/factor3_all.csv"))
+```
+
+# factor 1 
+
+## size 
+
+```{r}
+weights %>% 
+  rename(line = id) %>%
+  left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
+  left_join(organoid_morphology %>% 
+            mutate(line = substr(line, 1, 4)) %>% 
+  expand_grid(., rep = c("r1", "r2")) %>% 
+  mutate(sample = paste0(line, "_", rep)) %>% dplyr::select(-line, line = sample)) %>%
+  distinct() %>%
+  ggplot(aes(factor1, size, label = line)) + 
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_point(size = 4) + 
+  ggrepel::geom_text_repel(color = "black") + 
+  scale_color_viridis_c() + 
+  labs(y = "expected size") +
+  theme_cowplot()
+```
+
+
+## gene expression
+
+```{r}
+plot_weights(model,
+  view = "expression",
+  factor = 1,
+  nfeatures = 10,     # Number of features to highlight
+  scale = T,          # Scale weights from -1 to 1
+  abs = F             # Take the absolute value?
+)
+```
+growth control via IGF signaling
+cell adhesion via FYN signaling, high fibronectin expression
+DLX- TGFb and BMP inhibiting transcription factor
+
+
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  filter(symbol != "") %>%
+  left_join(promise_long_filtered_top %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor1))
+  
+
+ranks <- setNames(df$factor1, as.character(df$entrez))
+ranks <- sort(ranks, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_1 <- gsePathway(
+  geneList = ranks,
+  organism = 'human',
+  #nPerm = 1e5,
+  #minGSSize = 100,
+  #maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+reactome <- pairwise_termsim(gse_reactome_1) 
+emapplot(reactome, color = "NES")
+```
+
+
+```{r}
+gse_go <- gseGO(
+  geneList = ranks,
+  OrgDb = org.Hs.eg.db,
+  ont = 'BP',
+  nPerm = 1e5,
+  minGSSize = 10,
+  maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+go <- pairwise_termsim(gse_go) 
+emapplot(go)
+```
+
+
+```{r}
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor1, symbol) %>% distinct() %>%
+  arrange(desc(factor1))
+ranks_symbol = setNames(df$factor1, as.character(df$symbol))
+
+gse_sig <- GSEA(
+  geneList = ranks,
+  TERM2GENE = intestinal_sig,
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_sig_tbl <- as_tibble(gse_sig)
+```
+
+
+```{r}
+## lgr5 signature
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[2], 
+  title = paste0(gse_sig$ID[2], 
+                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
+) 
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[1],
+  title = paste0(gse_sig$ID[1], 
+                ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
+)
+```
+
+
+## drug sensitivity
 
 ```{r}
 
@@ -332,6 +441,8 @@ drug_activity_test %>%
 
 median weighting within the factor was strongest for activity of MEK, IGF1R inhibitors. mTOR inhibitors ranked among the strongest drugs as well. In contrast, EGFR inhibitor activity had the most negative median contribution to the factor. Put differently, organoid lines that had a high score for factor 1 tended to be sensitive to MEK and IGF-1R inhibitors and less responsive to EGFR and Syk inhibitors. 
 
+
+EGFR inhibitor activity has a significant negative contribution to the factor. This means that lines with a high factor1 score, show little to no activity when treated with EGFR inhibitors.
 
 
 ```{r}
@@ -432,8 +543,13 @@ Next we wondered how treatment with members from these highly active groups woul
 
 ```
 
-## factor 2
+# factor 2
 
+## morphology
+
+## gene expression
+
+## drug sensitivity
 
 ```{r}
 
@@ -540,8 +656,21 @@ drug_activity_joined %>%
 again, within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor - showing less activity in factor 2 high organoids compared to factor 2 low organoid lines.
 
 
-## factor 3
+# factor 3
 
+
+
+```{r}
+plot_weights(model,
+  view = "expression",
+  factor = 3,
+  nfeatures = 14,     # Number of features to highlight
+  scale = T,          # Scale weights from -1 to 1
+  abs = F             # Take the absolute value?
+)
+```
+NRX cell adhesion
+xenobiotic metabolism
 
 
 ```{r}
@@ -611,28 +740,6 @@ drug_activity_joined %>%
 
 
 
-
-```{r}
-drug_activity_joined <- weights %>%
-  mutate(id = substr(id, 1, 4)) %>% 
-  group_by(id) %>% 
- summarise_all(funs(mean)) %>% 
-  mutate(line = paste0(id, "T01")) %>%
-  left_join(drug_activity)
-
-doi <- drug_activity_test %>% 
-  dplyr::filter(target == "mTOR") %>% 
-  .$drug 
-
-
-drug_activity_joined %>% 
-  filter(drug %in% doi) %>% 
-  ggplot(aes(factor2, auroc)) +
-  geom_point() + 
-  cowplot::theme_cowplot() + 
-  geom_smooth(method = "lm", se = FALSE, color = "green") + 
-  facet_wrap(~ drug)
-```
 again, within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor - showing less activity in factor 2 high organoids compared to factor 2 low organoid lines.
 
 
@@ -640,79 +747,10 @@ again, within the group of mTOR inhibitors, activity towards treatment with the 
 ## other
 
 
-```{r}
-plot_weights(model,
-  view = "drug_activity",
-  factor = 1,
-  nfeatures = 14,     # Number of features to highlight
-  scale = T,          # Scale weights from -1 to 1
-  abs = F             # Take the absolute value?
-)
-```
 
 
-```{r}
-plot_top_weights(model,
-  view = "morphology_view",
-  factor = 1,
-  nfeatures = 5,
-  scale = FALSE
-)
-```
-
-```{r}
-plot_top_weights(model,
-  view = "drug_activity",
-  factor = 1,
-  nfeatures = 10,
-  scale = FALSE
-)
-```
-
-```{r}
-plot_top_weights(model,
-  view = "drug_activity",
-  factor = 3,
-  nfeatures = 10,
-  scale = FALSE
-)
-```
 
 
-```{r}
-plot_top_weights(model,
-  view = "expression",
-  factor = 1,
-  nfeatures = 30,
-  scale = FALSE
-)
-```
-
-
-```{r}
-df <- loadings_expression %>% 
-  separate(id, c("symbol"), sep = "_exp") %>% 
-  filter(symbol != "") %>%
-  left_join(promise_long_filtered_top %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
-  arrange(desc(factor1))
-  
-
-ranks <- setNames(df$factor1, as.character(df$entrez))
-ranks <- sort(ranks, decreasing = T)
-
-## Reactome enrichment analysis
-gse_reactome_1 <- gsePathway(
-  geneList = ranks,
-  organism = 'human',
-  #nPerm = 1e5,
-  #minGSSize = 100,
-  #maxGSSize = 500,
-  pvalueCutoff = 0.2
-)
-
-reactome <- pairwise_termsim(gse_reactome_1) 
-emapplot(reactome, color = "NES")
-```
 
 
 
