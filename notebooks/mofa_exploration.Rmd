@@ -18,15 +18,21 @@ library(biomaRt)
 
 
 ```{r}
+# input
 model <- load_model(here("models/mofa/model.hdf5"))
-#load(here("notebooks/SCOPEAnalysis/data/promise_expr.rda")) 
-#feature_anno <- read_csv(here("data/interim/FeatureAnalysis/feature_annotation.csv"))
-
-PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
+
 umap_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 
+organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
+  filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
+  #filter(!line %in% c('D055T01','D020T02')) %>% 
+  mutate(line = as.character(line)) %>% 
+  dplyr::select(line, size = x, rep = replicate) %>% 
+  distinct() %>% arrange(line) %>%
+  mutate(line = substr(line, 1, 4)) %>% 
+  mutate(rep = paste0("r", rep))
 
 # fomrmatting model output
 weights <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
@@ -58,12 +64,8 @@ model@cache$variance_explained$r2_per_factor$single_group %>% as.data.frame() %>
   mutate(overall_variance = expression + morphology_view + size_view + drug_activity) %>%
   mutate(overall_variance = overall_variance/4) %>%
   ggplot(aes(factor, overall_variance)) + 
-  geom_point()
-```
-
-
-```{r}
-predicted_expr <- predict(model, view='expression') 
+  geom_point(size = 2) + 
+  theme_cowplot()
 ```
 
 
@@ -278,7 +280,7 @@ umap_factor <- weights %>%
          replicate = substr(replicate, 2,2)) %>% 
   left_join(umap_df %>% 
   filter(drug == "DMSO"), .) %>% 
-  filter(line != "D020T01") 
+  filter(line != "D020T02") 
 
 
 # %>% # dropping line because of duplicate imaging
@@ -287,9 +289,6 @@ umap_factor <- weights %>%
 #   scale_color_viridis_c() +
 #   theme_cowplot()
 ```
-
-
-
 
 
 # QC for technical artefacts
@@ -330,30 +329,11 @@ ggbatch
 # Factor Exploration
 
 ```{r}
-umap_sampled_factor %>% 
+gg_factor_umap <- umap_factor %>% 
   dplyr::select(-size_factor) %>%
   pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
   ggplot(aes(v1, v2, color = value)) + 
-  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
-  scale_color_viridis_c() +
-  cowplot::theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2",
-       color = "partition") + 
-  facet_wrap(~ number) +
-  theme(legend.position = "bottom") + 
-    coord_fixed()
-```
-I am also displaying all factors except factor 2, which is strongly linked to the cell permeability dye. 
-
-```{r}
-gg_fm2 <- umap_sampled_factor %>% 
-  filter(partition %in% c(1,2)) %>%
-  dplyr::select(-size_factor) %>%
-  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
-  filter(number != "factor2") %>%
-  ggplot(aes(v1, v2, color = value)) + 
-  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
+  ggrastr::geom_point_rast(alpha = 0.1, size = 0.35) + 
   scale_color_viridis_c() +
   cowplot::theme_cowplot() +
   labs(x = "UMAP 1",
@@ -363,8 +343,13 @@ gg_fm2 <- umap_sampled_factor %>%
   theme(legend.position = "bottom") + 
     coord_fixed()
 
-gg_fm2 + ggsave(here("factor_overview.pdf"), height = 6 , width = 6)
+gg_factor_umap + ggsave(here("factor_overview.pdf"), height = 6 , width = 6)
 ```
+
+```{r, eval =FALSE}
+cowplot::plot_grid()
+```
+
 
 ## GSEA
 
@@ -514,25 +499,6 @@ enrichment.parametric_negative$pval.adj[,3] %>% as.data.frame() %>% rownames_to_
   arrange(p.adj)
 ```
 
-
-## Factor 1
-
-```{r}
-gg_f1 <- umap_sampled_factor %>% 
-  dplyr::select(-size_factor) %>%
-  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
-  filter(number == "factor1") %>%
-  ggplot(aes(v1, v2, color = value)) + 
-  ggrastr::geom_point_rast(alpha = 0.5, size = 0.35) + 
-  scale_color_viridis_c() +
-  cowplot::theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2",
-       color = "factor") + 
-  facet_wrap(~ number) +
-  theme(legend.position = "bottom") + 
-    coord_fixed()
-```
 
 
 ```{r}
