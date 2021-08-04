@@ -265,26 +265,26 @@ loadings_drug_activity_tidy <- loadings_drug_activity %>%
   left_join(drug_anno)
 
 
-
-top_n <- 20
-
-top_drugs <- rbind(
-  loadings_drug_activity_tidy %>% arrange(factor1) %>% head(top_n),
-  loadings_drug_activity_tidy %>% arrange(factor1) %>% tail(top_n),
-  loadings_drug_activity_tidy %>% arrange(factor2) %>% head(top_n),
-  loadings_drug_activity_tidy %>% arrange(factor2) %>% tail(top_n),
-  loadings_drug_activity_tidy %>% arrange(factor3) %>% head(top_n),
-  loadings_drug_activity_tidy %>% arrange(factor3) %>% tail(top_n)
-) %>% distinct()
-
-top_drugs %>% 
-  column_to_rownames("drug") %>% 
-  pheatmap::pheatmap()
+# 
+# top_n <- 20
+# 
+# top_drugs <- rbind(
+#   loadings_drug_activity_tidy %>% arrange(factor1) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor1) %>% tail(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor2) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor2) %>% tail(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor3) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor3) %>% tail(top_n)
+# ) %>% distinct()
+# 
+# top_drugs %>% 
+#   column_to_rownames("drug") %>% 
+#   pheatmap::pheatmap()
 ```
 ```{r}
 drug_activity_test <- loadings_drug_activity_tidy %>% semi_join(loadings_drug_activity_tidy %>% 
                                             dplyr::count(target) %>% 
-                                            filter(n >=3)) 
+                                            filter(n >=5)) 
 ```
 
 
@@ -306,28 +306,211 @@ df %>%
 ```
 
 ```{r}
-drug_activity_test_result %>% filter(p.value <= 0.05) %>% 
-  filter(term != "(Intercept)")
+drug_activity_test_result %>% filter(p.value <= 0.2) %>% 
+  filter(term != "(Intercept)") %>% 
+  arrange(factor, statistic)
 ```
-
+## factor 1 
+EGFR inhibitor activity has a significant negative contribution to the factor. This means that lines with a high factor1 score, show little to no activity when treated with EGFR inhibitors.
 
 
 ```{r}
 
+aggregate_drugs <- drug_activity_test %>% group_by(target) %>% summarise_at(vars(contains("factor")), funs("median"))
 
-aggregate_drugs <- drugs_plot %>% group_by(target) %>% summarise_at(vars(contains("factor")), funs("mean"))
+include_drugs <- aggregate_drugs %>% arrange(desc(factor1)) %>% .$target
 
-
-
-
-
-drugs_plot %>%
+drug_activity_test %>%
   drop_na() %>%
-  mutate(target = factor(target, levels = aggregate_drugs %>% arrange(desc(factor1)) %>% .$target)) %>%
+  mutate(target = factor(target, levels = include_drugs)) %>%
   ggplot(aes(target, factor1)) + 
   geom_point() + 
   geom_hline(yintercept = 0) + 
-  coord_flip()
+  coord_flip() + 
+  cowplot::theme_cowplot()
+```
+
+median weighting within the factor was strongest for activity of MEK, IGF1R inhibitors. mTOR inhibitors ranked among the strongest drugs as well. In contrast, EGFR inhibitor activity had the most negative median contribution to the factor. Put differently, organoid lines that had a high score for factor 1 tended to be sensitive to MEK and IGF-1R inhibitors and less responsive to EGFR and Syk inhibitors. 
+
+
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "EGFR") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor1, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") + 
+  facet_wrap(~ drug)
+```
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "MEK") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor1, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(~ drug)
+```
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "IGF-1R") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor1, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  facet_wrap(~ drug)
+```
+
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "mTOR") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor1, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "green") + 
+  facet_wrap(~ drug)
+```
+within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor. WYE-132 is an ATP competitive inhibitor of mTORC1 and mTORC2
+
+
+Next we wondered how treatment with members from these highly active groups would change the phenotype of organoids 
+
+
+```{r}
+
+```
+
+## factor 2
+
+
+```{r}
+
+aggregate_drugs <- drug_activity_test %>% group_by(target) %>% summarise_at(vars(contains("factor")), funs("median"))
+
+include_drugs <- aggregate_drugs %>% arrange(desc(factor2)) %>% .$target
+
+drug_activity_test %>%
+  drop_na() %>%
+  mutate(target = factor(target, levels = include_drugs)) %>%
+  ggplot(aes(target, factor2)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0) + 
+  coord_flip() + 
+  cowplot::theme_cowplot()
+```
+
+median weighting within the factor was strongest for activity of Wnt/bcatenin, Src, EGFR and FAK inhibitors. In contrast, MEK, ERK inhibitor activity had among the most negative median contribution to the factor, similarly mTOR inhibitors, albeit not statistically significant. Put differently, organoid lines that had a high score for factor 2 tended to be sensitive to Wnt and EGFR targeting and less responsive to MEK and ERK inhibitors. 
+
+
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "EGFR") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") + 
+  facet_wrap(~ drug)
+```
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "MEK") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(~ drug)
+```
+```{r}
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "Wnt/beta-catenin") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  facet_wrap(~ drug)
 ```
 
 
@@ -341,9 +524,50 @@ drug_activity_joined <- weights %>%
   mutate(line = paste0(id, "T01")) %>%
   left_join(drug_activity)
 
-doi <- loadings_drug_activity_tidy %>% 
-  arrange(desc(factor3)) %>% 
-  .$drug %>% head(12)
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "mTOR") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "green") + 
+  facet_wrap(~ drug)
+```
+again, within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor - showing less activity in factor 2 high organoids compared to factor 2 low organoid lines.
+
+
+## factor 3
+
+
+
+```{r}
+
+aggregate_drugs <- drug_activity_test %>% group_by(target) %>% summarise_at(vars(contains("factor")), funs("median"))
+
+include_drugs <- aggregate_drugs %>% arrange(desc(factor3)) %>% .$target
+
+drug_activity_test %>%
+  drop_na() %>%
+  mutate(target = factor(target, levels = include_drugs)) %>%
+  ggplot(aes(target, factor3)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0) + 
+  coord_flip() + 
+  cowplot::theme_cowplot()
+```
+
+median weighting within the factor was strongest for activity of AURK inhibitors. In contrast, GSK and EGFR inhibitor activity had the most negative median contribution to the factor. Put differently, organoid lines that had a high score for factor 3 tended to be sensitive to ARK targeting and less responsive to GSK and EGFR inhibitors. 
+
+
+
+```{r}
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "EGFR") %>% 
+  .$drug 
 
 
 drug_activity_joined %>% 
@@ -351,15 +575,69 @@ drug_activity_joined %>%
   ggplot(aes(factor3, auroc)) +
   geom_point() + 
   cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") + 
+  facet_wrap(~ drug)
+```
+
+```{r}
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "GSK-3") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE) + 
   facet_wrap(~ drug)
 ```
 
-
 ```{r}
-WYE-125132 (WYE-132)
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "Aurora Kinase") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor3, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  facet_wrap(~ drug)
 ```
 
+
+
+
+```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "mTOR") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, color = "green") + 
+  facet_wrap(~ drug)
+```
+again, within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor - showing less activity in factor 2 high organoids compared to factor 2 low organoid lines.
+
+
+
+## other
 
 
 ```{r}
