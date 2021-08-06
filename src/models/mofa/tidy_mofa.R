@@ -40,6 +40,8 @@ mofa_activity <- aucroc %>% filter(!line %in% c('D055T01', 'D021T01', 'D054T01')
     # I average one more time over drug activity per line. This is necessary as D020 was imaged twice. In this particular case, I am creating the average activity score
     group_by(sample, feature, view) %>% summarise(value = mean(value))
 
+# organoid mutation data
+#read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% janitor::clean_names() %>% mutate(sample = substr(sample, 2,nchar(sample)-1)) %>% mutate(sample = paste0("D", sample)) %>% expand_grid(replicate = c("r1", "r2")) %>% mutate(sample = paste0(sample, replicate)) %>% dplyr::select(sample, feature = symbol, everything())
 
 # define MOFA object and run MOFA
 mofa_size <- organoid_size_fit %>% 
