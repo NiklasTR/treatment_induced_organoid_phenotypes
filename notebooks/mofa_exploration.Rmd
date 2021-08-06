@@ -172,23 +172,6 @@ gg_f12 + ggsave(here("factor_12_plot.pdf"), height = 5 , width = 5)
 ```{r}
 weights %>% 
   rename(line = id) %>%
-  left_join(organoid_morphology %>% 
-              mutate(line = substr(line, 1, 4)) %>% 
-    expand_grid(., rep = c("r1", "r2")) %>% 
-      mutate(sample = paste0(line, "_", rep)) %>% dplyr::select(-line, line = sample)) %>%
-  distinct() %>%
-  ggplot(aes(factor1, factor2, label = line, color = morphology)) + 
-  geom_point(size = 4) + 
-  ggrepel::geom_text_repel(color = "black") + 
-  theme_cowplot() + 
-  scale_color_brewer(type = "qual")
-
-```
-
-
-```{r}
-weights %>% 
-  rename(line = id) %>%
   left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
   ggplot(aes(factor1, factor3, label = line)) + 
   geom_point(size = 2) + 
@@ -227,6 +210,23 @@ loadings_drug_activity_tidy <- loadings_drug_activity %>%
 #   column_to_rownames("drug") %>% 
 #   pheatmap::pheatmap()
 ```
+
+```{r}
+df <- loadings_drug_activity_tidy %>% dplyr::select(-target) %>% 
+  gather(factor_name, value, -drug) %>% 
+  distinct() 
+
+row_anno <-  df %>% left_join(loadings_drug_activity_tidy) %>% dplyr::select(drug, target) %>% as.data.frame() %>% column_to_rownames("drug") %>% distinct()
+
+df %>%
+  spread(drug, value) %>% 
+  dplyr::select(-factor_name) %>%
+  cor() %>% 
+  as.matrix() %>% 
+  pheatmap::pheatmap(show_rownames = FALSE, 
+                     show_colnames = FALSE)
+```
+
 
 
 ```{r}
@@ -341,12 +341,12 @@ df <- loadings_expression %>%
   arrange(desc(factor1))
   
 
-ranks <- setNames(df$factor1, as.character(df$entrez))
-ranks <- sort(ranks, decreasing = T)
+ranks_1 <- setNames(df$factor1, as.character(df$entrez))
+ranks_1 <- sort(ranks_1, decreasing = T)
 
 ## Reactome enrichment analysis
 gse_reactome_1 <- gsePathway(
-  geneList = ranks,
+  geneList = ranks_1,
   organism = 'human',
   #nPerm = 1e5,
   #minGSSize = 100,
@@ -361,17 +361,17 @@ emapplot(reactome, color = "NES")
 
 ```{r}
 gse_go <- gseGO(
-  geneList = ranks,
+  geneList = ranks_1,
   OrgDb = org.Hs.eg.db,
   ont = 'BP',
-  nPerm = 1e5,
-  minGSSize = 10,
-  maxGSSize = 500,
+  # nPerm = 1e5,
+  # minGSSize = 10,
+  # maxGSSize = 500,
   pvalueCutoff = 0.2
 )
 
 go <- pairwise_termsim(gse_go) 
-emapplot(go)
+emapplot(go, color = "NES")
 ```
 
 
@@ -386,7 +386,7 @@ df = loadings_expression %>% drop_na() %>%
 ranks_symbol = setNames(df$factor1, as.character(df$symbol))
 
 gse_sig <- GSEA(
-  geneList = ranks,
+  geneList = ranks_symbol,
   TERM2GENE = intestinal_sig,
   nPerm = 1e5,
   minGSSize = 1,
@@ -396,17 +396,6 @@ gse_sig <- GSEA(
 
 ## output as tibble
 gse_sig_tbl <- as_tibble(gse_sig)
-```
-
-
-```{r}
-## lgr5 signature
-gseaplot2(
-  gse_sig, geneSetID = gse_sig$ID[2], 
-  title = paste0(gse_sig$ID[2], 
-                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
-                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
-) 
 ```
 
 
@@ -421,6 +410,39 @@ gseaplot2(
 ```
 
 
+
+```{r}
+## late TA signature
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[2], 
+  title = paste0(gse_sig$ID[2], 
+                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
+) 
+```
+
+
+```{r}
+## LGR5
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[3],
+  title = paste0(gse_sig$ID[3], 
+                ' (p = ', round(gse_sig_tbl$pvalue[3], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[3], 2), ')')
+)
+```
+
+
+
+```{r}
+## EPH
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[4],
+  title = paste0(gse_sig$ID[4], 
+                ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
+)
+```
 ## drug sensitivity
 
 ```{r}
@@ -432,12 +454,18 @@ include_drugs <- aggregate_drugs %>% arrange(desc(factor1)) %>% .$target
 drug_activity_test %>%
   drop_na() %>%
   mutate(target = factor(target, levels = include_drugs)) %>%
-  ggplot(aes(target, factor1)) + 
-  geom_point() + 
+  ggplot(aes(y = target, x = factor1)) + 
+  #geom_point() + 
+  ggridges::geom_density_ridges() +
   geom_hline(yintercept = 0) + 
-  coord_flip() + 
+  #coord_flip() + 
   cowplot::theme_cowplot()
 ```
+
+```{r}
+
+```
+
 
 median weighting within the factor was strongest for activity of MEK, IGF1R inhibitors. mTOR inhibitors ranked among the strongest drugs as well. In contrast, EGFR inhibitor activity had the most negative median contribution to the factor. Put differently, organoid lines that had a high score for factor 1 tended to be sensitive to MEK and IGF-1R inhibitors and less responsive to EGFR and Syk inhibitors. 
 
@@ -539,15 +567,153 @@ within the group of mTOR inhibitors, activity towards treatment with the small m
 Next we wondered how treatment with members from these highly active groups would change the phenotype of organoids 
 
 
-```{r}
-
-```
-
 # factor 2
 
 ## morphology
 
+```{r}
+weights %>% 
+  rename(line = id) %>%
+  left_join(organoid_morphology %>% 
+              mutate(line = substr(line, 1, 4)) %>% 
+    expand_grid(., rep = c("r1", "r2")) %>% 
+      mutate(sample = paste0(line, "_", rep)) %>% dplyr::select(-line, line = sample)) %>%
+  distinct() %>%
+  ggplot(aes(factor1, factor2, label = line, color = morphology)) + 
+  geom_point(size = 4) + 
+  ggrepel::geom_text_repel(color = "black") + 
+  theme_cowplot() + 
+  scale_color_brewer(type = "qual")
+
+```
+
 ## gene expression
+
+
+```{r}
+plot_weights(model,
+  view = "expression",
+  factor = 2,
+  nfeatures = 10,     # Number of features to highlight
+  scale = T,          # Scale weights from -1 to 1
+  abs = F             # Take the absolute value?
+)
+```
+growth control via IGF signaling
+cell adhesion via FYN signaling, high fibronectin expression
+DLX- TGFb and BMP inhibiting transcription factor
+
+
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  filter(symbol != "") %>%
+  left_join(promise_long_filtered_top %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor2))
+  
+
+ranks_2 <- setNames(df$factor2, as.character(df$entrez))
+ranks_2 <- sort(ranks_2, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_2 <- gsePathway(
+  geneList = ranks_2,
+  organism = 'human',
+  #nPerm = 1e5,
+  #minGSSize = 100,
+  #maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+reactome <- pairwise_termsim(gse_reactome_2) 
+emapplot(reactome, color = "NES")
+```
+
+
+```{r}
+gse_go <- gseGO(
+  geneList = ranks_2,
+  OrgDb = org.Hs.eg.db,
+  ont = 'BP',
+  # nPerm = 1e5,
+  # minGSSize = 10,
+  # maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+go <- pairwise_termsim(gse_go) 
+emapplot(go, color = "NES")
+```
+
+
+```{r}
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor2, symbol) %>% distinct() %>%
+  arrange(desc(factor2))
+ranks_symbol = setNames(df$factor2, as.character(df$symbol))
+
+gse_sig <- GSEA(
+  geneList = ranks_symbol,
+  TERM2GENE = intestinal_sig,
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_sig_tbl <- as_tibble(gse_sig)
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[1],
+  title = paste0(gse_sig$ID[1], 
+                ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
+)
+```
+
+
+```{r}
+## lgr5 signature
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[2], 
+  title = paste0(gse_sig$ID[2], 
+                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
+) 
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[3],
+  title = paste0(gse_sig$ID[3], 
+                ' (p = ', round(gse_sig_tbl$pvalue[3], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[3], 2), ')')
+)
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[4],
+  title = paste0(gse_sig$ID[4], 
+                ' (p = ', round(gse_sig_tbl$pvalue[4], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[4], 2), ')')
+)
+```
+
 
 ## drug sensitivity
 
@@ -560,10 +726,11 @@ include_drugs <- aggregate_drugs %>% arrange(desc(factor2)) %>% .$target
 drug_activity_test %>%
   drop_na() %>%
   mutate(target = factor(target, levels = include_drugs)) %>%
-  ggplot(aes(target, factor2)) + 
-  geom_point() + 
+  ggplot(aes(y = target, x = factor2)) + 
+  #geom_point() + 
+  ggridges::geom_density_ridges() +
   geom_hline(yintercept = 0) + 
-  coord_flip() + 
+  #coord_flip() + 
   cowplot::theme_cowplot()
 ```
 
@@ -658,20 +825,134 @@ again, within the group of mTOR inhibitors, activity towards treatment with the 
 
 # factor 3
 
+## morphology
 
+## gene expression
 
 ```{r}
 plot_weights(model,
   view = "expression",
   factor = 3,
-  nfeatures = 14,     # Number of features to highlight
+  nfeatures = 10,     # Number of features to highlight
   scale = T,          # Scale weights from -1 to 1
   abs = F             # Take the absolute value?
 )
 ```
+
 NRX cell adhesion
 xenobiotic metabolism
 
+
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  filter(symbol != "") %>%
+  left_join(promise_long_filtered_top %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor3))
+  
+
+ranks_3 <- setNames(df$factor3, as.character(df$entrez))
+ranks_3 <- sort(ranks_3, decreasing = T)
+
+## Reactome enrichment analysis
+gse_reactome_3 <- gsePathway(
+  geneList = ranks_3,
+  organism = 'human',
+  #nPerm = 1e5,
+  #minGSSize = 100,
+  #maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+reactome <- pairwise_termsim(gse_reactome_3) 
+emapplot(reactome, color = "NES")
+```
+
+
+```{r}
+gse_go <- gseGO(
+  geneList = ranks_3,
+  OrgDb = org.Hs.eg.db,
+  ont = 'BP',
+  # nPerm = 1e5,
+  # minGSSize = 10,
+  # maxGSSize = 500,
+  pvalueCutoff = 0.2
+)
+
+go <- pairwise_termsim(gse_go) 
+emapplot(go, color = "NES")
+```
+
+
+```{r}
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor3, symbol) %>% distinct() %>%
+  arrange(desc(factor3))
+ranks_symbol = setNames(df$factor3, as.character(df$symbol))
+
+gse_sig <- GSEA(
+  geneList = ranks_symbol,
+  TERM2GENE = intestinal_sig,
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_sig_tbl <- as_tibble(gse_sig)
+```
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[1],
+  title = paste0(gse_sig$ID[1], 
+                ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
+)
+```
+
+
+```{r}
+## lgr5 signature
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[2], 
+  title = paste0(gse_sig$ID[2], 
+                ' (p = ', round(gse_sig_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[2], 2), ')')
+) 
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[3],
+  title = paste0(gse_sig$ID[3], 
+                ' (p = ', round(gse_sig_tbl$pvalue[3], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[3], 2), ')')
+)
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_sig, geneSetID = gse_sig$ID[4],
+  title = paste0(gse_sig$ID[4], 
+                ' (p = ', round(gse_sig_tbl$pvalue[4], 3), 
+                '; NES = ', round(gse_sig_tbl$NES[4], 2), ')')
+)
+```
+
+
+## drug sensitivity
 
 ```{r}
 
@@ -682,10 +963,12 @@ include_drugs <- aggregate_drugs %>% arrange(desc(factor3)) %>% .$target
 drug_activity_test %>%
   drop_na() %>%
   mutate(target = factor(target, levels = include_drugs)) %>%
-  ggplot(aes(target, factor3)) + 
-  geom_point() + 
-  geom_hline(yintercept = 0) + 
-  coord_flip() + 
+  ggplot(aes(y = target, x = factor3)) + 
+  geom_vline(xintercept = 0) + 
+  #geom_point() + 
+  ggridges::geom_density_ridges() +
+  
+  #coord_flip() + 
   cowplot::theme_cowplot()
 ```
 
@@ -716,7 +999,7 @@ doi <- drug_activity_test %>%
 
 drug_activity_joined %>% 
   filter(drug %in% doi) %>% 
-  ggplot(aes(factor2, auroc)) +
+  ggplot(aes(factor3, auroc)) +
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE) + 
