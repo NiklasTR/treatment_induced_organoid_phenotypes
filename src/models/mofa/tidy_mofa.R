@@ -41,7 +41,18 @@ mofa_activity <- aucroc %>% filter(!line %in% c('D055T01', 'D021T01', 'D054T01')
     group_by(sample, feature, view) %>% summarise(value = mean(value))
 
 # organoid mutation data
-#read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% janitor::clean_names() %>% mutate(sample = substr(sample, 2,nchar(sample)-1)) %>% mutate(sample = paste0("D", sample)) %>% expand_grid(replicate = c("r1", "r2")) %>% mutate(sample = paste0(sample, replicate)) %>% dplyr::select(sample, feature = symbol, everything())
+mofa_genetics <- read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% 
+    janitor::clean_names() %>% 
+    mutate(sample = substr(sample, 2,nchar(sample)-1)) %>% 
+    mutate(sample = paste0("D", sample)) %>% 
+    dplyr::filter(!sample %in% c("D021", "D015")) %>%
+    expand_grid(replicate = c("r1", "r2")) %>% 
+    mutate(sample = paste0(sample, "_", replicate)) %>% 
+    dplyr::select(sample, feature = symbol, everything()) %>% dplyr::select(sample, feature) %>% 
+    mutate(value = 1) %>%
+    complete(sample, feature, fill = list(value = 0)) %>% 
+    distinct(sample, feature, value) %>%
+    mutate(view = "mutation")
 
 # define MOFA object and run MOFA
 mofa_size <- organoid_size_fit %>% 
@@ -80,6 +91,7 @@ input_df = rbind(mofa_size,
                  mofa_morphology,
                  #mofa_classification,
                  mofa_activity,
+                 mofa_genetics,
                  mofa_expression
                  ) %>% 
   data.table::as.data.table()
