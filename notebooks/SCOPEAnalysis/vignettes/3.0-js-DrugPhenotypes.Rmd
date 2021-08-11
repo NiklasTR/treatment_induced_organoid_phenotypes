@@ -26,6 +26,9 @@ library(Matrix)
 library(tidyverse)
 library(Rtsne)
 library(SCOPEAnalysis)
+library(stats)
+library(utils)
+library(grDevices)
 
 # knitr::opts_chunk$set(
 #   collapse = TRUE,
@@ -40,7 +43,7 @@ utils::data("organoid_viability", package = "SCOPEAnalysis")
 
 # Lines
 lines = get_lines()
-colorScale = setNames(
+colorScale = stats::setNames(
   object = c("#e6194b", "#3cb44b", "#ffe119", "#0082c8", "#f58231", 
              "#911eb4", "#46f0f0", "#f032e6", "#d2f53c", "#fabebe", 
              "#008080", "#e6beff", "#aa6e28", "#fffac8", "#800000"), 
@@ -211,7 +214,7 @@ ggplot_df = ggplot_df[ggplot_df$Var1 != "D054T01", ]
 
 # filtering additional lines 
 ggplot_df <- ggplot_df %>% 
-  filter(!Var1 %in% c("D021T01", "D055T01"))
+  dplyr::filter(!Var1 %in% c("D021T01", "D055T01"))
 
 ggplot_df$TextLoc = ggplot_df$Freq - 50
 ggplot(data = ggplot_df, mapping = aes(x = Var1, y = Freq)) + 
@@ -423,7 +426,7 @@ if(save_images) write.csv2(
 ```{r plot_clustering_kistem_individual_lines}
 anno_colorScale = list(
   "Viability" = setNames(
-    object = colorRampPalette(c("black", "white"))(
+    object = grDevices::colorRampPalette(c("black", "white"))(
       length(unique(annotation$Viability))), 
     nm = sort(unique(annotation$Viability))))
 
@@ -455,7 +458,7 @@ for(line in names(line_results)) {
   hm_legend_breaks = c(-floor(hm_range_limit), 0, floor(hm_range_limit))
   hm_legend_labels = hm_legend_breaks**2
   hm_legend_labels[hm_legend_breaks < 0] = -hm_legend_labels[hm_legend_breaks < 0]
-  hm_colorscale = colorRampPalette(
+  hm_colorscale = grDevices::colorRampPalette(
     c("#0082c8", "white", "#e6194b"))(length(hm_breaks))
   pheatmap(
       t(lp), annotation_col = line_annotation,
@@ -476,7 +479,7 @@ for(line in names(line_results)) {
       filename = file.path(img_out_dir, sprintf("EffectVectorHeatmap_PCA_%s.pdf", line)))
   
   # Symmetrical Heatmap (save as regular image and as super large image with rownames)
-  hm_colorscale = colorRampPalette(
+  hm_colorscale = grDevices::colorRampPalette(
     rev(c("#f7f7f7", "#f7f7f7", "#f7f7f7", 
           "#E0F3F8", "#91BFDB", "#4575B4")))(150)
   pheatmap(
@@ -955,7 +958,13 @@ for(line in unique(all_target_features$Line)) {
 
 ### Comparing Drug Effects Directly
 Treating effect vectors of all drugs and all lines equally shows that drug effects on different lines are difficult to compare to each other. Line heterogeneity appears to overpower the effects of drugs. Even the drugs classified as lethal do not cluster together. Notable is that the lines D046T01 and D055T01, which look extremely similar on visual inspection, DO overlap. 
+
 ```{r clustering_panline_noconcat}
+## overwriting objects to remove dropped lines
+profiles_active <- profiles_active %>% rownames_to_column("id") %>% mutate(line = substr(id, 1, 7)) %>%
+  dplyr::filter(!line %in% c("D021T01", "D054T01", "D055T01")) %>% dplyr::select(-line) %>%
+  column_to_rownames("id")
+
 angles = get_angles(profiles_active)
 d = acos(angles)*180/pi
 hc = hclust(as.dist(d), method = "ward.D2")
@@ -984,8 +993,12 @@ annotation = data.frame(
   "Pathway" = get_mode_of_action(metadata_active$Drug),
   "Target" = get_targets(metadata_active$Drug),
   "Line" = metadata_active$Line,
-  row.names = rownames(profiles_active),
+  #row.names = rownames(profiles_active),
   stringsAsFactors = FALSE)
+
+# dropping lines
+annotation <- annotation %>% dplyr::filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+rownames(annotation) <- rownames(profiles_active)
 
 # Annotate Pathway and Targets
 pathways = list()
@@ -1100,11 +1113,14 @@ pheatmap(
 ### Concatenating Vectors
 Instead of treating each drug per line separately, I concatenate the effect vectors on all lines for each drug. The resulting composite vector describes the drug's effect on all cell lines without attempting to compare cell lines.
 ```{r panline_concat_vectors}
+## TODO dropping filtered line
+loi <- sort(unique(metadata_active$Line))[!c(sort(unique(metadata_active$Line))%in% c("D021T01", "D055T01", "D054T01"))]
+
 profiles_concat = list()
 for(drug in sort(unique(metadata_active$Drug))) {
 # for(drug in sort(unique(metadata$Drug))) {
   profiles_concat_drug = c()
-  for(line in sort(unique(metadata_active$Line))) {
+  for(line in loi) {
   # for(line in sort(unique(metadata$Line))) {
     tmp = profiles[
       metadata$Drug == drug & 
@@ -1267,6 +1283,9 @@ active_viabilities = acast(
   data = active_viabilities, 
   formula = Line ~ Drug, value.var = "x")
 
+## TODO drop lines
+active_viabilities = active_viabilities[!c(active_viabilities %>% rownames() %in% c("D021T01", "D055T01", "D054T01")),]
+
 # Remove viability from annotation
 anno_noLethality = annotation
 anno_noLethality$Lethality = NULL
@@ -1303,7 +1322,7 @@ print(annotation_table)
 ```
 
 Generate a force-directed graph from these similarities
-```{r graph_of_panline_drug_similarities}
+```{r graph_of_panline_drug_similarities, eval = FALSE}
 # Set up adjacency matrix
 adjmatrix = d
 adjmatrix[adjmatrix > 45] = 0
@@ -1365,7 +1384,7 @@ metadata = metadata[order_indices, ]
 ```
 
 ## Drugs Active at All Concentrations
-```{r ccp_conc_heatmaps}
+```{r ccp_conc_heatmaps, eval = FALSE}
 sig_concentrations = aggregate(
   x = metadata$AUC_Mean >= auc_thresh, 
   by = list("Drug" = metadata$Drug, 
