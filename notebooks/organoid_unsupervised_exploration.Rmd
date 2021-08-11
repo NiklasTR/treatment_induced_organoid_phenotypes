@@ -189,8 +189,10 @@ df <- line_param %>% unnest(param) %>%
 
 organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
 organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds"))
 
-organoid_size_factor <- df$line %>% levels()
+organoid_size_factor <- organoid_size_fit$line %>% levels()
+df <- organoid_size_fit
 
 df <- df %>% 
     dplyr::select(line, replicate, x) %>%

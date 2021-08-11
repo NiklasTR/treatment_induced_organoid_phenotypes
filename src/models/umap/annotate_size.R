@@ -1,0 +1,78 @@
+# defining lib path
+# .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
+# print(.libPaths())
+
+# example
+# Rscript --vanilla src/models/umap/annotate_size.R data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds
+
+# input
+args = commandArgs(trailingOnly=TRUE)
+if (!length(args)==1) {
+  stop("Arguments must be supplied (input file name).n", call.=FALSE)
+} 
+
+print(args)
+
+## library 
+library(dplyr)
+library(tidyr)
+library(magrittr)
+library(purrr)
+library(readr)
+library(here)
+
+## loading data
+umap_df <- read_rds(here::here(args[1]))
+
+## overall size
+line_param <- umap_df %>% #filter(partition %in% c(1,2)) %>% 
+  nest(-line, -replicate) %>% 
+  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
+         param = map(fit, ~ .x$estimate %>% broom::tidy()))
+
+df <- line_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>% 
+  group_by(line) %>% 
+  mutate(mean_meanlog = mean(x)) %>% 
+  arrange(mean_meanlog) %>% 
+  ungroup() %>%
+  mutate(line = factor(line, levels = .$line %>% unique()))
+
+organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+
+## DMSO size
+line_param <- umap_df %>% #filter(partition %in% c(1,2)) %>% 
+  filter(drug == "DMSO") %>%
+  nest(-line, -replicate) %>% 
+  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
+         param = map(fit, ~ .x$estimate %>% broom::tidy()))
+
+df <- line_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>% 
+  group_by(line) %>% 
+  mutate(mean_meanlog = mean(x)) %>% 
+  arrange(mean_meanlog) %>% 
+  ungroup() %>%
+  mutate(line = factor(line, levels = .$line %>% unique()))
+
+organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO.Rds"))
+
+## by drug size - CAUTION make sure to run the estimation of drug effects on size with the complete dataset, not a subsample
+line_param <- umap_df %>% #filter(partition %in% c(1,2)) %>% 
+  nest(-line, -replicate, -drug, -concentration) %>% 
+  mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
+         param = map(fit, ~ .x$estimate %>% broom::tidy()))
+
+df <- line_param %>% unnest(param) %>% 
+  filter(names == "meanlog") %>% 
+  group_by(line) %>% 
+  mutate(mean_meanlog = mean(x)) %>% 
+  arrange(mean_meanlog) %>% 
+  ungroup() %>%
+  mutate(line = factor(line, levels = .$line %>% unique()))
+
+organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO.Rds"))
+

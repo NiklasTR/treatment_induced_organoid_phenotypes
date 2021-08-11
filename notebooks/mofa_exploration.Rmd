@@ -53,12 +53,27 @@ intestinal_sig <- readxl::read_excel(here('data/external/expression/merloz-suare
   gather(signature, symbol) %>% drop_na() %>% 
   mutate(symbol = gsub('\\*', '', symbol))
 
+# organoid mutation
+mofa_genetics <- read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% 
+    janitor::clean_names() %>% 
+    mutate(sample = substr(sample, 2,nchar(sample)-1)) %>% 
+    mutate(sample = paste0("D", sample)) %>% 
+    dplyr::filter(!sample %in% c("D021", "D015")) %>%
+    expand_grid(replicate = c("r1", "r2")) %>% 
+    mutate(sample = paste0(sample, "_", replicate)) %>% 
+    dplyr::select(sample, feature = symbol, everything()) %>% dplyr::select(sample, feature) %>% 
+    mutate(value = 1) %>%
+    complete(sample, feature, fill = list(value = 0)) %>% 
+    distinct(sample, feature, value) %>%
+    mutate(view = "mutation")
+
 
 weights <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_size <- model@expectations$W$size_view %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_expression <- model@expectations$W$expression %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_morphology <- model@expectations$W$morphology %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 loadings_drug_activity <- model@expectations$W$drug_activity %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
 
 
 ```
@@ -180,6 +195,27 @@ weights %>%
   theme_cowplot()
 ```
 
+## mutations
+
+```{r}
+loadings_mutation %>%
+  column_to_rownames("id") %>% 
+  pheatmap::pheatmap()
+```
+
+```{r}
+df <- loadings_mutation %>% 
+  gather(key = "factor", value = "weight", -id) 
+
+df %>%
+  ggplot(aes(factor, weight, label = id)) +
+  geom_point() + 
+  theme_cowplot() + 
+  ggrepel::geom_text_repel(data = df %>% filter(id %in% c("NRAS", "ERBB2", "PTEN", "KRAS", "PIK3CA")))
+```
+
+
+
 ## drug response
 
 
@@ -216,7 +252,9 @@ df <- loadings_drug_activity_tidy %>% dplyr::select(-target) %>%
   gather(factor_name, value, -drug) %>% 
   distinct() 
 
-row_anno <-  df %>% left_join(loadings_drug_activity_tidy) %>% dplyr::select(drug, target) %>% as.data.frame() %>% column_to_rownames("drug") %>% distinct()
+row_anno <-  df %>% left_join(loadings_drug_activity_tidy) %>% dplyr::select(drug, target) %>%
+  mutate(id = paste0(drug, "_", target)) %>% distinct() %>% as.data.frame() %>% column_to_rownames("id") 
+           
 
 df %>%
   spread(drug, value) %>% 
@@ -255,7 +293,9 @@ df %>%
 ```
 
 ```{r}
-drug_activity_test_result %>% filter(p.value <= 0.2) %>% 
+drug_activity_test_result %>% 
+  mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
+  filter(fdr <= 0.2) %>% 
   filter(term != "(Intercept)") %>% 
   arrange(factor, statistic)
 ```
@@ -315,6 +355,9 @@ weights %>%
   labs(y = "expected size") +
   theme_cowplot()
 ```
+
+
+
 
 
 ## gene expression
@@ -566,6 +609,28 @@ within the group of mTOR inhibitors, activity towards treatment with the small m
 
 
 Next we wondered how treatment with members from these highly active groups would change the phenotype of organoids 
+
+## mutation
+
+```{r}
+df <- mofa_genetics %>% 
+  mutate(sample = substr(sample, 1, 4)) %>% 
+  distinct() %>%
+  filter(feature %in% c("NRAS"))
+
+drug_activity_joined %>%
+  dplyr::select(-line, sample = id) %>% 
+  filter(drug %in% c("Selumetinib (AZD6244)")) %>%
+  left_join(df) %>% 
+  drop_na() %>%
+  mutate(value = if_else(value == 0, "WT", "mut")) %>%
+  ggplot(aes(value, auroc)) + 
+  geom_point() + 
+  ggsignif::geom_signif(comparisons = list(c("WT", "mut"))) + 
+  theme_cowplot() + 
+  facet_grid(drug ~ feature)
+  
+```
 
 
 # factor 2

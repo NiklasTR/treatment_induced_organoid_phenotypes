@@ -21,10 +21,12 @@ organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size
 
 ## organoid morphology
 mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
-  dplyr::filter(drug == "DMSO") %>% 
+  dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)") & line == "D046T01")) %>% 
   mutate(rep = paste0("r", replicate)) %>% 
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(line = paste0(line, "_", rep)) %>%
+  # I treat every drug induced phenotype as a dedicated line
+  mutate(line = if_else(drug == "DMSO", line, paste0(line, "_", drug))) %>%
   #filter(size_log > 7.5) %>%
   group_by(line) %>% 
   summarise_at(vars(contains("pc")), funs(mean)) %>% 
@@ -123,7 +125,7 @@ stochastic_opts <- get_default_stochastic_options(MOFAobject)
 print(stochastic_opts)
 
 # running model
-outfile = file.path(here::here("models/mofa/model.hdf5"))
+outfile = file.path(here::here("models/mofa/model_drug_effect.hdf5"))
 MOFAobject <- prepare_mofa(
   object = MOFAobject,
   data_options = data_opts,
