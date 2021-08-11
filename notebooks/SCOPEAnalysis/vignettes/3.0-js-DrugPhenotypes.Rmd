@@ -3,7 +3,7 @@ title: "Drug-Induced Phenotypes"
 author: "Jan Sauer"
 date: "`r Sys.Date()`"
 output:
-  BiocStyle::html_document:
+  html_document:
       code_folding: hide
       df_print: paged
       toc_depth: 4
@@ -20,7 +20,7 @@ library(pheatmap)
 library(ggplot2)
 library(reshape2)
 library(knitr)
-#library(igraph)
+library(igraph)
 #library(qgraph) # Running the vignette with fruchterman-reingold clustering to avoid gfortran hickups in R.
 library(Matrix)
 library(tidyverse)
@@ -35,8 +35,8 @@ library(SCOPEAnalysis)
 knitr::opts_chunk$set(cache = TRUE)
 
 # Load data
-data("drug_effects", package = "SCOPEAnalysis")
-data("organoid_viability", package = "SCOPEAnalysis")
+utils::data("drug_effects", package = "SCOPEAnalysis")
+utils::data("organoid_viability", package = "SCOPEAnalysis")
 
 # Lines
 lines = get_lines()
@@ -145,6 +145,14 @@ drug_effect_metadata = tmp[, c(
 rownames(drug_effect_metadata) = tmp$RowNames
 ```
 
+Updating key objects after removing data from the analysis
+
+```{r}
+drug_effect_metadata_all_lines <- drug_effect_metadata
+#drug_effect_metadata <- drug_effect_metadata %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+```
+
+
 # Introduction 
 Drug effects are defined as the vector pointing from negative control (DMSO) organoids to treated organoids in feature space. Features are transformed with a PCA and the top 25 components are retained. An SVM with a linear kernel is trained to differentiate DMSO and treated organoids (for each drug individually) and the normal vector to the separating hyperplane is defined as the drug effect vector. It is scaled to be as long as the distance between the DMSO median and the treated organoid median in feature space.
 
@@ -191,8 +199,8 @@ if(save_images) ggsave(
 Based on the bimodal histogram of active drugs, I define any drug that can be separated with $AUC = 0.85$ from the DMSO controls as "active".
 ```{r select_active_profiles}
 auc_thresh = 0.85
-profiles_active = drug_effect_profiles[drug_effect_metadata$AUC_Mean >= auc_thresh, ]
-metadata_active = drug_effect_metadata[drug_effect_metadata$AUC_Mean >= auc_thresh, ]
+profiles_active = drug_effect_metadata_all_lines[drug_effect_metadata_all_lines$AUC_Mean >= auc_thresh, ]
+metadata_active = drug_effect_metadata_all_lines[drug_effect_metadata_all_lines$AUC_Mean >= auc_thresh, ]
 ```
 
 The number of active drugs varies per line.
@@ -200,6 +208,11 @@ The number of active drugs varies per line.
 ggplot_df = as.data.frame(table(metadata_active$Line))
 # D054T01 was only imaged with the small library
 ggplot_df = ggplot_df[ggplot_df$Var1 != "D054T01", ]
+
+# filtering additional lines 
+ggplot_df <- ggplot_df %>% 
+  filter(!Var1 %in% c("D021T01", "D055T01"))
+
 ggplot_df$TextLoc = ggplot_df$Freq - 50
 ggplot(data = ggplot_df, mapping = aes(x = Var1, y = Freq)) + 
   geom_col() + 
@@ -258,13 +271,13 @@ ggplot(data = drug_effect_metadata[
 # KiStem library
 I analyze the two libraries separately and begin with the KiStem library.
 ```{r select_kistem}
-sel_indices = (is.na(drug_effect_metadata$Concentration) | (
-  drug_effect_metadata$Drug %in% c("Bortezomib", "Irinotecan / SN-38") &
-  drug_effect_metadata$Concentration %in% c(0.2, 1))) & 
+sel_indices = (is.na(drug_effect_metadata_all_lines$Concentration) | (
+  drug_effect_metadata_all_lines$Drug %in% c("Bortezomib", "Irinotecan / SN-38") &
+  drug_effect_metadata_all_lines$Concentration %in% c(0.2, 1))) & 
   # D054 was only treated with the CCP library
-  drug_effect_metadata$Line != "D054T01"
+  drug_effect_metadata_all_lines$Line != "D054T01"
 profiles = drug_effect_profiles[sel_indices, ]
-metadata = drug_effect_metadata[sel_indices, ]
+metadata = drug_effect_metadata_all_lines[sel_indices, ]
 ```
 
 ```{r select_active_kistem}
@@ -297,7 +310,7 @@ annotation = data.frame(
   "Pathway" = SCOPEAnalysis::get_mode_of_action(metadata_active$Drug),
   "Target" = SCOPEAnalysis::get_targets(metadata_active$Drug),
   "Line" = metadata_active$Line,
-  row.names = rownames(profiles_active),
+  row.names = rownames(profiles_active), # needs commenting when filtering
   stringsAsFactors = FALSE)
 
 # Fix for slashes in targets
@@ -772,7 +785,7 @@ if(save_images) {
 ## Feature Differences
 I look at the vectors from median DMSO to median drug features for each drug per replicate. I use the well-averaged features to improve loading times. For each line, I aggregate all drugs belonging to the enriched clusters.
 
-```{r calc_phenoprints}
+```{r calc_phenoprints, eval = FALSE}
 # Extract only key features
 key_features = c(
   "x.0.s.area_expected" = "Area", 
@@ -867,7 +880,7 @@ all_target_features = do.call(rbind, all_target_features)
 ```
 
 ### Phenoprints for Pathways
-```{r phenoprints_pathways}
+```{r phenoprints_pathways, eval = FALSE}
 for(line in unique(all_pathway_features$Line)) {
   labels = unique(all_pathway_features[
     all_pathway_features$Line == line, "Label"])
@@ -903,7 +916,7 @@ for(line in unique(all_pathway_features$Line)) {
 ```
 
 ### Phenoprints for Targets
-```{r phenoprints_targets}
+```{r phenoprints_targets, eval = FALSE}
 for(line in unique(all_target_features$Line)) {
   labels = unique(all_target_features[
     all_target_features$Line == line, "Label"])
