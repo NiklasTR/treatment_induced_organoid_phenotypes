@@ -53,6 +53,9 @@ intestinal_sig <- readxl::read_excel(here('data/external/expression/merloz-suare
   gather(signature, symbol) %>% drop_na() %>% 
   mutate(symbol = gsub('\\*', '', symbol))
 
+cris_sig <- readxl::read_excel(here('data/external/expression/cris/41467_2017_BFncomms15107_MOESM422_ESM.xlsx'), sheet = 1, skip = 2) %>% 
+  rename(symbol = `Gene ID`, signature = `CRIS Class`)
+
 # organoid mutation
 mofa_genetics <- read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% 
     janitor::clean_names() %>% 
@@ -417,7 +420,7 @@ gse_go <- gseGO(
 go <- pairwise_termsim(gse_go) 
 emapplot(go, color = "NES")
 ```
-
+### suarez signature
 
 ```{r}
 # run gsea with clusterprofiler
@@ -487,6 +490,55 @@ gseaplot2(
                 '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
 )
 ```
+
+### CRIS signature
+
+```{r}
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor1, symbol) %>% distinct() %>%
+  arrange(desc(factor1))
+ranks_symbol = setNames(df$factor1, as.character(df$symbol))
+
+gse_cris <- GSEA(
+  geneList = ranks_symbol,
+  TERM2GENE = cris_sig %>% dplyr::select(signature, symbol),
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_cris_tbl <- as_tibble(gse_cris)
+
+gse_cris_tbl
+```
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[1],
+  title = paste0(gse_cris$ID[1], 
+                ' (p = ', round(gse_cris_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_cris_tbl$NES[1], 2), ')')
+)
+
+```
+
+```{r}
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[2],
+  title = paste0(gse_cris$ID[2], 
+                ' (p = ', round(gse_cris_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_cris_tbl$NES[2], 2), ')')
+)
+```
+
+
 ## drug sensitivity
 
 ```{r}
@@ -670,6 +722,7 @@ cell adhesion via FYN signaling, high fibronectin expression
 DLX- TGFb and BMP inhibiting transcription factor
 
 
+### reactome and GO
 
 ```{r}
 df <- loadings_expression %>% 
@@ -712,6 +765,7 @@ go <- pairwise_termsim(gse_go)
 emapplot(go, color = "NES")
 ```
 
+### suarez signature
 
 ```{r}
 # run gsea with clusterprofiler
@@ -777,6 +831,64 @@ gseaplot2(
   title = paste0(gse_sig$ID[4], 
                 ' (p = ', round(gse_sig_tbl$pvalue[4], 3), 
                 '; NES = ', round(gse_sig_tbl$NES[4], 2), ')')
+)
+```
+
+### CRIS signature
+
+```{r}
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor2, symbol) %>% distinct() %>%
+  arrange(desc(factor2))
+ranks_symbol = setNames(df$factor2, as.character(df$symbol))
+
+gse_cris <- GSEA(
+  geneList = ranks_symbol,
+  TERM2GENE = cris_sig %>% dplyr::select(signature, symbol),
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_cris_tbl <- as_tibble(gse_cris)
+
+gse_cris_tbl
+```
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[3],
+  title = paste0(gse_cris$ID[3], 
+                ' (p = ', round(gse_cris_tbl$pvalue[3], 5), 
+                '; NES = ', round(gse_cris_tbl$NES[3], 2), ')')
+)
+```
+
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[1],
+  title = paste0(gse_cris$ID[1], 
+                ' (p = ', round(gse_cris_tbl$pvalue[1], 5), 
+                '; NES = ', round(gse_cris_tbl$NES[1], 2), ')')
+)
+
+```
+
+```{r}
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[4],
+  title = paste0(gse_cris$ID[4], 
+                ' (p = ', round(gse_cris_tbl$pvalue[4], 5), 
+                '; NES = ', round(gse_cris_tbl$NES[4], 2), ')')
 )
 ```
 
@@ -908,6 +1020,7 @@ plot_weights(model,
 NRX cell adhesion
 xenobiotic metabolism
 
+### reactome and GO
 
 ```{r}
 df <- loadings_expression %>% 
@@ -950,6 +1063,7 @@ go <- pairwise_termsim(gse_go)
 emapplot(go, color = "NES")
 ```
 
+### suarez signature
 
 ```{r}
 # run gsea with clusterprofiler
@@ -1014,6 +1128,55 @@ gseaplot2(
   title = paste0(gse_sig$ID[4], 
                 ' (p = ', round(gse_sig_tbl$pvalue[4], 3), 
                 '; NES = ', round(gse_sig_tbl$NES[4], 2), ')')
+)
+```
+
+### CRIS signature
+
+```{r}
+set.seed(1234)
+
+# run gsea with clusterprofiler
+df = loadings_expression %>% drop_na() %>%
+  mutate(symbol = substr(id, 1, nchar(id)-11)) %>%
+  dplyr::select(-id) %>%
+  left_join(promise_long_filtered_top) %>%
+  dplyr::select(factor3, symbol) %>% distinct() %>%
+  arrange(desc(factor3))
+ranks_symbol = setNames(df$factor3, as.character(df$symbol))
+
+gse_cris <- GSEA(
+  geneList = ranks_symbol,
+  TERM2GENE = cris_sig %>% dplyr::select(signature, symbol),
+  nPerm = 1e5,
+  minGSSize = 1,
+  maxGSSize = 1000,
+  pvalueCutoff = 1
+)
+
+## output as tibble
+gse_cris_tbl <- as_tibble(gse_cris)
+
+gse_cris_tbl
+```
+
+```{r}
+## proliferation
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[1],
+  title = paste0(gse_cris$ID[1], 
+                ' (p = ', round(gse_cris_tbl$pvalue[1], 3), 
+                '; NES = ', round(gse_cris_tbl$NES[1], 2), ')')
+)
+
+```
+
+```{r}
+gseaplot2(
+  gse_cris, geneSetID = gse_cris$ID[2],
+  title = paste0(gse_cris$ID[2], 
+                ' (p = ', round(gse_cris_tbl$pvalue[2], 3), 
+                '; NES = ', round(gse_cris_tbl$NES[2], 2), ')')
 )
 ```
 

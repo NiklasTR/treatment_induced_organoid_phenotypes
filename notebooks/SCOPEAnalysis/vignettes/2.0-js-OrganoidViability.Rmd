@@ -1,9 +1,9 @@
 ---
 title: "Organoid Viability"
-author: "Jan Sauer"
+author: "Jan Sauer, edited by Niklas Rindtorff"
 date: "`r Sys.Date()`"
 output:
-  BiocStyle::html_document:
+  html_document:
     code_folding: hide
     df_print: paged
     toc_depth: 4
@@ -18,7 +18,7 @@ editor_options:
 
 ```{r setup, include = FALSE}
 library(ggplot2)
-library(tidyverse)
+
 library(knitr)
 library(kableExtra)
 library(reshape2)
@@ -26,6 +26,10 @@ library(pheatmap)
 library(SCOPEAnalysis)
 # library(DT)
 # library(webshot)
+library(stats)
+library(utils)
+library(grDevices)
+library(tidyverse)
 
 knitr::opts_chunk$set(
   collapse = TRUE,
@@ -276,7 +280,7 @@ drug_viability = mortality %>%
          (Product.Name %in% c("Bortezomib", "Irinotecan / SN-38") & 
           Concentration %in% c(0.2, 1.0))) %>%
   filter(Line != "D054T01") %>%
-  select(Product.Name, Line, Percent.Live)
+  dplyr::select(Product.Name, Line, Percent.Live)
 drug_viability = aggregate(
   x = drug_viability$Percent.Live, 
   by = list("Drug" = drug_viability$Product.Name, 
