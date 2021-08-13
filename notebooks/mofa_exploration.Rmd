@@ -378,6 +378,22 @@ growth control via IGF signaling
 cell adhesion via FYN signaling, high fibronectin expression
 DLX- TGFb and BMP inhibiting transcription factor
 
+```{r}
+df <- loadings_expression %>% 
+  separate(id, c("symbol"), sep = "_exp") %>% 
+  filter(symbol != "") %>%
+  left_join(promise_long_filtered_top %>% dplyr::select(symbol, entrez) %>% distinct()) %>%
+  arrange(desc(factor1)) %>%
+  mutate(order = nrow(.):1)
+
+df %>% 
+  ggplot(aes(order, factor1)) + 
+  geom_point()+ 
+  geom_point(data = df %>% filter(symbol %in% c("H19", "IGF2")), 
+             color = "blue") + 
+  theme_cowplot()
+```
+
 
 
 ```{r}
