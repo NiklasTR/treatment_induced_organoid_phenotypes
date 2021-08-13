@@ -101,6 +101,20 @@ img_output_dir = "images"
 if(save_images) if(!dir.exists(img_output_dir)) dir.create(img_output_dir)
 ```
 
+# QC
+
+I remove a set of organoid lines from the data
+
+```{r}
+auc_ctg <- auc_ctg %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+auc_img_full <- auc_img_full %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+auc_img_twoChannel <- auc_img_twoChannel %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+mortality <- mortality %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+roc_aucs <- roc_aucs %>% filter(!clf_line %in% c("D021T01", "D054T01", "D055T01")) %>% filter(!data_line %in% c("D021T01", "D054T01", "D055T01"))
+roc_data <- roc_data %>% filter(!clf_line %in% c("D021T01", "D054T01", "D055T01")) %>% filter(!data_line %in% c("D021T01", "D054T01", "D055T01"))
+```
+
+
 # Introduction 
 I trained a random forest classifier to differentiate between live and dead organoids. DMSO served as the negative controls, i.e. live organoids. After visual inspection of the images we decided to use Bortezomib and Irinotecan/SN-38 at concentrations of 0.2 and 1.0 as positive controls, i.e. dead organoids. A separate classifier was trained for each cell line. Data was split into a training and validation data set.
 

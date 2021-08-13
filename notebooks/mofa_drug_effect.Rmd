@@ -40,7 +40,7 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
   dplyr::select(contains("pc"), uuid) %>% 
   column_to_rownames("uuid") %>%
-  as.matrix()
+  as.matrix() %>% scale(center = TRUE, scale = FALSE)
 
 z_projected_organoid <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("uuid")
 
@@ -76,7 +76,7 @@ Winv <- pracma::pinv(W)
 # Damit kannst du dann erstmal schauen, wo die Organoide im latenten Raum liegen (z_projected).
 # Falls das Sinn macht, kannst du dann mit den gelernten Gewichten vom RNA view via Z_projected  * W_RNA  die RNA Werte vorhersagen und mit den Messungen, die du fuer einzelne Drugs hast, vergleichen, i.e.
 
-model@intercepts$morphology_view
+
 
 new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
   # dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)",
@@ -95,7 +95,9 @@ new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absol
   #filter(size_log > 7.5) %>%
   group_by(line) %>% 
   summarise_at(vars(contains("pc")), funs(mean)) %>% 
-  ungroup() %>% column_to_rownames("line") %>% as.matrix()
+  ungroup() %>% column_to_rownames("line") %>% as.matrix() %>% 
+  #scale(center = TRUE, scale = FALSE) %>% 
+  sweep(2, model@intercepts$morphology_view %>% unlist() %>% unname())
 
 z_projected <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
 ```
