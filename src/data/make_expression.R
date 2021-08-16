@@ -14,6 +14,7 @@ library(tidyverse)
 library(affy)
 library(org.Hs.eg.db)
 library(here)
+require("biomaRt")
 
 # Data preparation
 # ================
@@ -77,7 +78,7 @@ colnames(log_expr) <- samples_nb$id
 # ====================================
 
 ## pulling probes from biomart
-require("biomaRt")
+
 mart <- useMart("ENSEMBL_MART_ENSEMBL")
 mart <- useDataset("hsapiens_gene_ensembl", mart)
 annotLookup <- getBM(
