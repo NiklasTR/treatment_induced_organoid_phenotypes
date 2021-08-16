@@ -35,7 +35,7 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 
 ```
 
-# Inference on organoid level
+# Inference on organoid level based on morphology
 
 ```{r, eval = FALSE}
 new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
@@ -68,7 +68,7 @@ gg_factor_umap + ggsave(here("factor_overview_organoid_level.pdf"), height = 6 ,
 ```
 
 
-# Inference on treatment-level
+# Inference on treatment-level based on morphology
 
 ```{r}
 W <- get_weights(model, "morphology_view")[[1]]
@@ -103,7 +103,63 @@ new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absol
 z_projected <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
 ```
 
-# Inference of gene expression
+# Inference on treatment-level based on gene expression
+
+```{r}
+mofa_expression <- promise_long_filtered_top %>% 
+  # renaming columns
+  mutate(line = paste0(line, "_", rep)) %>%
+  dplyr::select(sample = line,
+                feature = symbol, # setting feature to symbol
+                value = expr) %>% 
+  mutate(view = "expression") %>% 
+  # averaging feature value
+  group_by(feature, sample, view) %>%
+  summarise(value = mean(value)) %>%
+  # renaming feature jic
+  mutate(feature = paste0(feature, "_", view)) %>%
+  dplyr::select(sample, feature, view, value) %>% 
+  drop_na() %>% 
+  filter(feature != "_expression")
+
+new_expression <- mofa_expression %>%
+  dplyr::select(-view) %>%
+  spread(sample, value) %>%
+  column_to_rownames("feature") %>%
+  as.matrix() %>%
+  t()
+  
+
+W <- get_weights(model, "expression")[[1]]
+Winv <- pracma::pinv(W)
+
+z_projected_expression <-  new_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+```
+
+
+```{r}
+z_projected_exp_anno <- z_projected_expression %>% 
+  mutate(line = substr(id, 1, 7))
+
+z_projected_expression %>% 
+  left_join(weights) %>% 
+  
+  gather(variable, value, -id) %>% 
+  mutate(factor = if_else(variable %in% c("V1", "factor1"), "factor1", "none")) %>%
+  mutate(factor = if_else(variable %in% c("V2", "factor2"), "factor2", factor)) %>%
+  mutate(factor = if_else(variable %in% c("V3", "factor3"), "factor3", factor)) %>% 
+  mutate(source = if_else(grepl(variable, pattern = "factor"), "MOFA", "pseudoinverse")) %>% 
+  dplyr::select(-variable) %>%
+  spread(source, value) %>% 
+  ggplot(aes(MOFA, pseudoinverse)) + 
+  geom_point() + 
+  facet_wrap(~ factor) + 
+  theme_cowplot() + 
+  geom_smooth(method = "lm")
+```
+
+
+# Inference of gene expression based on morphology
 
 ```{r}
 z_projected_matrix <- z_projected %>% column_to_rownames("id") %>% as.matrix()
