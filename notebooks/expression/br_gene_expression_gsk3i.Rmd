@@ -48,7 +48,7 @@ We load the gene expression data from the raw Affymetrix CEL files and normalize
 
 ```{r}
 ## list of cel files
-cel_files <- list.files(here('data/raw/expression/microarray_manuscript/GSK_inhibition/CEL_files/'),
+cel_files <- list.files(here::here('data/raw/expression/microarray_manuscript/GSK_inhibition/CEL_files/'),
                         full.names = T, pattern = '.CEL')
 
 ## parse and normalize
