@@ -4,7 +4,7 @@ author: "Benedikt Rauscher"
 date: "11/24/2020"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -48,7 +48,7 @@ We load the gene expression data from the raw Affymetrix CEL files and normalize
 
 ```{r}
 ## list of cel files
-cel_files <- list.files(here('data/gene_expression/gsk3_inhibitor/cel_files/'),
+cel_files <- list.files(here('data/raw/expression/microarray_manuscript/GSK_inhibition/CEL_files/'),
                         full.names = T, pattern = '.CEL')
 
 ## parse and normalize
@@ -68,8 +68,8 @@ sample_info <- tibble(names = colnames(expr_mat)) %>%
           regex = '^(D.+?)-(.+?)-([1,2])_.+?', remove = F)
 
 ## create an annotation for the probe IDs
-load(here('data/gene_expression/promise_expr.rda'))
-probe_anno <- promise_expr %>% distinct(probe, symbol, entrez)
+promise_expr_filtered_tidy <- readRDS(here::here("data/processed/expression/promise_expr_filtered_tidy.rds"))
+probe_anno <- promise_expr_filtered_tidy %>% distinct(probe, symbol, entrez)
 ## confirm that chip model was the same
 table(probe_anno$probe %in% rownames(expr_mat))
 ```
@@ -200,10 +200,10 @@ ranks <- sort(ranks, decreasing = T)
 gse_go <- gseGO(
   geneList = ranks,
   OrgDb = org.Hs.eg.db,
-  ont = 'BP',
-  nPerm = 1e5,
-  minGSSize = 100,
-  maxGSSize = 500
+  ont = 'BP'#,
+  # nPerm = 1e5,
+  # minGSSize = 100,
+  # maxGSSize = 500
 )
 ```
 
@@ -223,10 +223,10 @@ We do the same for Reactome instead of GO terms. A convenience function for enri
 ## Reactome enrichment analysis
 gse_reactome <- gsePathway(
   geneList = ranks,
-  organism = 'human',
-  nPerm = 1e5,
-  minGSSize = 100,
-  maxGSSize = 500
+  organism = 'human'#,
+  # nPerm = 1e5,
+  # minGSSize = 100,
+  # maxGSSize = 500
 )
 ```
 
@@ -242,7 +242,7 @@ We perform GSEA for the humanized intestinal crypt signatures published in Merlo
 
 ```{r}
 ## parse signatures and make list
-intestinal_sig <- readxl::read_excel(here('data/gene_expression/merloz-suarez_sigantures.xls'), 
+intestinal_sig <- readxl::read_excel(here('data/external/expression/merloz-suarez_sigantures.xls'), 
                                      sheet = 1, skip = 4) %>% .[,1:4] %>%
   gather(signature, symbol) %>% drop_na() %>% 
   mutate(symbol = gsub('\\*', '', symbol))
@@ -255,9 +255,9 @@ ranks_symbol <- sort(setNames(res_symbol$t, res_symbol$symbol), decreasing = T)
 gse_sig <- GSEA(
   geneList = ranks_symbol,
   TERM2GENE = intestinal_sig,
-  nPerm = 1e5,
-  minGSSize = 1,
-  maxGSSize = 1000,
+  # nPerm = 1e5,
+  # minGSSize = 1,
+  # maxGSSize = 1000,
   pvalueCutoff = 1
 )
 
