@@ -36,38 +36,6 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 
 ```
 
-# Inference on organoid level based on morphology
-
-```{r, eval = FALSE}
-new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
-  dplyr::select(contains("pc"), uuid) %>% 
-  column_to_rownames("uuid") %>%
-  as.matrix() %>% scale(center = TRUE, scale = FALSE)
-
-z_projected_organoid <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("uuid")
-
-umap_factor <- umap_df %>% 
-  inner_join(z_projected_organoid) %>%
-  filter(line != "D020T02") 
-
-gg_factor_umap <- umap_factor %>% 
-  dplyr::select(-size_factor) %>%
-  dplyr::rename(factor1 = V1, factor2 = V2, factor3 = V3) %>%
-  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
-  ggplot(aes(v1, v2, color = log(value))) + 
-  ggrastr::geom_point_rast(alpha = 0.1, size = 0.35) + 
-  scale_color_viridis_c() +
-  cowplot::theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2",
-       color = "factor value") + 
-  facet_wrap(~ number) +
-  theme(legend.position = "bottom") + 
-    coord_fixed()
-
-gg_factor_umap + ggsave(here("factor_overview_organoid_level.pdf"), height = 6 , width = 6)
-```
-
 
 # Inference on treatment-level based on morphology
 
