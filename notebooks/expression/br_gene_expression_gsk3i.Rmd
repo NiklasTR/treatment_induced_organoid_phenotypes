@@ -47,22 +47,9 @@ theme_set(theme_cowplot())
 We load the gene expression data from the raw Affymetrix CEL files and normalize the data using RMA.
 
 ```{r}
-## list of cel files
-cel_files <- list.files(here::here('data/raw/expression/microarray_manuscript/GSK_inhibition/CEL_files/'),
-                        full.names = T, pattern = '.CEL')
+expr_mat <- read_rds(here::here("data/processed/expression/gsk_expr.rds"))
 
-## parse and normalize
-affy_batch <- ReadAffy(filenames = cel_files)
-expr_mat <- expresso(
-  affy_batch,
-  bgcorrect.method = 'rma',
-  normalize.method = 'quantiles',
-  pmcorrect.method = 'pmonly',
-  summary.method = 'avgdiff'
-)
-expr_mat <- log(exprs(expr_mat))
-
-## create an annotation for the samples
+## sample info
 sample_info <- tibble(names = colnames(expr_mat)) %>%
   extract(names, c('line', 'treatment', 'rep'),
           regex = '^(D.+?)-(.+?)-([1,2])_.+?', remove = F)
@@ -70,6 +57,7 @@ sample_info <- tibble(names = colnames(expr_mat)) %>%
 ## create an annotation for the probe IDs
 promise_expr_filtered_tidy <- readRDS(here::here("data/processed/expression/promise_expr_filtered_tidy.rds"))
 probe_anno <- promise_expr_filtered_tidy %>% distinct(probe, symbol, entrez)
+
 ## confirm that chip model was the same
 table(probe_anno$probe %in% rownames(expr_mat))
 ```
@@ -196,6 +184,12 @@ res_filtered <- res_gsk %>% inner_join(probe_anno) %>%
 ranks <- setNames(res_filtered$t, as.character(res_filtered$entrez))
 ranks <- sort(ranks, decreasing = T)
 
+
+```
+
+We can generate a network plot using clusterProfiler in order to get an overview of the results.
+
+```{r, eval = FALSE}
 ## GO term enrichment (biological process)
 gse_go <- gseGO(
   geneList = ranks,
@@ -205,11 +199,7 @@ gse_go <- gseGO(
   # minGSSize = 100,
   # maxGSSize = 500
 )
-```
 
-We can generate a network plot using clusterProfiler in order to get an overview of the results.
-
-```{r}
 emapplot(gse_go)
 ```
 
@@ -233,7 +223,7 @@ gse_reactome <- gsePathway(
 Again we plot an enrichment map to visualize the results.
 
 ```{r}
-emapplot(gse_reactome)
+emapplot(pairwise_termsim(gse_reactome))
 ```
 
 ## Intestinal crypt signatures

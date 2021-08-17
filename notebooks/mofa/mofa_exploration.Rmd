@@ -14,6 +14,10 @@ library(here)
 #library(MOFAdata)
 library(ReactomePA)
 library(biomaRt)
+library(cowplot)
+library(enrichplot)
+library(dplyr)
+library(clusterProfiler)
 ```
 
 
@@ -54,7 +58,7 @@ intestinal_sig <- readxl::read_excel(here('data/external/expression/merloz-suare
   mutate(symbol = gsub('\\*', '', symbol))
 
 cris_sig <- readxl::read_excel(here('data/external/expression/cris/41467_2017_BFncomms15107_MOESM422_ESM.xlsx'), sheet = 1, skip = 2) %>% 
-  rename(symbol = `Gene ID`, signature = `CRIS Class`)
+  dplyr::rename(symbol = `Gene ID`, signature = `CRIS Class`)
 
 # organoid mutation
 mofa_genetics <- read_delim(here::here("data/processed/mutation/Table-S2_Mutations_PDOs_RevisionV4.csv"), delim = ";") %>% 
@@ -163,14 +167,14 @@ gg_factor_umap <- umap_factor %>%
   theme(legend.position = "bottom") + 
     coord_fixed()
 
-gg_factor_umap + ggsave(here("factor_overview.pdf"), height = 6 , width = 6)
+gg_factor_umap + ggsave(here("reports/figures/factor_overview.pdf"), height = 6 , width = 6)
 ```
 
 
 
 ```{r}
 gg_f12 <- weights %>% 
-  rename(line = id) %>%
+  dplyr::rename(line = id) %>%
   left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
   left_join(organoid_morphology %>% 
             mutate(line = substr(line, 1, 4)) %>% 
@@ -183,13 +187,13 @@ gg_f12 <- weights %>%
   scale_color_viridis_c() + 
   theme_cowplot()
 
-gg_f12 + ggsave(here("factor_12_plot.pdf"), height = 5 , width = 5)
+gg_f12 + ggsave(here("reports/figures/factor_12_plot.pdf"), height = 5 , width = 5)
 ```
 
 
 ```{r}
 weights %>% 
-  rename(line = id) %>%
+  dplyr::rename(line = id) %>%
   left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
   ggplot(aes(factor1, factor3, label = line)) + 
   geom_point(size = 2) + 
@@ -343,7 +347,7 @@ loadings_expression %>% arrange(desc(factor3)) %>%
 
 ```{r}
 weights %>% 
-  rename(line = id) %>%
+  dplyr::rename(line = id) %>%
   left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
   left_join(organoid_morphology %>% 
             mutate(line = substr(line, 1, 4)) %>% 
@@ -422,7 +426,7 @@ emapplot(reactome, color = "NES")
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 gse_go <- gseGO(
   geneList = ranks_1,
   OrgDb = org.Hs.eg.db,
@@ -707,7 +711,7 @@ drug_activity_joined %>%
 
 ```{r}
 weights %>% 
-  rename(line = id) %>%
+  dplyr::rename(line = id) %>%
   left_join(organoid_morphology %>% 
               mutate(line = substr(line, 1, 4)) %>% 
     expand_grid(., rep = c("r1", "r2")) %>% 
@@ -766,7 +770,7 @@ emapplot(reactome, color = "NES")
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 gse_go <- gseGO(
   geneList = ranks_2,
   OrgDb = org.Hs.eg.db,
@@ -1064,7 +1068,7 @@ emapplot(reactome, color = "NES")
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 gse_go <- gseGO(
   geneList = ranks_3,
   OrgDb = org.Hs.eg.db,
