@@ -3,17 +3,28 @@
 # date: "7/2/2021"
 # note: refactored from "br_baseline_expression.Rmd"
 
-# defining lib path
+# checking input and defining lib path
 args = commandArgs(trailingOnly=TRUE)
+if (!length(args)==2) {
+  stop("arguments must be supplied (remote / local, baseline / all).n", call.=FALSE)
+} 
+
 if (args[1] == "remote") {
   .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
   print(.libPaths())
 } 
 
+## TODO integrate all treatment analysis
+if (args[2]== "all"){
+  stop("aggregate normalization with baseline and drug treatments has not yet been implemented. aborting.")
+}
+
+# loading libraries
 library(tidyverse)
 library(affy)
 library(org.Hs.eg.db)
 library(here)
+require("biomaRt")
 
 # Data preparation
 # ================
@@ -44,8 +55,20 @@ fn <- list.files(here::here('data/raw/expression/microarray_manuscript/baseline/
 
 sn <- paste('sample', 1:length(fn), sep='_')
 
+if (args[2] == "all") {
+  # appending other drug treatments
+  fn <- c(fn, list.files(here::here('data/raw/expression/microarray_manuscript/GSK_inhibition/CEL_files'), recursive = T,
+                 full.names=T, pattern = '*CEL') %>% .[!grepl('HuGene', .)],
+              list.files(here::here('data/raw/expression/microarray_manuscript/MEK_inhibition/CEL_files'), recursive = T,
+                 full.names=T, pattern = '*CEL') %>% .[!grepl('HuGene', .)]
+                 )
+
+  sn <- paste('sample', 1:length(fn), sep='_')
+} 
+
 ## read chips
 orgas_bl <- ReadAffy(filenames = fn, sampleNames = sn)
+
 ## calculate RMA corrected expression values
 ex_bl <- expresso(orgas_bl,
                   bgcorrect.method='rma', 
@@ -77,7 +100,7 @@ colnames(log_expr) <- samples_nb$id
 # ====================================
 
 ## pulling probes from biomart
-require("biomaRt")
+
 mart <- useMart("ENSEMBL_MART_ENSEMBL")
 mart <- useDataset("hsapiens_gene_ensembl", mart)
 annotLookup <- getBM(
@@ -134,8 +157,13 @@ promise_expr <- SummarizedExperiment::SummarizedExperiment(
 )
 
 
+if (args[2] != "all") {
+  save(promise_expr, file = here::here('data/processed/expression/promise_expr.rda'))
+} 
 
-save(promise_expr, file = here::here('data/processed/expression/promise_expr.rda'))
+if (args[2] == "all") {
+  save(promise_expr, file = here::here('data/processed/expression/promise_expr_all.rda'))
+} 
 
 # Session info
 sessionInfo()
