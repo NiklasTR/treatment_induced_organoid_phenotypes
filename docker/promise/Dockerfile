@@ -2,16 +2,28 @@ FROM rocker/rstudio:4.0.0
 
 RUN apt-get update && apt-get install -y \
   build-essential \
-  libglpk40
+  libglpk40 \
+  tmux \
+  libxml2-dev \
+  libcurl4-openssl-dev \
+  libssl-dev
 
 # R packages
 ## CRAN
-RUN R -e "install.packages('janitor',dependencies=TRUE)" 
-RUN R -e "install.packages(c('igraph', 'ggdag'), dependencies = TRUE)"
+RUN R -e "install.packages('igraph',dependencies=TRUE)" 
+RUN R -e "install.packages('tidyverse',dependencies=TRUE)" 
+### grouped packages where I do not expect errors
+RUN R -e "install.packages(c('janitor', 'ggdag', 'here', 'cowplot', 'gridExtra', 'pheatmap'), dependencies = TRUE)"
 
 ## Bioconductor
+RUN R -e "install.packages('BiocManager')"
 RUN R -e "BiocManager::install('org.Hs.eg.db',dependencies=TRUE)"
 RUN R -e "BiocManager::install('biomaRt',dependencies=TRUE)"
 RUN R -e "BiocManager::install('enrichplot',dependencies=TRUE)"
 RUN R -e "BiocManager::install('clusterProfiler',dependencies=TRUE)"
 RUN R -e "BiocManager::install('ReactomePA',dependencies=TRUE)"
+### grouped packages where I do not expect errors
+RUN R -e "BiocManager::install(c('lumi', 'limma', 'affy', 'MOFA2'),dependencies=TRUE)"
+
+
+

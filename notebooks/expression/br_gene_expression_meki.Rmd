@@ -4,7 +4,7 @@ author: "Benedikt Rauscher"
 date: "1/20/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -178,20 +178,20 @@ ranks <- setNames(res_filtered$t, as.character(res_filtered$Entrez_Gene_ID))
 ranks <- sort(ranks, decreasing = T)
 
 ## GO term enrichment (biological process)
-gse_go <- gseGO(
-  geneList = ranks,
-  OrgDb = org.Hs.eg.db,
-  ont = 'BP',
-  eps = 0,
-  minGSSize = 100,
-  maxGSSize = 500
-)
+# gse_go <- gseGO(
+#   geneList = ranks,
+#   OrgDb = org.Hs.eg.db,
+#   ont = 'BP',
+#   eps = 0,
+#   minGSSize = 100,
+#   maxGSSize = 500
+# )
 ```
 
 We can generate a network plot using clusterProfiler in order to get an overview of the results.
 
 ```{r}
-emapplot(pairwise_termsim(gse_go))
+# emapplot(pairwise_termsim(gse_go))
 ```
 
 An upregulation of ribosome biogenesis might indicate a mode of action via mTOR. The link between GSK3 and TSC is known and both a highly correlated in the DepMap CRISPR data.
