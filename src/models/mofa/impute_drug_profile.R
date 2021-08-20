@@ -4,7 +4,6 @@ library(tidyverse)
 library(MOFA2)
 library(here)
 #library(MOFAdata)
-library(ReactomePA)
 library(biomaRt)
 
 # load input 
