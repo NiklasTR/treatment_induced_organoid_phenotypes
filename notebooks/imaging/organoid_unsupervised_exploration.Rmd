@@ -7,6 +7,7 @@ output:
     keep_md: true
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  sample: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
   remote: FALSE
   cache: FALSE
 ---
@@ -44,6 +45,7 @@ library(ggridges)
 # parameter
 print("parameter input:")
 print(params$data)
+print(params$sample)
 ```
 
 loading input data and annotation. Note that on the central cluster, with access to the complete data table, the definition of the input can easily be changed. For remote work, the subsampled dataset "umap_drugs_sampled.Rds" is the default choice.
@@ -58,6 +60,7 @@ PATH = paste0(here::here(), "/")
 #umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 #umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 umap_df <- read_rds(here::here(params$data))
+umap_df_sample <- read_rds(here::here(params$sample))
 
 organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
   dplyr::select(line = organoid, morphology = visual_inspection_v2)
@@ -114,7 +117,7 @@ gg_cluster <- umap_df %>%
   theme(legend.position = "bottom") + 
     coord_fixed()
 
-gg_cluster + ggsave(here("reports/figures/gg_cluster.pdf"), width = 4, height = 4)
+gg_cluster + ggsave(here("reports/figures/imaging/gg_cluster.pdf"), width = 4, height = 4)
 
 
 ```
@@ -129,12 +132,13 @@ gg_size_dist <- umap_df %>%
   filter(partition %in% c(1,2)) %>%
   ggplot(aes(size)) + 
   geom_histogram() + 
-  theme_cowplot()
+  theme_cowplot() + 
+  labs(caption = "all treatments, downsampled")
 
 gg_size_dist_log <- gg_size_dist + 
-  scale_x_log10() 
+  scale_x_log10()
 
-gg_size_dist_log
+gg_size_dist_log + ggsave(here("reports/figures/imaging/gg_size_dist.pdf"), width = 4, height = 4)
 ```
 
 I add the eCDF.
@@ -175,6 +179,7 @@ For more details about distributions, please refer to *reports/Phenotypespectrum
 
 ```{r}
 line_param <- umap_df %>% filter(partition %in% c(1,2)) %>% 
+  #filter(drug == "DMSO") %>%
   nest(-line, -replicate) %>% 
   mutate(fit = map(data, ~ fitdistrplus::fitdist(.x$size, "lnorm")),
          param = map(fit, ~ .x$estimate %>% broom::tidy()))
@@ -210,7 +215,7 @@ gg_size_replicate <- df %>%
   theme_cowplot() + 
   labs(x = "Replicate 1, ln(size)",
        y = "Replicate 2, ln(size)",
-       caption = paste0("2 replicates, r= ", round(r_size, 2))) + 
+       caption = paste0("all treatments, downsampled, 2 replicates, r= ", round(r_size, 2))) + 
   coord_fixed(ratio = 1) 
   #geom_abline(slope = 1, color = "grey")
   
@@ -226,7 +231,7 @@ organoid_size_factor_09 <- umap_df %>% filter(partition %in% c(1,2)) %>% group_b
   arrange(x) %>% .$line
 
 
-gg_size_dist_morph_ridge <- umap_df %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
+gg_size_dist_morph_ridge <- umap_df_sample %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
   mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
   ggplot() +
   geom_density_ridges_gradient(aes(y = line, x = size_log, fill = stat(x)), scale = 1) +
@@ -237,7 +242,8 @@ gg_size_dist_morph_ridge <- umap_df %>% filter(partition %in% c(1,2)) %>% filter
        x = "ln(size)",
        fill = "size") + 
   theme(legend.position = "bottom") +
-  theme_cowplot() 
+  theme_cowplot() + 
+  labs(caption = "DMSO treated, downsampled")
 
 gg_size_dist_morph_ridge
 ```
@@ -257,11 +263,32 @@ umap_size <- function(umap){
     coord_fixed()
 }
 
-gg_size <- umap_size(umap_df %>% filter(partition %in% c(1,2)))
+gg_size <- umap_size(umap_df) + 
+  labs(caption = "all treatments, downsampled")
 
-gg_size
+gg_size  + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"))
 ```
 
+
+In general, DMSO treated organoid lines cover the same latent space than drug treated organoids. This is likely influenced by the large number of untreated organoids in the dataset.
+
+```{r}
+df <- umap_df 
+
+gg_size_supp <- df %>%
+  mutate(drug = if_else(drug == "DMSO", "DMSO", "other")) %>%
+  ggplot(aes(v1, v2, color = size_log)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  scale_color_viridis_c() +
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2") + 
+  theme(legend.position = "bottom") +
+  facet_wrap(~ drug) + 
+  labs(caption = "downsampled")
+
+gg_size_supp + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"))
+```
 
 # Organoid Size during Drug Treatment
 
@@ -425,27 +452,6 @@ gg_cys_comp <- df %>%
 gg_cys_comp
 ```
 
-In general, DMSO treated organoid lines cover the same latent space than drug treated organoids. This is likely influenced by the large number of untreated organoids in the dataset.
-
-```{r}
-set.seed(123)
-
-df <- umap_df %>% filter(partition %in% c(1,2))
-
-
-gg_size_supp <- df %>%
-  mutate(drug = if_else(drug == "DMSO", "DMSO", "other")) %>%
-  ggplot(aes(v1, v2, color = size_log)) + 
-  geom_point_rast(alpha = 0.5, size = 0.35) + 
-  scale_color_viridis_c() +
-  theme_cowplot() +
-  labs(x = "UMAP 1",
-       y = "UMAP 2") + 
-  theme(legend.position = "bottom") +
-  facet_wrap(~ drug)
-
-gg_size_supp + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"))
-```
 
 # Organoid line differences
 
@@ -484,7 +490,7 @@ gg_line <- df %>% dplyr::select(-line) %>%
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "nothing")
 
-gg_line + ggsave(paste0(PATH, "reports/figures/gg_size_all.pdf"), width = 4, height = 4)
+gg_line + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
@@ -511,7 +517,7 @@ gg_morph <- df %>% dplyr::select(-line) %>%
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8)
 
-gg_morph + ggsave(paste0(PATH, "reports/figures/gg_morphology.pdf"), width = 4, height = 4)
+gg_morph + ggsave(paste0(PATH, "reports/figures/imaging/gg_morphology.pdf"), width = 4, height = 4)
 
 ```
 
@@ -541,7 +547,7 @@ gg_screen_id <- df %>% dplyr::select(-line) %>%
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "bottom")
 
-gg_screen_id + ggsave(paste0(PATH, "reports/figures/gg_screen_id.pdf"), width = 4, height = 4)
+gg_screen_id + ggsave(paste0(PATH, "reports/figures/imaging/gg_screen_id.pdf"), width = 4, height = 4)
 
 ```
 
@@ -589,7 +595,7 @@ umap_df %>%
        y = "UMAP 2",
        title = "Permeability staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(paste0(PATH, "reports/figures/gg_permeability.pdf"), width = 4, height = 4)
+  ggsave(paste0(PATH, "reports/figures/imaging/gg_permeability.pdf"), width = 4, height = 4)
 
 umap_df %>%
   filter(drug == "DMSO") %>%
@@ -602,7 +608,7 @@ umap_df %>%
        y = "UMAP 2",
        title = "Actin staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(paste0(PATH, "reports/figures/gg_actin.pdf"), width = 4, height = 4)
+  ggsave(paste0(PATH, "reports/figures/imaging/gg_actin.pdf"), width = 4, height = 4)
 
 umap_df %>%
   filter(drug == "DMSO") %>%
@@ -615,7 +621,7 @@ umap_df %>%
        y = "UMAP 2",
        title = "Nuclear staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(paste0(PATH, "reports/figures/gg_dapi.pdf"), width = 4, height = 4)
+  ggsave(paste0(PATH, "reports/figures/imaging/gg_dapi.pdf"), width = 4, height = 4)
 
 ```
 
