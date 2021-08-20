@@ -502,7 +502,7 @@ gg_morph <- df %>% dplyr::select(-line) %>%
     #mutate(line = factor(line, levels = c("D021T01"))),
   aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
   #facet_wrap( ~ line, ncol =2) +
-  scale_color_brewer(type = "qual", palette = "Set2") +
+  scale_color_brewer(type = "qual", palette = "Set1") +
   #scale_color_manual(values = c(c("#D80D12", "#461C01", "#9a4c91", "#70BE6F", "#24345E"))) + 	
   #geom_density2d(color = "black") + 
   theme_classic() +
@@ -575,12 +575,25 @@ df %>%
   theme_cowplot()
 ```
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 set.seed(123)
 
-df %>%
+umap_df %>%
   filter(drug == "DMSO") %>%
-  sample_n(10000) %>%
+  #sample_n(10000) %>%
+  ggplot(aes(v1, v2, color = permeability)) + 
+  geom_point_rast(alpha = 0.75, size = 0.35) +
+   scale_colour_gradient(low = "white", high = "green") + 
+  theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       title = "Permeability staining intensity") + 
+  theme(legend.position = "bottom") + 
+  ggsave(paste0(PATH, "reports/figures/gg_permeability.pdf"), width = 4, height = 4)
+
+umap_df %>%
+  filter(drug == "DMSO") %>%
+  #sample_n(10000) %>%
   ggplot(aes(v1, v2, color = actin)) + 
   geom_point_rast(alpha = 0.75, size = 0.35) +
    scale_colour_gradient(low = "white", high = "red") + 
@@ -591,9 +604,9 @@ df %>%
   theme(legend.position = "bottom") + 
   ggsave(paste0(PATH, "reports/figures/gg_actin.pdf"), width = 4, height = 4)
 
-df %>%
+umap_df %>%
   filter(drug == "DMSO") %>%
-  sample_n(10000) %>%
+  #sample_n(10000) %>%
   ggplot(aes(v1, v2, color = dapi)) + 
   geom_point_rast(alpha = 0.75, size = 0.35) +
    scale_colour_gradient(low = "white", high = "blue") + 
@@ -610,7 +623,7 @@ df %>%
 
 I am focusing on cystic vs solid organoid lines
 
-```{r}
+```{r, eval = FALSE}
 #UMAP Cystic (Lines 18, 13, 27, 30) vs. Solid (others) treated with DMSO, for Figure 1 / matching expression analysis done for cystic vs. rest
 
 set.seed(123)
@@ -658,19 +671,6 @@ gg_cystic
 
 
 # Plot Export
-
-```{r}
-#gg_size_dist + ggsave(paste0(PATH, "reports/figures/gg_size_dist.pdf"))
-#gg_size_dist_log +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_log.pdf"))
-#ggdrug_size + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_size_log.pdf"))
-#gg_ecdf + ggsave(paste0(PATH, "reports/figures/gg_size_dist_ecdf.pdf"))
-#gg_size_dist_morph_ridge +  ggsave(paste0(PATH, "reports/figures/gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
-
-# ggdrug_count + ggsave(paste0(PATH, "reports/figures/gg_drug_dist_n_log.pdf"))
-# gg_drug + ggsave(paste0(PATH, "reports/figures/gg_drug.pdf"), width = 8, height = 4)
-# gg_size_drug + ggsave(paste0(PATH, "reports/figures/gg_trametinib_size_dose.pdf"), width = 3.65, height = 3.65)
-gg_cystic + ggsave(paste0(PATH, "reports/figures/gg_cystic.pdf"), width = 4, height = 4)
-```
 
 ```{r, eval = FALSE}
 plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
