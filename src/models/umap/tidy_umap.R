@@ -101,6 +101,7 @@ umap_sampled_h <- umap_tidy_h %>%
 pca_sampled_h <- pca_tidy_h %>%
   sample_frac(size = as.numeric(args[4])/2,
               replace = FALSE)
+
 # write to file
 umap_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 pca_tidy %>% write_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_tidy.Rds"))
