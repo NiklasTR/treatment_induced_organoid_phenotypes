@@ -295,7 +295,7 @@ gg_size_supp + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"))
 
 ```{r}
 
-drug_size <- umap_df %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
+drug_size <- umap_df_sample %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>%
   #filter(morphological_class == "disorganized") %>% 
   #filter(morphological_class != "other") %>% 
@@ -337,13 +337,13 @@ set.seed(234)
 loi = c("D022T01", "D046T01")
 
 
-df <- umap_df  %>%
+df <- umap_df_sample  %>%
   filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | drug == "Paclitaxel") %>% 
   mutate(concentration = ifelse(drug == "DMSO", 0, concentration)) %>% 
   filter(line == loi)
 
-gg_drug <- umap_df %>% filter(partition %in% c(1,2)) %>%
+gg_drug <- umap_df_sample %>% filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
@@ -426,13 +426,13 @@ gg_ldc
 
 I plot 2 organoid lines treated with DMSO control
 
-```{r}
+```{r, eval = FALSE}
 set.seed(234)
 
 
 df <- umap_df  %>% filter(partition %in% c(1,2)) %>%
   mutate(cystic = if_else(line == "D013T01" &  well == "D24" & plate == "D013T01P001L02", TRUE, FALSE)) %>%
-  mutate(compact = if_else(line == "D055T01" &  well == "D24" & plate == "D055T01P007L02", TRUE, FALSE))
+  mutate(compact = if_else(line == "D046T01" &  well == "D24" & plate == "D046T01P007L02", TRUE, FALSE))
 
 gg_cys_comp <- df %>% 
   sample_frac(0.01) %>%
@@ -619,7 +619,7 @@ umap_df %>%
   theme_cowplot() +
   labs(x = "UMAP 1",
        y = "UMAP 2",
-       title = "Nuclear staining intensity") + 
+       title = "DNA staining intensity") + 
   theme(legend.position = "bottom") + 
   ggsave(paste0(PATH, "reports/figures/imaging/gg_dapi.pdf"), width = 4, height = 4)
 
