@@ -157,7 +157,7 @@ gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
 gg_ecdf
 ```
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 # variance_explained %>% ggplot(aes(PC, var_explained)) + geom_point() + geom_vline(xintercept = 25) + scale_y_sqrt()
 
 
