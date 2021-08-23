@@ -287,7 +287,7 @@ gg_size_supp <- df %>%
   facet_wrap(~ drug) + 
   labs(caption = "downsampled")
 
-gg_size_supp + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"))
+gg_size_supp + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_treatment.pdf"))
 ```
 
 # Organoid Size during Drug Treatment
@@ -490,7 +490,7 @@ gg_line <- df %>% dplyr::select(-line) %>%
   theme_cowplot(font_size = 8) + 
   theme(legend.position = "nothing")
 
-gg_line + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"), width = 4, height = 4)
+gg_line + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_four_lines.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
@@ -678,18 +678,18 @@ gg_cystic
 
 # Plot Export
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_size,
           plot_grid(gg_line, gg_cystic, labels = c('D', 'E'), label_size = 12, ncol = 2),
           labels = c('', 'C', ''), label_size = 12, ncol = 1) +
-  ggsave(paste0(PATH, "reports/panels/panel_size_dist.pdf"), width = 8, height = 16)
+  ggsave(paste0(PATH, "reports/panels/imaging/panel_size_dist.pdf"), width = 8, height = 16)
 
 plot_grid(plot_grid(ggdrug_size, ggdrug_count, labels = c('A', 'B'), label_size = 12),
           gg_drug,
           gg_size_drug,
           labels = c('', 'C', 'D'), label_size = 12, ncol = 1) +
-  ggsave(paste0(PATH, "reports/panels/panel_size_drug.pdf"), width = 8, height = 12)
+  ggsave(paste0(PATH, "reports/panels/imaging/panel_size_drug.pdf"), width = 8, height = 12)
 
 gg_size_supp
 
