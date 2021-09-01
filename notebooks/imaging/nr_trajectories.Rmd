@@ -42,8 +42,14 @@ library(scico)
 library(ggridges)
 
 umap_df <- read_rds(here::here(params$data))
-umap_tidy <- umap_df # for pseudotime fit
-umap_df_sample <- list.files(here::here(params$sample))
+
+umap_df_sample <- tibble(file = list.files(here::here(params$sample), full.names = TRUE)) %>% mutate(drug = grepl(file, pattern = "umap_absolute_all_drugs_tidy_")) %>% filter(drug == TRUE) %>% 
+  mutate(data = purrr::map(file, ~ readRDS(.x))) %>%
+  dplyr::select(data) %>%
+  unnest(data)
+
+umap_tidy <- rbind(umap_df, umap_df_sample) # for pseudotime fit
+  
 
 source(here("src/models/misc/pseudotime.R"))
 ```
@@ -59,7 +65,7 @@ gg_bortezomib <- umap_df %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
-  geom_point_rast(data = umap_df %>%
+  geom_point_rast(data = umap_df_sample %>%
         filter(grepl(drug, pattern = "Bortezomib")) %>%
         filter(line %in% c("D007T01", "D019T01", "D018T01")) %>%
         filter(concentration != "1.0") %>% # removing the maximum concentration as it is not adding further information
@@ -90,7 +96,7 @@ plot_df_raw <- create_plot_df(drug_order = c("Bortezomib"),
 
 plot_df <- plot_df_raw %>% 
   filter(line %in% c("D007T01", "D019T01", "D018T01")) %>%
-  mutate(plot_trace = case_when(line == "D018T01" ~ purrr::map(plot, ~ .x$fit %>% .[1:2000,]),
+  mutate(plot_trace = case_when(line == "D018T01" ~ purrr::map(plot, ~ .x$fit %>% .[550:2500,]),
                                 TRUE ~ purrr::map(plot, ~ .x$fit))) 
 
 gg_bortezomib_traj <- draw_trajectory(plot_df)
@@ -104,7 +110,7 @@ gg_bortezomib_traj +
 ```{r}
 plot_grid(gg_bortezomib + coord_fixed(), gg_bortezomib_traj + coord_fixed(),
           labels = c('A', 'B'), label_size = 12, ncol = 2) +
-  ggsave(here::here("reports/panel_bortezomib.pdf"), width = 8, height = 4)
+  ggsave(here::here("reports/panels/panel_bortezomib.pdf"), width = 8, height = 4)
 
 
 
@@ -252,7 +258,7 @@ gg_mekgsk_density <- umap_df %>%
 
 
 ```{r}
-gg_mtor_all <- umap_df %>%
+gg_mtor_all <- umap_df %>% rbind(umap_df_sample) %>%
   filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
@@ -314,7 +320,7 @@ gg_gsk_all <- umap_tidy %>%
 
 ```
 
-```{r}
+```{r, eval = FALSE}
 set.seed(123)
 drug_order <- c("Ulixertinib (BVD-523, VRT752271)", 
                 "TAK-733",
@@ -357,7 +363,7 @@ center_df %>%
 
 I am focusing on a set of two lines, D019T01 and D004T01
 
-```{r}
+```{r, eval = FALSE}
 i_dist_in = 0.05
 j_nn_in = 30
 k_res_in = .1
@@ -407,7 +413,7 @@ gg_target
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 gg_target_density <- umap_df %>%
 
   filter(partition %in% c(1,2)) %>%
@@ -440,7 +446,7 @@ gg_target_density <- umap_df %>%
 gg_target_density
 ```
 
-```{r}
+```{r, eval = FALSE}
 plot_grid(gg_target, gg_target_density,
      labels = c('A', 'B'), label_size = 12, ncol = 1) +
   ggsave(here::here("reports/enrichment_drugtarget.pdf"), width = 4, height = 4)
@@ -451,7 +457,7 @@ plot_grid(gg_target, gg_target_density,
 # MEK inhibitor Pseudotimes
 
 
-```{r}
+```{r, eval = FALSE}
 set.seed(1323)
 
 plot_df_raw <- create_plot_df(drug_order = c("Binimetinib", "Trametinib"),
@@ -471,7 +477,7 @@ gg_mek_traj_sel
 
 
 
-```{r}
+```{r, eval = FALSE}
 traj_df <- plot_df %>% 
   mutate(proj = purrr::map2(data, plot_trace, ~ project_to_curve(.x %>% dplyr::select(v1, v2) %>% as.matrix(),
                                                                  .y %>% dplyr::select(v1, v2) %>% as.matrix())),
@@ -494,7 +500,7 @@ traj_df %>%
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 
 doi = "Trametinib"
 loi = "D027T01"
@@ -547,7 +553,7 @@ plot_grid(plot_grid(gg_traj_incl,gg_size_pc, labels = c('A', 'B'), label_size = 
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 tmp <- runif(100, -1, 1)
 x <- cbind(tmp, tmp ^ 2) + rnorm(200, sd = 0.05)
 s <- matrix(c(-1, 0, 1, 1, 0, 1), ncol = 2)
@@ -563,7 +569,7 @@ segments(x[, 1], x[, 2], proj$s[, 1], proj$s[, 2])
 
 # Plot Export
 
-```{r}
+```{r, eval = FALSE}
 gg_bortezomib + ggsave(here::here("reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
 
 gg_mtor_all + ggsave(here::here("reports/figures/gg_mtor.pdf"), width = 6, height = 3)
