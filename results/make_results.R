@@ -6,7 +6,7 @@ print(.libPaths())
 rmarkdown::render(here::here('notebooks/imaging/organoid_unsupervised_exploration.Rmd'), 
     params = list(
         remote = FALSE, 
-        data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds", 
+        data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds", 
         sample = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds",
         cache = FALSE))
 system("cp reports/figures/imaging/* results/figure_1/")

@@ -8,6 +8,7 @@ output:
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
   sample: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
+  output: "imaging"
   remote: FALSE
   cache: FALSE
 ---
@@ -56,7 +57,7 @@ loading input data and annotation. Note that on the central cluster, with access
 # I wish I could solve my path problems with the here() package, but experienced unreliable behavior 
 # PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
 PATH = paste0(here::here(), "/")
-
+here::here()
 #umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
 #umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 umap_df <- read_rds(here::here(params$data))
@@ -117,7 +118,7 @@ gg_cluster <- umap_df %>%
   theme(legend.position = "bottom") + 
     coord_fixed()
 
-gg_cluster + ggsave(here("reports/figures/imaging/gg_cluster.pdf"), width = 4, height = 4)
+gg_cluster + ggsave(here("reports/figures", params$output, "gg_cluster.pdf"), width = 4, height = 4)
 
 
 ```
@@ -138,7 +139,8 @@ gg_size_dist <- umap_df %>%
 gg_size_dist_log <- gg_size_dist + 
   scale_x_log10()
 
-gg_size_dist_log + ggsave(here("reports/figures/imaging/gg_size_dist.pdf"), width = 4, height = 4)
+gg_size_dist_log + 
+  ggsave(here("reports/figures", params$output, "gg_size_dist.pdf"), width = 4, height = 4)
 ```
 
 I add the eCDF.
@@ -157,7 +159,7 @@ gg_ecdf <- ggplot(df %>% filter(drug == "DMSO")) +
 gg_ecdf
 ```
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 # variance_explained %>% ggplot(aes(PC, var_explained)) + geom_point() + geom_vline(xintercept = 25) + scale_y_sqrt()
 
 
@@ -220,7 +222,8 @@ gg_size_replicate <- df %>%
   #geom_abline(slope = 1, color = "grey")
   
 
-gg_size_replicate
+gg_size_replicate +
+  ggsave(here("reports/figures", params$output, "gg_size_correlation.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
@@ -243,9 +246,10 @@ gg_size_dist_morph_ridge <- umap_df_sample %>% filter(partition %in% c(1,2)) %>%
        fill = "size") + 
   theme(legend.position = "bottom") +
   theme_cowplot() + 
-  labs(caption = "DMSO treated, downsampled")
+  labs(caption = "DMSO treated, downsampled") +
+  coord_fixed(ratio = 1)
 
-gg_size_dist_morph_ridge
+gg_size_dist_morph_ridge + ggsave(here("reports/figures", params$output, "gg_size_dist_morph_ridge.pdf"), width = 4, height = 4)
 ```
 
 ```{r}
@@ -266,7 +270,7 @@ umap_size <- function(umap){
 gg_size <- umap_size(umap_df) + 
   labs(caption = "all treatments, downsampled")
 
-gg_size  + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_all.pdf"))
+gg_size  + ggsave(here("reports/figures", params$output, "gg_size_all.pdf"), width = 4, height = 4)
 ```
 
 
@@ -678,7 +682,7 @@ gg_cystic
 
 # Plot Export
 
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 plot_grid(plot_grid(gg_size_dist_morph_ridge, gg_size_replicate, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_size,
           plot_grid(gg_line, gg_cystic, labels = c('D', 'E'), label_size = 12, ncol = 2),
