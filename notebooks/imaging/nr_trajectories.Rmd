@@ -1,12 +1,34 @@
 ---
-title: "Pseudotimes"
-output: html_document
+title: "Morphology Trajectories"
+author: Niklas Rindtorff
+output:
+  pdf_document: default
+  html_document:
+    keep_md: true
+params:
+  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
+  sample: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
+  output: "imaging"
+  remote: FALSE
+  cache: FALSE
 ---
 
+
+
 ```{r setup, include=FALSE}
+# defining lib path
+if(params$remote == TRUE){
+  .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
+}
+print(.libPaths())
+
+
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+                      cache = params$cache,
+                      message = FALSE,
+                      warning = FALSE)
 ```
+
 
 Loading packages
 
@@ -19,13 +41,11 @@ library(princurve)
 library(scico)
 library(ggridges)
 
-# I wish I could solve my path problems with the here() package, but experienced unreliable behaviour 
-PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"
+umap_df <- read_rds(here::here(params$data))
+umap_tidy <- umap_df # for pseudotime fit
+#umap_df_sample <- read_rds(here::here(params$sample))
 
-umap_tidy <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))
-umap_sampled <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/filtered_moderate/umap_absolute_all_drugs_sampled.Rds"))
-
-source(here("src/models/PhenotypeSpectrum/R/pseudotime.R"))
+source(here("src/models/misc/pseudotime.R"))
 ```
 
 
@@ -34,17 +54,17 @@ source(here("src/models/PhenotypeSpectrum/R/pseudotime.R"))
 ```{r}
 set.seed(123)
 
-gg_bortezomib <- umap_sampled %>%
+gg_bortezomib <- umap_df %>%
   filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
-  geom_point_rast(data = umap_tidy %>%
+  geom_point_rast(data = umap_df %>%
         filter(grepl(drug, pattern = "Bortezomib")) %>%
         filter(line %in% c("D007T01", "D019T01", "D018T01")) %>%
         filter(concentration != "1.0") %>% # removing the maximum concentration as it is not adding further information
     group_by(concentration) %>% 
-    sample_n(1000, replace = TRUE),
+    sample_n(10000, replace = TRUE),
   aes(color = line),alpha = 1, size = 0.35, shape=16) + 
   scale_color_brewer(type = "qual", palette = "Set2") +
   facet_wrap( ~ concentration, ncol = 2) + 
@@ -97,10 +117,10 @@ plot_grid(gg_bortezomib + coord_fixed(), gg_bortezomib_traj + coord_fixed(),
 I am repeating a similar plot with SN-38, the active metabolite of Irinotecan. 
 
 
-```{r}
+```{r, eval = FALSE}
 set.seed(123)
 
-gg_irinotecan <- umap_sampled %>%
+gg_irinotecan <- umap_df %>%
   filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
@@ -125,7 +145,7 @@ gg_irinotecan
 
 I am generating a pseudotime plot for Irinotecan, a toxic drug 
 
-```{r}
+```{r, eval = FALSE}
 set.seed(168763)
 
 plot_df_raw <- create_plot_df(drug_order = c("Irinotecan / SN-38"),
@@ -148,19 +168,9 @@ gg_irinotecan_traj
 # e-7 good
 ```
 
-```{r}
-plot_grid(gg_irinotecan + coord_fixed(), gg_irinotecan_traj + coord_fixed(),
-          labels = c('A', 'B'), label_size = 12, ncol = 2) +
-  ggsave(paste0(PATH, "reports/panel_irinotecan.pdf"), width = 8, height = 4)
-
-
-
-
-```
-
 # 5 major drug induced phenotypes
 
-```{r}
+```{r, eval = FALSE}
 set.seed(123)
 anno <- read_delim(here("references/layouts/Layouts.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% janitor::clean_names() %>% 
   dplyr::rename(drug = product_name) %>% 
@@ -186,7 +196,7 @@ activity = umap_tidy %>% distinct(line, drug) %>%
   dplyr::select(-data) %>%
   unnest(activity)
   
-gg_big5_density <- umap_sampled %>%
+gg_big5_density <- umap_df %>%
 
   filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
@@ -212,7 +222,7 @@ gg_big5_density <- umap_sampled %>%
   theme_cowplot(font_size = 8) + 
   coord_fixed()
 
-gg_mekgsk_density <- umap_sampled %>%
+gg_mekgsk_density <- umap_df %>%
   filter(partition %in% c(1,2)) %>%
   dplyr::select(-line, -concentration) %>%
   ggplot(aes(v1, v2)) + 
@@ -242,7 +252,7 @@ gg_mekgsk_density <- umap_sampled %>%
 
 
 ```{r}
-gg_mtor_all <- umap_sampled %>%
+gg_mtor_all <- umap_df %>%
   filter(partition %in% c(1,2)) %>%
   filter(drug == "DMSO" | grepl(drug, pattern = "WYE-132")) %>%
   #filter(line %in% c("D030T01", "D027T01", "D013T01")) %>%
@@ -252,7 +262,7 @@ gg_mtor_all <- umap_sampled %>%
   sample_n(700, replace = TRUE) %>%
   ggplot(aes(v1, v2)) + 
   
-  geom_point_rast(data = umap_sampled %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = umap_df %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
  
   geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16, color = "black") + 
   facet_wrap(~ drug) + 
@@ -290,7 +300,7 @@ gg_gsk_all <- umap_tidy %>%
   sample_n(500) %>%
   ggplot(aes(v1, v2)) + 
   
-  geom_point_rast(data = umap_sampled %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = umap_df %>% dplyr::select(-drug), alpha = 1, size = 0.35, color = "#f1f1f1") + 
  
   geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16, color = "black") + 
   facet_wrap(~ drug) + 
@@ -333,7 +343,7 @@ center_df <- umap_tidy %>% filter(concentration == "nan") %>%
 
 center_df %>%
   ggplot(aes(v1, v2)) + 
-  geom_point_rast(data = umap_sampled %>% dplyr::select(-drug, -line), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = umap_df %>% dplyr::select(-drug, -line), alpha = 1, size = 0.35, color = "#f1f1f1") + 
   geom_point_rast(aes(color = drug),alpha = 1, size = 1, shape=16) + 
   facet_wrap(~ line) + 
   theme_cowplot() +
@@ -398,7 +408,7 @@ gg_target
 
 
 ```{r}
-gg_target_density <- umap_sampled %>%
+gg_target_density <- umap_df %>%
 
   filter(partition %in% c(1,2)) %>%
 
@@ -494,7 +504,7 @@ gg_traj_incl <- traj_df %>%
   #filter(lambda >= 5) %>% # hyperparameter tuned to avoid undershooting treatment effects
   filter(dist <= threshold) %>%
   ggplot(aes(v1, v2)) + 
-  geom_point_rast(data = umap_sampled %>% dplyr::select(-line, -concentration), alpha = 1, size = 0.35, color = "#f1f1f1") + 
+  geom_point_rast(data = umap_df %>% dplyr::select(-line, -concentration), alpha = 1, size = 0.35, color = "#f1f1f1") + 
   geom_point(aes(color = lambda)) + 
   scale_color_viridis_c() + 
   theme_cowplot() + 
