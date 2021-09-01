@@ -7,7 +7,7 @@ output:
     keep_md: true
 params:
   data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
-  sample: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
+  sample: "data/processed/PhenotypeSpectrum"
   output: "imaging"
   remote: FALSE
   cache: FALSE
@@ -43,7 +43,7 @@ library(ggridges)
 
 umap_df <- read_rds(here::here(params$data))
 umap_tidy <- umap_df # for pseudotime fit
-#umap_df_sample <- read_rds(here::here(params$sample))
+umap_df_sample <- list.files(here::here(params$sample))
 
 source(here("src/models/misc/pseudotime.R"))
 ```
@@ -104,7 +104,7 @@ gg_bortezomib_traj +
 ```{r}
 plot_grid(gg_bortezomib + coord_fixed(), gg_bortezomib_traj + coord_fixed(),
           labels = c('A', 'B'), label_size = 12, ncol = 2) +
-  ggsave(paste0(PATH, "reports/panel_bortezomib.pdf"), width = 8, height = 4)
+  ggsave(here::here("reports/panel_bortezomib.pdf"), width = 8, height = 4)
 
 
 
@@ -188,7 +188,7 @@ anno = anno %>% mutate(group = case_when(grepl(pattern = "CDK", x= target) ~ "CD
                                         ))
 activity = umap_tidy %>% distinct(line, drug) %>%
   nest(-line) %>% 
-  mutate(activity = purrr::map(line, ~ read_csv(paste0(PATH, "data/interim/FeatureAnalysis/drug_effects/human/",.x,"/SVM_Accuracies_PCA_",.x, "_25components.csv")) %>% 
+  mutate(activity = purrr::map(line, ~ read_csv(here::here( "data/interim/FeatureAnalysis/drug_effects/human/",.x,"/SVM_Accuracies_PCA_",.x, "_25components.csv")) %>% 
                                         janitor::clean_names() %>% 
                                         dplyr::rename(drug = x1)
                                )
@@ -363,13 +363,13 @@ j_nn_in = 30
 k_res_in = .1
 
 loi = "D019T01"
-obj <- readRDS(paste0(PATH, "data/processed/PhenotypeSpectrum/drug_effects/lm_umap", loi, "_", i_dist_in, "_", j_nn_in, "_", k_res_in, ".Rds"))
+obj <- readRDS(here::here(paste0("data/processed/PhenotypeSpectrum/drug_effects/lm_umap", loi, "_", i_dist_in, "_", j_nn_in, "_", k_res_in, ".Rds")))
 umap_tidy_drug <- reducedDims(obj)$UMAP %>% cbind(colData(obj), 
                                                   cluster = clusters(obj),
                                                   partition = partitions(obj)) %>% as_tibble() %>% janitor::clean_names() %>%
                                                     mutate(line = loi)
 loi = "D004T01"
-obj <- readRDS(paste0(PATH, "data/processed/PhenotypeSpectrum/drug_effects/lm_umap", loi, "_", i_dist_in, "_", j_nn_in, "_", k_res_in, ".Rds"))
+obj <- readRDS(here::here(paste0("data/processed/PhenotypeSpectrum/drug_effects/lm_umap", loi, "_", i_dist_in, "_", j_nn_in, "_", k_res_in, ".Rds")))
 
 umap_tidy_drug <- rbind(umap_tidy_drug, reducedDims(obj)$UMAP %>% cbind(colData(obj), 
                                                   cluster = clusters(obj),
@@ -443,7 +443,7 @@ gg_target_density
 ```{r}
 plot_grid(gg_target, gg_target_density,
      labels = c('A', 'B'), label_size = 12, ncol = 1) +
-  ggsave(paste0(PATH, "reports/enrichment_drugtarget.pdf"), width = 4, height = 4)
+  ggsave(here::here("reports/enrichment_drugtarget.pdf"), width = 4, height = 4)
 ```
 
 
@@ -543,7 +543,7 @@ gg_conc_pc <- traj_df %>%
 plot_grid(plot_grid(gg_traj_incl,gg_size_pc, labels = c('A', 'B'), label_size = 12, ncol = 2),
           gg_conc_pc,
           labels = c('', 'C'), label_size = 12, ncol = 1) + 
-  ggsave(paste0(PATH, "reports/pseudotime_meki_", loi, "_", doi, ".pdf"), width = 8, height = 8)
+  ggsave(here::here(paste0("reports/pseudotime_meki_", loi, "_", doi, ".pdf")), width = 8, height = 8)
 ```
 
 
@@ -564,18 +564,18 @@ segments(x[, 1], x[, 2], proj$s[, 1], proj$s[, 2])
 # Plot Export
 
 ```{r}
-gg_bortezomib + ggsave(paste0(PATH, "reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
+gg_bortezomib + ggsave(here::here("reports/figures/gg_bortezomib.pdf"), width = 2, height = 8)
 
-gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_mtor.pdf"), width = 6, height = 3)
-gg_mtor_all + ggsave(paste0(PATH, "reports/figures/gg_gsk.pdf"), width = 6, height = 3)
+gg_mtor_all + ggsave(here::here("reports/figures/gg_mtor.pdf"), width = 6, height = 3)
+gg_mtor_all + ggsave(here::here("reports/figures/gg_gsk.pdf"), width = 6, height = 3)
 
-gg_mek_traj_sel  + ggsave(paste0(PATH, "reports/figures/gg_mek_traj_sel.pdf"), width = 4, height = 4)
-gg_bini_traj_sel + ggsave(paste0(PATH, "reports/figures/gg_bini_traj_sel.pdf"), width = 4, height = 4)
-gg_tram_traj + ggsave(paste0(PATH, "reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
+gg_mek_traj_sel  + ggsave(here::here("reports/figures/gg_mek_traj_sel.pdf"), width = 4, height = 4)
+gg_bini_traj_sel + ggsave(here::here("reports/figures/gg_bini_traj_sel.pdf"), width = 4, height = 4)
+gg_tram_traj + ggsave(here::here("reports/figures/gg_tram_traj.pdf"), width = 4, height = 4)
 
 
-gg_big5_density + ggsave(paste0(PATH, "reports/figures/gg_big5_density.pdf"), width = 16, height = 8)
-gg_mekgsk_density + ggsave(paste0(PATH, "reports/figures/gg_mekgsk_density.pdf"), width = 12, height = 12)
+gg_big5_density + ggsave(here::here("reports/figures/gg_big5_density.pdf"), width = 16, height = 8)
+gg_mekgsk_density + ggsave(here::here("reports/figures/gg_mekgsk_density.pdf"), width = 12, height = 12)
 ```
 
 
