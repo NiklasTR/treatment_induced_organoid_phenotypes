@@ -633,7 +633,7 @@ umap_df %>%
 
 I am focusing on cystic vs solid organoid lines
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 #UMAP Cystic (Lines 18, 13, 27, 30) vs. Solid (others) treated with DMSO, for Figure 1 / matching expression analysis done for cystic vs. rest
 
 set.seed(123)
@@ -652,19 +652,19 @@ gg_cystic <- umap_df %>%
   ggplot(aes(v1, v2)) + 
   geom_point_rast(alpha = 1, size = 0.35, color = "#f1f1f1") + 
   
-  # geom_point_rast(data = df %>%
-  #   filter(morphology == "cystic") %>% 
-  #     sample_frac(0.05),
-  # aes(color = morphology),alpha = .4, size = 0.35, shape=16) + 
+  geom_point_rast(data = df %>%
+    filter(morphology != "other") %>%
+      sample_frac(1),
+  aes(color = morphology),alpha = .1, size = 0.35, shape=16) +
   
-  geom_density_2d(data = df %>% #geom_density_2d_filled
-    filter(morphology != "other"), # %>% 
-    #  sample_frac(0.05)
-    aes(fill = morphology), size = 1.5) +
+  # geom_density_2d(data = df %>% #geom_density_2d_filled
+  #   filter(morphology != "other"), # %>% 
+  #   #  sample_frac(0.05)
+  #   aes(fill = morphology), size = 1.5) +
 
-  #scale_color_brewer(type = "qual", palette = "Set2") +
+  scale_color_brewer(type = "qual") +
   #scale_fill_manual(values = c("#0571b0", "#ca0020")) + 	
-  scale_color_manual(values = c("#0571b0", "#ca0020")) + 	
+  #scale_color_manual(values = c("#0571b0", "#ca0020")) + 	
   #geom_density2d(color = "black") + 
   theme_classic() +
   labs(x = "UMAP 1",
@@ -672,11 +672,10 @@ gg_cystic <- umap_df %>%
        #caption = "control treated organoids") + 
   theme_cowplot(font_size = 8) + 
   #theme(legend.position = "nothing")  + 
-  coord_fixed() + 
-  scale_x_reverse()
+  coord_fixed()
 
 
-gg_cystic
+gg_cystic + ggsave(here::here("reports/figures/mofa/gg_cystic.pdf"), width = 4, height = 4)
 ```
 
 

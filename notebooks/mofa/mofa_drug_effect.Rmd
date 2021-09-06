@@ -35,8 +35,8 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 
 # loading gene expression data
 
-expr_long_gsk <- readRDS(here::here("data/processed/expression/gsk_expr_tidy.rds"))
-expr_long_mek <- readRDS(here::here("data/processed/expression/mek_expr_tidy.rds"))
+# expr_long_gsk <- readRDS(here::here("data/processed/expression/gsk_expr_tidy.rds"))
+# expr_long_mek <- readRDS(here::here("data/processed/expression/mek_expr_tidy.rds"))
 ```
 
 
@@ -404,6 +404,7 @@ expression_dmso_inference %>%
 ```
 
 
+# morhphology MOA activity
 
 
 ```{r}
@@ -411,7 +412,7 @@ expression_dmso_inference %>%
 drug_anno <- readxl::read_excel(here::here('references/layouts/Compound_Annotation_Libraries_New.xlsx')) %>% distinct(drug = `Compound name`, target = `Primary Target`)
 
 z_projected_anno_tidy <- z_projected_anno %>% 
-  rename(drug = target) %>%
+  dplyr::rename(drug = target) %>%
   left_join(drug_anno)
 
 z_projected_anno_test <- z_projected_anno_tidy %>% semi_join(z_projected_anno_tidy %>% 
@@ -421,6 +422,8 @@ z_projected_anno_test <- z_projected_anno_tidy %>% semi_join(z_projected_anno_ti
                                             filter(n >=5)) %>% 
   filter(drug != "DMSO")
 ```
+
+
 
 ```{r}
 drug_projection_test_result <- rbind(
@@ -437,15 +440,61 @@ drug_projection_test_result <- drug_projection_test_result %>%
 hist(drug_projection_test_result$p.value)
 ```
 
+
+
 ```{r}
 moa_factor_shift <- drug_projection_test_result %>% arrange(p.value) %>% 
-  mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
-  filter(fdr <= 0.2) %>% 
+  mutate(fdr = p.adjust(p.value, method = "BH"))
+  
+
+moa_factor_shift_tbl <- moa_factor_shift%>% 
+  filter(fdr <= 0.2) %>%
   head(15) %>%
   tableGrob(., theme = ttheme_default(), rows = NULL)
 
-grid.arrange(moa_factor_shift)
+grid.arrange(moa_factor_shift_tbl)
 ```
+
+
+```{r}
+moa_factor_shift %>%
+  ggplot(aes(statistic, fdr, color = factor, label = term)) + 
+  geom_point() + 
+  scale_y_reverse() + 
+  geom_hline(yintercept = 0.2) + 
+  theme_cowplot() + 
+  #facet_wrap( ~ factor)+ 
+  ggrepel::geom_text_repel(data = moa_factor_shift %>% filter(term == "targetMEK")) + 
+  ggrepel::geom_text_repel(data = moa_factor_shift %>% filter(term == "targetAurora Kinase"))
+  NULL
+```
+
+```{r}
+df <- moa_factor_shift %>%
+  filter(factor != "factor3") %>%
+  filter((term == "targetMEK" & factor == "factor2") | (term %in% c("targetAurora Kinase", "targetCDK")) & factor ==  "factor1")
+
+gg_shift <- moa_factor_shift %>% 
+  filter(factor != "factor3") %>%
+  ggplot(aes(statistic)) + 
+  geom_vline(xintercept = 0) +
+  geom_density(aes(fill = factor), alpha = 0.2) + 
+  geom_rug(aes(color = factor)) + 
+  
+  geom_vline(data = df, aes(xintercept = statistic, color = factor), linetype="dashed") + 
+  geom_text(aes(x= df %>% filter(factor == "factor2") %>% .$statistic - .5, 
+                label= df %>% filter(factor == "factor2") %>% .$term, y=.350), color = "black") +
+  geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[1] + .5, 
+                label= df %>% filter(factor == "factor1") %>% .$term %>% .[1], y=.350), color = "black") + 
+  geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[2] + .5, 
+              label= df %>% filter(factor == "factor1") %>% .$term %>% .[2], y=.370), color = "black") + 
+  theme_cowplot() + 
+  theme(legend.position = "bottom")
+
+gg_shift + ggsave(here::here("reports/figures/mofa/drug_shift.pdf"), width = 3, height = 3)  
+  
+```
+
 
 aurora kinase, PLK, CDK, leads to reduced factor 1 - smaller organoids
 mTORi leads to increased factor 1 - larger organoids?
@@ -459,7 +508,7 @@ doi <- c("MEK", "ctrl")
 
 z_projected_anno_tidy %>% 
   mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
-  left_join(drug_projection_test_result %>% rename(target = term)) %>%
+  left_join(drug_projection_test_result %>% dplyr::rename(target = term)) %>%
   #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
   filter(target %in% doi) %>%
   ggplot(aes(target, V2, label = id)) + 
@@ -470,6 +519,8 @@ z_projected_anno_tidy %>%
 
 
 ```
+
+## concentration dependend effects
 
 ```{r}
 new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
@@ -501,13 +552,13 @@ z_projected_conc_anno <- z_projected_concentration %>%
   mutate(target = ifelse(target == "", "DMSO", target))
 
 z_projected_conc_anno_tidy <- z_projected_conc_anno %>% 
-  rename(drug = target) %>%
+  dplyr::rename(drug = target) %>%
   left_join(drug_anno)
 
 ```
 
 ```{r}
-z_projected_conc_anno_tidy %>% 
+gg_f2_mek_conc <- z_projected_conc_anno_tidy %>% 
   filter(drug %in% c("DMSO", "Binimetinib")) %>%
   mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
   ggplot(aes(concentration, V2)) + 
@@ -517,6 +568,41 @@ z_projected_conc_anno_tidy %>%
   geom_hline(yintercept = 0) +
   theme_cowplot() + 
   labs(y = "factor 2") + 
+  scale_color_manual(values = c("black", "grey")) + 
+  theme(legend.position = "bottom")
+
+gg_f2_mek_conc + ggsave(here::here("reports/figures/mofa/f2_mek_shift.pdf"), width = 4, height = 4)  
+```
+
+
+```{r}
+gg_f1_mek_conc <- z_projected_conc_anno_tidy %>% 
+  filter(drug %in% c("DMSO", "Binimetinib")) %>%
+  mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
+  ggplot(aes(concentration, V1)) + 
+  geom_jitter(width = 0.1, aes(color = drug)) + 
+  scale_x_log10() + 
+  geom_smooth(color = "black") + 
+  geom_hline(yintercept = 0) +
+  theme_cowplot() + 
+  labs(y = "factor 1") + 
+  scale_color_manual(values = c("black", "grey")) + 
+  theme(legend.position = "bottom")
+
+gg_f1_mek_conc + ggsave(here::here("reports/figures/mofa/f1_mek_shift.pdf"), width = 4, height = 4)  
+```
+
+```{r}
+z_projected_conc_anno_tidy %>% 
+  filter(drug %in% c("DMSO", "Binimetinib")) %>%
+  mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
+  ggplot(aes(concentration, V3)) + 
+  geom_jitter(width = 0.1, aes(color = drug)) + 
+  scale_x_log10() + 
+  geom_smooth(color = "black") + 
+  geom_hline(yintercept = 0) +
+  theme_cowplot() + 
+  labs(y = "factor 3") + 
   scale_color_manual(values = c("black", "grey"))
 ```
 
@@ -535,15 +621,22 @@ z_projected_conc_anno_tidy %>%
 
 ```{r}
 umap_df %>%
-  filter(drug == "Binimetinib") %>%
+  filter(drug %in% c("DMSO", "Binimetinib")) %>%
+  mutate(concentration = ifelse(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
   mutate(concentration = as.numeric(concentration)) %>%
-  ggplot(aes(concentration, size_log)) + 
-  geom_jitter(width = 0.1) + 
-  stat_summary(fun.y=mean, colour="blue", geom="line", size = 1) + # draw a mean line in the data
+  ggplot(aes(concentration, v2)) + 
+  geom_jitter(width = 0.1, aes(color = drug)) + 
   scale_x_log10() + 
-  labs(title = "Binimetinib") + 
-  theme_cowplot()
+  geom_smooth(color = "black") + 
+  geom_hline(yintercept = 0) +
+  theme_cowplot() + 
+  labs(y = "factor 2") + 
+  scale_color_manual(values = c("black", "grey"))
 ```
+
+
+
+
 ```{r}
 umap_df %>%
   filter(drug == "Binimetinib") %>%
@@ -609,6 +702,36 @@ z_projected %>% ggplot(aes(V1, V3, label = id)) +
   theme_cowplot()
 ```
 
+
+# morhphology drug activity
+
+
+```{r, eval=FALSE}
+drug_projection_test_result_drug <- rbind(
+  lm(V1 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
+  lm(V2 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
+  lm(V3 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor3")) 
+
+drug_projection_test_result_drug <- drug_projection_test_result_drug %>% 
+  filter(term != "(Intercept)") %>% 
+  dplyr::select(term, statistic, factor, p.value)
+```
+
+```{r, eval=FALSE}
+hist(drug_projection_test_result_drug$p.value)
+```
+
+```{r, eval =FALSE}
+moa_factor_shift <- drug_projection_test_result_drug %>% arrange(statistic) %>% 
+  mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
+  filter(fdr <= 0.2) 
+
+moa_factor_shift_tbl <- moa_factor_shift%>% 
+  head(15) %>%
+  tableGrob(., theme = ttheme_default(), rows = NULL)
+
+grid.arrange(moa_factor_shift_tbl)
+```
 
 # QC
 

@@ -672,7 +672,8 @@ gg_f1_egfr <- drug_activity_joined %>%
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE, color = "red") + 
-  facet_wrap(~ drug)
+  facet_wrap(~ drug) + 
+  coord_fixed(ratio = 5)
 
 
 gg_f1_egfr + ggsave(here::here("reports/figures/mofa/f1_egfr.pdf"), width = 6, height = 6)
@@ -698,7 +699,8 @@ gg_f1_mek <- drug_activity_joined %>%
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE) + 
-  facet_wrap(~ drug)
+  facet_wrap(~ drug) + 
+  coord_fixed(ratio = 5)
 
 gg_f1_mek + ggsave(here::here("reports/figures/mofa/f1_mek.pdf"), width = 6, height = 6)
 ```
@@ -813,7 +815,7 @@ plot_grid(plot_grid(gg_sizef1, gg_f1_geneexp, align = "hv"),
 ## morphology
 
 ```{r}
-weights %>% 
+gg_cystic <- weights %>% 
   dplyr::rename(line = id) %>%
   left_join(organoid_morphology %>% 
               mutate(line = substr(line, 1, 4)) %>% 
@@ -826,19 +828,27 @@ weights %>%
   theme_cowplot() + 
   scale_color_brewer(type = "qual")
 
+
+gg_cystic + ggsave(here::here("reports/figures/mofa/f2_morph.pdf"), width = 6, height = 6)
 ```
 
 ## gene expression
 
 
 ```{r}
-plot_weights(model,
+gg_f2_geneexp <- plot_weights(model,
   view = "expression",
   factor = 2,
   nfeatures = 10,     # Number of features to highlight
   scale = T,          # Scale weights from -1 to 1
   abs = F             # Take the absolute value?
-)
+) + 
+  theme_cowplot() + 
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y =element_blank()) 
+
+gg_f2_geneexp + 
+  ggsave(here::here("reports/figures/mofa/f2_genexp.pdf"), width = 4, height = 4)
 ```
 growth control via IGF signaling
 cell adhesion via FYN signaling, high fibronectin expression
@@ -869,7 +879,16 @@ gse_reactome_2 <- gsePathway(
 )
 
 reactome <- pairwise_termsim(gse_reactome_2) 
-emapplot(reactome, color = "NES")
+
+gg_f2_emap <- emapplot(reactome, color = "NES",
+         cex_label_category = .8,
+         cex_line = 1) + 
+  scale_color_viridis_c() + 
+  labs(color = "NES")
+
+gg_f2_emap + 
+  ggsave(here::here("reports/figures/mofa/f2_emap.pdf"), width = 4, height = 4)
+
 ```
 
 
@@ -915,13 +934,16 @@ gse_sig_tbl <- as_tibble(gse_sig)
 
 
 ```{r}
-## proliferation
-gseaplot2(
+## lgr5
+gg_f2lgr5 <- gseaplot2(
   gse_sig, geneSetID = gse_sig$ID[1],
   title = paste0(gse_sig$ID[1], 
                 ' (p = ', round(gse_sig_tbl$pvalue[1], 3), 
                 '; NES = ', round(gse_sig_tbl$NES[1], 2), ')')
 )
+
+gg_f2lgr5 + 
+  ggsave(here::here("reports/figures/mofa/f2_lgr5.pdf"), width = 4, height = 3)
 ```
 
 
@@ -1024,15 +1046,18 @@ aggregate_drugs <- drug_activity_test %>% group_by(target) %>% summarise_at(vars
 
 include_drugs <- aggregate_drugs %>% arrange(desc(factor2)) %>% .$target
 
-drug_activity_test %>%
+gg_f2_drug <- drug_activity_test %>%
   drop_na() %>%
   mutate(target = factor(target, levels = include_drugs)) %>%
   ggplot(aes(y = target, x = factor2)) + 
+  geom_vline(xintercept = 0, color = "grey") +
   #geom_point() + 
   ggridges::geom_density_ridges() +
-  geom_hline(yintercept = 0) + 
+   
   #coord_flip() + 
   cowplot::theme_cowplot()
+
+gg_f2_drug + ggsave(here::here("reports/figures/mofa/f2_ridge_drug.pdf"), width = 4, height = 3)
 ```
 
 median weighting within the factor was strongest for activity of Wnt/bcatenin, Src, EGFR and FAK inhibitors. In contrast, MEK, ERK inhibitor activity had among the most negative median contribution to the factor, similarly mTOR inhibitors, albeit not statistically significant. Put differently, organoid lines that had a high score for factor 2 tended to be sensitive to Wnt and EGFR targeting and less responsive to MEK and ERK inhibitors. 
@@ -1082,19 +1107,24 @@ drug_activity_joined %>%
   geom_smooth(method = "lm", se = FALSE) + 
   facet_wrap(~ drug)
 ```
+
 ```{r}
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "Wnt/beta-catenin") %>% 
   .$drug 
 
 
-drug_activity_joined %>% 
+gg_f2_wnt <- drug_activity_joined %>% 
   filter(drug %in% doi) %>% 
+  filter(drug != "WIKI4") %>%
+  filter(drug != "Wnt agonist 1") %>%
   ggplot(aes(factor2, auroc)) +
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE, color = "black") + 
   facet_wrap(~ drug)
+
+gg_f2_wnt + ggsave(here::here("reports/figures/mofa/f2_wnt.pdf"), width = 6, height = 6)
 ```
 
 
@@ -1123,6 +1153,21 @@ drug_activity_joined %>%
 ```
 again, within the group of mTOR inhibitors, activity towards treatment with the small molecule WYE-132 had the strongest contribution to the factor - showing less activity in factor 2 high organoids compared to factor 2 low organoid lines.
 
+### pick of drug sensitivity
+
+```{r}
+gg_f2_pick <- drug_activity_joined %>% 
+  filter(drug %in% c("PRI-724", "Trametinib (GSK1120212)", "WYE-125132 (WYE-132)")) %>% 
+  ggplot(aes(factor2, auroc, color = drug)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE, aes(group = drug)) + 
+  coord_equal(ratio = 10) + 
+  theme(legend.position = "bottom")
+  
+
+gg_f2_pick + ggsave(here::here("reports/figures/mofa/f2_drug_pick.pdf"), width = 4, height = 4)
+```
 
 # factor 3
 
