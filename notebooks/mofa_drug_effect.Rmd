@@ -1,0 +1,634 @@
+---
+title: "MOFA drug effect"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(MOFA2)
+library(here)
+#library(MOFAdata)
+library(ReactomePA)
+library(biomaRt)
+library(gridExtra)
+```
+
+## Introduction
+
+```{r}
+# input
+model <- load_model(here("models/mofa/model.hdf5"))
+
+umap_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
+promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
+
+weights <- model@expectations$Z$single_group %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_size <- model@expectations$W$size_view %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_expression <- model@expectations$W$expression %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_morphology <- model@expectations$W$morphology %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_drug_activity <- model@expectations$W$drug_activity %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% janitor::clean_names()
+
+
+```
+
+# factor conversions
+
+## morph(organoid) to factor
+
+```{r, eval = FALSE}
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+  dplyr::select(contains("pc"), uuid) %>% 
+  column_to_rownames("uuid") %>%
+  as.matrix() %>% scale(center = TRUE, scale = FALSE)
+
+z_projected_organoid <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("uuid")
+
+umap_factor <- umap_df %>% 
+  inner_join(z_projected_organoid) %>%
+  filter(line != "D020T02") 
+
+gg_factor_umap <- umap_factor %>% 
+  dplyr::select(-size_factor) %>%
+  dplyr::rename(factor1 = V1, factor2 = V2, factor3 = V3) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  ggplot(aes(v1, v2, color = log(value))) + 
+  ggrastr::geom_point_rast(alpha = 0.1, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "factor value") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_factor_umap + ggsave(here("factor_overview_organoid_level.pdf"), height = 6 , width = 6)
+```
+
+
+## morph(population) to factor
+
+```{r}
+W <- get_weights(model, "morphology_view")[[1]]
+Winv <- pracma::pinv(W)
+
+# Damit kannst du dann erstmal schauen, wo die Organoide im latenten Raum liegen (z_projected).
+# Falls das Sinn macht, kannst du dann mit den gelernten Gewichten vom RNA view via Z_projected  * W_RNA  die RNA Werte vorhersagen und mit den Messungen, die du fuer einzelne Drugs hast, vergleichen, i.e.
+
+
+
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+  # dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)",
+  #                                                  "Trametinib (GSK1120212)") & 
+  #                                       line %in% c("D046T01", "D018T01"))) %>% 
+  # dplyr::filter(drug %in% c("DMSO") | drug %in% c("WYE-125132 (WYE-132)",
+  #                                                  "Trametinib (GSK1120212)",
+  #                                                 "AZD3759")) %>%
+  #dplyr::filter(drug %in% c("DMSO")) %>%
+  filter(concentration == "nan") %>%
+  mutate(rep = paste0("r", replicate)) %>% 
+  mutate(line = substr(line, 1, 4)) %>% 
+  mutate(line = paste0(line, "_", rep)) %>%
+  # I treat every drug induced phenotype as a dedicated line
+  mutate(line = if_else(drug == "DMSO", line, paste0(line, "_", drug))) %>%
+  #filter(size_log > 7.5) %>%
+  group_by(line) %>% 
+  summarise_at(vars(contains("pc")), funs(mean)) %>% 
+  ungroup() %>% column_to_rownames("line") %>% as.matrix() %>% 
+  #scale(center = TRUE, scale = FALSE) %>% 
+  sweep(2, model@intercepts$morphology_view %>% unlist() %>% unname())
+
+z_projected <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+```
+
+
+```{r}
+z_projected_anno <- z_projected %>% 
+  mutate(target = substr(id, 9, nchar(id))) %>% 
+  mutate(line = substr(id, 1, 7)) %>%
+  mutate(target = ifelse(target == "", "DMSO", target))
+
+z_projected_anno %>% 
+  filter(target == "DMSO") %>%
+  left_join(weights) %>% 
+  dplyr::select(-target, -line) %>% 
+  gather(variable, value, -id) %>% 
+  mutate(factor = if_else(variable %in% c("V1", "factor1"), "factor1", "none")) %>%
+  mutate(factor = if_else(variable %in% c("V2", "factor2"), "factor2", factor)) %>%
+  mutate(factor = if_else(variable %in% c("V3", "factor3"), "factor3", factor)) %>% 
+  mutate(source = if_else(grepl(variable, pattern = "factor"), "MOFA", "pseudoinverse")) %>% 
+  dplyr::select(-variable) %>%
+  spread(source, value) %>% 
+  ggplot(aes(MOFA, pseudoinverse)) + 
+  geom_point() + 
+  facet_wrap(~ factor) + 
+  theme_cowplot() + 
+  geom_smooth(method = "lm")
+
+```
+
+## expr(population) to factor
+
+```{r}
+mofa_expression <- promise_long_filtered_top %>% 
+  # renaming columns
+  mutate(line = paste0(line, "_", rep)) %>%
+  dplyr::select(sample = line,
+                feature = symbol, # setting feature to symbol
+                value = expr) %>% 
+  mutate(view = "expression") %>% 
+  # averaging feature value
+  group_by(feature, sample, view) %>%
+  summarise(value = mean(value)) %>%
+  # renaming feature jic
+  mutate(feature = paste0(feature, "_", view)) %>%
+  dplyr::select(sample, feature, view, value) %>% 
+  drop_na() %>% 
+  filter(feature != "_expression")
+
+new_expression <- mofa_expression %>%
+  dplyr::select(-view) %>%
+  spread(sample, value) %>%
+  column_to_rownames("feature") %>%
+  as.matrix() %>%
+  t()
+  
+
+W <- get_weights(model, "expression")[[1]]
+Winv <- pracma::pinv(W)
+
+z_projected_expression <-  new_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+```
+
+
+```{r}
+z_projected_exp_anno <- z_projected_expression %>% 
+  mutate(line = substr(id, 1, 7))
+
+z_projected_expression %>% 
+  left_join(weights) %>% 
+  
+  gather(variable, value, -id) %>% 
+  mutate(factor = if_else(variable %in% c("V1", "factor1"), "factor1", "none")) %>%
+  mutate(factor = if_else(variable %in% c("V2", "factor2"), "factor2", factor)) %>%
+  mutate(factor = if_else(variable %in% c("V3", "factor3"), "factor3", factor)) %>% 
+  mutate(source = if_else(grepl(variable, pattern = "factor"), "MOFA", "pseudoinverse")) %>% 
+  dplyr::select(-variable) %>%
+  spread(source, value) %>% 
+  ggplot(aes(MOFA, pseudoinverse)) + 
+  geom_point() + 
+  facet_wrap(~ factor) + 
+  theme_cowplot() + 
+  geom_smooth(method = "lm")
+```
+
+
+## morph(pop) to expr(pop)
+
+```{r}
+z_projected_matrix <- z_projected %>% column_to_rownames("id") %>% as.matrix()
+
+expression_inference <- z_projected_matrix %*% t(get_weights(model, "expression")[[1]]) %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% 
+  separate(id, c("line", "drug"), sep = 7) %>% 
+  mutate(drug = substr(drug , 2, nchar(drug))) %>% 
+  mutate(drug = ifelse(drug == "", "DMSO", drug))
+```
+
+
+```{r}
+expression_inference_tidy <- expression_inference %>%  gather(symbol, expr, -drug, -line) %>% mutate(symbol = substr(symbol, 1, nchar(symbol)-nchar("_expression"))) 
+
+expression_dmso_inference <- promise_long_filtered_top %>% 
+  dplyr::select(-line) %>% 
+  dplyr::rename(line = id) %>% 
+  dplyr::select(line, expr, symbol) %>% 
+  left_join(expression_inference_tidy %>% filter(drug == "DMSO") %>% dplyr::rename(inference = expr))
+```
+
+```{r}
+expression_dmso_inference %>% 
+  drop_na() %>%
+  ggplot(aes(expr, inference)) + 
+  geom_point(alpha = 0.2) + 
+  geom_smooth(aes(group = line))
+```
+
+# drug induced factor shifts
+
+## factor ~ MOA
+
+
+```{r}
+## load drug annotation
+drug_anno <- readxl::read_excel(here::here('references/layouts/Compound_Annotation_Libraries_New.xlsx')) %>% distinct(drug = `Compound name`, target = `Primary Target`)
+
+z_projected_anno_tidy <- z_projected_anno %>% 
+  dplyr::rename(drug = target) %>%
+  left_join(drug_anno)
+
+z_projected_anno_test <- z_projected_anno_tidy %>% semi_join(z_projected_anno_tidy %>% 
+                                                               dplyr::select(target, drug) %>%
+                                                               distinct() %>%
+                                            dplyr::count(target) %>% 
+                                            filter(n >=5)) %>% 
+  filter(drug != "DMSO")
+```
+
+```{r}
+drug_projection_test_result <- rbind(
+  lm(V1 ~ target, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
+  lm(V2 ~ target, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
+  lm(V3 ~ target, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor3")) 
+
+drug_projection_test_result <- drug_activity_test_result %>% 
+  filter(term != "(Intercept)") %>% 
+  dplyr::select(term, statistic, factor, p.value)
+```
+
+```{r}
+hist(drug_projection_test_result$p.value)
+```
+
+```{r}
+moa_factor_shift <- drug_projection_test_result %>% arrange(p.value) %>% 
+  mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
+  filter(fdr <= 0.2) %>% 
+  head(15) %>%
+  tableGrob(., theme = ttheme_default(), rows = NULL)
+
+grid.arrange(moa_factor_shift)
+```
+
+aurora kinase, PLK, CDK, leads to reduced factor 1 - smaller organoids
+mTORi leads to increased factor 1 - larger organoids?
+MEK, FAK leads to increased factor 2 - more cystic organoids
+
+
+Wnt inhibitors lead to reduced factor 3 - 
+
+```{r}
+doi <- c("MEK", "ctrl")
+
+z_projected_anno_tidy %>% 
+  mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
+  left_join(drug_projection_test_result %>% rename(target = term)) %>%
+  #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
+  filter(target %in% doi) %>%
+  ggplot(aes(target, V2, label = id)) + 
+  geom_jitter(width = 0.1) + 
+  ggsignif::geom_signif(comparisons = list(doi)) + 
+  theme_cowplot() + 
+  labs(y = "factor 2")
+
+
+```
+
+```{r}
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+  # dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)",
+  #                                                  "Trametinib (GSK1120212)") & 
+  #                                       line %in% c("D046T01", "D018T01"))) %>% 
+  # dplyr::filter(drug %in% c("DMSO") | drug %in% c("WYE-125132 (WYE-132)",
+  #                                                  "Trametinib (GSK1120212)",
+  #                                                 "AZD3759")) %>%
+  #dplyr::filter(drug %in% c("DMSO")) %>%
+  filter(concentration != "nan") %>%
+  mutate(rep = paste0("r", replicate)) %>% 
+  mutate(line = substr(line, 1, 4)) %>% 
+  mutate(line = paste0(line, "_", rep)) %>%
+  # I treat every drug induced phenotype as a dedicated line
+  mutate(line = if_else(drug == "DMSO", line, paste0(line, "_", drug, "_", concentration))) %>%
+  #filter(size_log > 7.5) %>%
+  group_by(line) %>% 
+  summarise_at(vars(contains("pc")), funs(mean)) %>% 
+  ungroup() %>% column_to_rownames("line") %>% as.matrix()
+
+z_projected_concentration <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+
+z_projected_conc_anno <- z_projected_concentration %>% 
+  mutate(target = substr(id, 9, nchar(id))) %>% 
+  separate(target, c("target", "concentration"), sep = "_") %>% 
+  mutate(concentration = as.numeric(concentration)) %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  mutate(target = ifelse(target == "", "DMSO", target))
+
+z_projected_conc_anno_tidy <- z_projected_conc_anno %>% 
+  rename(drug = target) %>%
+  left_join(drug_anno)
+
+```
+
+```{r}
+z_projected_conc_anno_tidy %>% 
+  filter(drug %in% c("DMSO", "Binimetinib")) %>%
+  mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
+  ggplot(aes(concentration, V2)) + 
+  geom_jitter(width = 0.1, aes(color = drug)) + 
+  scale_x_log10() + 
+  geom_smooth(color = "black") + 
+  geom_hline(yintercept = 0) +
+  theme_cowplot() + 
+  labs(y = "factor 2") + 
+  scale_color_manual(values = c("black", "grey"))
+```
+
+
+
+```{r}
+doi <- c("DMSO", "Binimetinib")
+
+z_projected_conc_anno_tidy %>% 
+  filter(drug %in% doi) %>%
+  filter(concentration == 0.2 | drug == "DMSO") %>%
+  ggplot(aes(drug, V2, label = id)) + 
+  geom_jitter() + 
+  ggsignif::geom_signif(comparisons = list(doi))
+```
+
+```{r}
+umap_df %>%
+  filter(drug == "Binimetinib") %>%
+  mutate(concentration = as.numeric(concentration)) %>%
+  ggplot(aes(concentration, size_log)) + 
+  geom_jitter(width = 0.1) + 
+  stat_summary(fun.y=mean, colour="blue", geom="line", size = 1) + # draw a mean line in the data
+  scale_x_log10() + 
+  labs(title = "Binimetinib") + 
+  theme_cowplot()
+```
+```{r}
+umap_df %>%
+  filter(drug == "Binimetinib") %>%
+  filter(prob_live == 1) %>%
+  mutate(concentration = as.numeric(concentration)) %>%
+  ggplot(aes(concentration, size_log)) + 
+  geom_jitter(width = 0.1) + 
+  stat_summary(fun.y=mean, colour="blue", geom="line", size = 1) + # draw a mean line in the data
+  scale_x_log10() + 
+  labs(title = "Binimetinib, filtering for alive organoids") +
+  #facet_grid(prediction ~ line) + 
+  theme_cowplot()
+```
+
+
+
+```{r}
+doi <- c("mTOR", "ctrl")
+
+z_projected_anno_tidy %>% 
+  mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
+  left_join(drug_projection_test_result %>% rename(target = term)) %>%
+  #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
+  filter(target %in% doi) %>%
+  ggplot(aes(target, V1)) + 
+  geom_jitter(width = 0.2) + 
+  ggsignif::geom_signif(comparisons = list(doi)) + 
+  labs(y = "factor 1") + 
+  theme_cowplot()
+```
+
+```{r}
+doi <- c("mTOR", "ctrl")
+
+z_projected_anno_tidy %>% 
+  mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
+  left_join(drug_projection_test_result %>% rename(target = term)) %>%
+  #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
+  filter(target %in% doi) %>% filter(drug %in% c("DMSO", "WYE-125132 (WYE-132)")) %>% 
+  
+  ggplot(aes(target, V1, label = id, color = target)) + 
+  geom_jitter() + 
+  ggsignif::geom_signif(comparisons = list(doi))
+```
+
+
+
+```{r}
+z_projected_anno %>%
+  filter(target %in% c("CTRL", "Trametinib")) %>%
+  ggplot(aes(V1, V2, color = target)) + 
+  geom_point() + 
+  geom_path(aes(group = line), color = "black")
+```
+
+
+
+```{r}
+z_projected %>% ggplot(aes(V1, V3, label = id)) + 
+  geom_point(size = 4) + 
+  ggrepel::geom_text_repel(color = "black") + 
+  #scale_color_viridis_c() + 
+  theme_cowplot()
+```
+
+
+# QC
+
+```{r}
+plot_data_overview(model)
+```
+
+```{r}
+head(model@cache$variance_explained$r2_total[[1]])
+```
+
+
+Breakdown by factors 
+
+```{r}
+model@cache$variance_explained$r2_per_factor$single_group
+```
+
+```{r}
+model@cache$variance_explained$r2_per_factor$single_group %>% as.data.frame() %>% 
+  rownames_to_column("factor") %>% 
+  mutate(overall_variance = expression + morphology_view + size_view + drug_activity) %>%
+  mutate(overall_variance = overall_variance/4) %>%
+  ggplot(aes(factor, overall_variance)) + 
+  geom_point(size = 2) + 
+  theme_cowplot()
+```
+
+
+```{r}
+gg_ve <- plot_variance_explained(model, x="view", y="factor")
+gg_ve
+```
+
+```{r}
+ph_cor <- weights %>% 
+  as.data.frame() %>% 
+  column_to_rownames("id") %>% 
+  cor() %>% 
+  pheatmap::pheatmap()
+```
+
+```{r}
+weights %>% 
+  as.data.frame() %>% 
+  column_to_rownames("id") %>% 
+  cor() %>% as.vector() %>% 
+  .[. != 1] %>% 
+  summary()
+```
+
+
+```{r}
+plot_factor(model, 
+  factor = 1:3
+)
+```
+
+# factor overview
+
+```{r}
+umap_factor <- weights %>% 
+  separate(id, c("line", "replicate"), sep = "_") %>% 
+  mutate(line = paste0(line, "T01"),
+         replicate = substr(replicate, 2,2)) %>% 
+  left_join(umap_df %>% 
+  filter(drug == "DMSO"), .) %>% 
+  filter(line != "D020T02") 
+
+gg_factor_umap <- umap_factor %>% 
+  dplyr::select(-size_factor) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  ggplot(aes(v1, v2, color = value)) + 
+  ggrastr::geom_point_rast(alpha = 0.1, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "factor value") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_factor_umap
+```
+
+
+
+```{r}
+gg_f12 <- weights %>% 
+  rename(line = id) %>%
+  left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
+  left_join(organoid_morphology %>% 
+            mutate(line = substr(line, 1, 4)) %>% 
+  expand_grid(., rep = c("r1", "r2")) %>% 
+  mutate(sample = paste0(line, "_", rep)) %>% dplyr::select(-line, line = sample)) %>%
+  distinct() %>%
+  mutate(drug = if_else(is.na(morphology), "treatment", "ctrl")) %>%
+  ggplot(aes(factor1, factor2, label = line, color = drug)) + 
+  geom_point(size = 4) + 
+  ggrepel::geom_text_repel(color = "black") + 
+  #scale_color_viridis_c() + 
+  theme_cowplot()
+
+gg_f12
+```
+
+```{r}
+weights %>% 
+  rename(line = id) %>%
+  left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
+  left_join(organoid_morphology %>% 
+            mutate(line = substr(line, 1, 4)) %>% 
+  expand_grid(., rep = c("r1", "r2")) %>% 
+  mutate(sample = paste0(line, "_", rep)) %>% dplyr::select(-line, line = sample)) %>%
+  distinct() %>%
+  mutate(drug = if_else(is.na(morphology), "treatment", "ctrl")) %>% 
+  dplyr::select(contains("factor"), line) %>%
+  column_to_rownames("line") %>% pheatmap::pheatmap()
+```
+
+
+
+```{r}
+weights %>% 
+  rename(line = id) %>%
+  left_join(organoid_size_fit %>% mutate(line = paste0(line, "_", rep))) %>%
+  ggplot(aes(factor1, factor3, label = line)) + 
+  geom_point(size = 2) + 
+  ggrepel::geom_text_repel(color = "black") + 
+  scale_color_viridis_c() + 
+  theme_cowplot()
+```
+
+## mutations
+
+```{r}
+loadings_mutation %>%
+  column_to_rownames("id") %>% 
+  pheatmap::pheatmap()
+```
+
+```{r}
+df <- loadings_mutation %>% 
+  gather(key = "factor", value = "weight", -id) 
+
+df %>%
+  ggplot(aes(factor, weight, label = id)) +
+  geom_point() + 
+  theme_cowplot() + 
+  ggrepel::geom_text_repel(data = df %>% filter(id %in% c("NRAS", "ERBB2", "PTEN", "KRAS", "PIK3CA")))
+```
+
+
+
+## drug response
+
+
+```{r}
+## load drug annotation
+drug_anno <- readxl::read_excel(here::here('references/layouts/Compound_Annotation_Libraries_New.xlsx')) %>% distinct(drug = `Compound name`, target = `Primary Target`)
+
+loadings_drug_activity_tidy <- loadings_drug_activity %>% 
+  mutate(drug = substr(id, 7, nchar(.))) %>% 
+  dplyr::select(-id) %>% 
+  arrange(desc(factor1)) %>% 
+  left_join(drug_anno)
+
+
+# 
+# top_n <- 20
+# 
+# top_drugs <- rbind(
+#   loadings_drug_activity_tidy %>% arrange(factor1) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor1) %>% tail(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor2) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor2) %>% tail(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor3) %>% head(top_n),
+#   loadings_drug_activity_tidy %>% arrange(factor3) %>% tail(top_n)
+# ) %>% distinct()
+# 
+# top_drugs %>% 
+#   column_to_rownames("drug") %>% 
+#   pheatmap::pheatmap()
+```
+
+```{r}
+df <- loadings_drug_activity_tidy %>% dplyr::select(-target) %>% 
+  gather(factor_name, value, -drug) %>% 
+  distinct() 
+
+row_anno <-  df %>% left_join(loadings_drug_activity_tidy) %>% dplyr::select(drug, target) %>%
+  mutate(id = paste0(drug, "_", target)) %>% distinct() %>% as.data.frame() %>% column_to_rownames("id") 
+           
+
+df %>%
+  spread(drug, value) %>% 
+  dplyr::select(-factor_name) %>%
+  cor() %>% 
+  as.matrix() %>% 
+  pheatmap::pheatmap(show_rownames = FALSE, 
+                     show_colnames = FALSE)
+```
+
+
