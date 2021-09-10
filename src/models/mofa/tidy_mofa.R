@@ -5,6 +5,9 @@ library(tidyverse)
 
 set.seed(123)
 
+# CAVE: 
+# make sure to run make_data_aggregation.R
+
 # input 
 ## organoid gene expression
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
