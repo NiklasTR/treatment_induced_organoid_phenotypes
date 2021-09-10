@@ -17,6 +17,7 @@ pca_tidy <- read_rds(here::here("data/processed/PhenotypeSpectrum/pca_absolute_a
 
 # run queries on data
 pca_tidy_aggregate <- pca_tidy %>% 
+  mutate(concentration = if_else(drug == "DMSO", "nan", concentration)) %>%
   dplyr::group_by(line, drug, concentration, replicate) %>% 
   summarise_at(vars(contains("pc")), funs(mean)) %>% 
   ungroup() %>%
