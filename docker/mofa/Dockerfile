@@ -10,3 +10,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN R -e "install.packages('tidyverse',dependencies=TRUE)"
 RUN R -e "install.packages('here',dependencies=TRUE)"
+
+# for promise package: install SCOPEAnalysis package
+# R CMD INSTALL data/external/SCOPEAnalysis_0.1.0.tar.gz 
