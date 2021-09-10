@@ -706,7 +706,7 @@ z_projected %>% ggplot(aes(V1, V3, label = id)) +
 # morhphology drug activity
 
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 drug_projection_test_result_drug <- rbind(
   lm(V1 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
   lm(V2 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
@@ -717,11 +717,11 @@ drug_projection_test_result_drug <- drug_projection_test_result_drug %>%
   dplyr::select(term, statistic, factor, p.value)
 ```
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 hist(drug_projection_test_result_drug$p.value)
 ```
 
-```{r, eval =FALSE}
+```{r, eval =TRUE}
 moa_factor_shift <- drug_projection_test_result_drug %>% arrange(statistic) %>% 
   mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
   filter(fdr <= 0.2) 
@@ -732,6 +732,114 @@ moa_factor_shift_tbl <- moa_factor_shift%>%
 
 grid.arrange(moa_factor_shift_tbl)
 ```
+
+## factor shift MOA by line
+
+
+```{r}
+z_projected_anno_test_line <- z_projected_anno_test %>% mutate(line = substr(line, 1, 4))
+
+drug_projection_test_result_line <- rbind(
+  lm(V1 ~ target + line, data = z_projected_anno_test_line) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
+  lm(V2 ~ target + line, data = z_projected_anno_test_line) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
+  lm(V3 ~ target + line, data = z_projected_anno_test_line) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor3")) 
+
+drug_projection_test_result_line <- drug_projection_test_result_line %>% 
+  filter(term != "(Intercept)") %>% 
+  dplyr::select(term, statistic, factor, p.value)
+```
+
+```{r}
+hist(drug_projection_test_result_line$p.value)
+```
+
+
+
+```{r}
+moa_factor_shift_line <- drug_projection_test_result_line %>% arrange(p.value) %>% 
+  mutate(fdr = p.adjust(p.value, method = "BH"))
+  
+
+moa_factor_shift_tbl <- moa_factor_shift_line%>% 
+  filter(fdr <= 0.2) %>%
+  head(15) %>%
+  tableGrob(., theme = ttheme_default(), rows = NULL)
+
+grid.arrange(moa_factor_shift_tbl)
+```
+
+decomposing the results
+
+```{r}
+moa_factor_shift_line_tidy <- moa_factor_shift_line %>%
+  separate(term, c("line", "drug"), remove = FALSE, sep = ":") %>%
+  mutate(type = case_when(is.na(line) ~ "drug",
+                          is.na(drug) ~ "line", 
+                          TRUE ~ "interaction"))
+```
+
+
+D018T01 is exceptionally strong in factor 2, when treated with MEK inhibitors the line shows a strong response with a shift in factor 1. At a first glance, this is in conflict with the observation that factor 2 high lines are relatively insensitive to MEK inhibtors.
+
+
+```{r}
+moa_factor_shift_line %>%
+  ggplot(aes(statistic, fdr, color = factor, label = term)) + 
+  geom_point() + 
+  scale_y_reverse() + 
+  geom_hline(yintercept = 0.2) + 
+  theme_cowplot() + 
+  facet_wrap( ~ factor)+ 
+  ggrepel::geom_text_repel(data = moa_factor_shift %>% filter(term == "targetMEK")) + 
+  ggrepel::geom_text_repel(data = moa_factor_shift %>% filter(term == "targetAurora Kinase"))
+  NULL
+```
+## factor 1
+
+```{r}
+moa_factor_shift_line_tidy %>% 
+  filter(factor == "factor1") %>%
+  filter(type != "interaction") %>%
+  
+  filter(fdr < 0.2)
+```
+
+factor 1 only using morphology (FDR < 0.1)
+* line 46, 18, 10 significantly associated with factor1 up 
+* line 22, 30 with decreased factor 1
+* mTORi leads to increase in factor 1
+* CDK and AURK to a decrease in factor 1
+
+When accounting for line differences, we observed a downward shift in factor1 score for organoids treated with CDK and AURK inhibitors. These findings where in line with the observation that organoids size was reduced visibly in CDK treated organoids. In contrast, mTORi treated organoids showed an increased factor1 score. Given the overrepresentation of IGF signaling mediators within the factor1 loading, we hypothesized that mTOR inhibitor treatment might lead to a previously described disinhibition of IGFR1 signaling. To validate these results we 
+
+
+factor 2 
+* line 18, 22, 30, 10 factor 2 up
+* MEKi leads to increase in factor 2, so did AURK, PLK, JNK
+
+The increase in MEKi loading is seen across lines. At the same time MEKi activity has a negative weight within factor2, generally suggesting that factor2 high organoids are relatively MEKi resistant. Given the shift of MEKi treated organoids within factor2 and the relative resistance of organoid lines that are factor2 high in an unperturbed state, we hypothesized that factor2 represents a MEK inhibited state. Organoid lines in this state are generally not perturbed by additional MEK inhibition while the general set of organoid lines respond with an increase in factor2 in phenotype space. <cite Tianzuo>, Based on this model, we  effect was concentration dependent we analyzed the factor2 score for all organoid lines in a concentration depend manner. To further investigate this relationship we performed qPCR for the intestinal stem cell marker Lgr5, a key marker of the intestinal stem cell signature which is enriched within the factor2 loadings. Organoids showed an increase in Lgr5 expression when treated with MEK inhibitors, recapituling the increase in factor2 loading
+
+factor 3
+* line 22, 20 and 46 with factor 3 up
+* line 30, and 7 with factor 3 low
+* JNK, Src to decrease
+
+```{r}
+moa_factor_shift_line_tidy %>% 
+  filter(factor == "factor3") %>%
+  filter(type == "interaction") %>%
+  filter(fdr < 0.1)
+```
+factor1 
+* line18 responds to many drugs with factor 1 *decrease*, incl IGF, MEK, PDGFR and EGFR. The same is true for AURK, p38
+
+factor 2
+* line46 example for strong factor 2 *decrease* JNK, Src
+
+factor 3
+* line 7 with *increase* to drugs
+
+
 
 # QC
 
