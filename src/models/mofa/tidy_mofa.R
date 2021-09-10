@@ -32,6 +32,7 @@ mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_abso
   #group_by(line) %>% 
   #summarise_at(vars(contains("pc")), funs(mean)) %>% 
   #ungroup() %>% 
+  dplyr::select(line, contains("pc")) %>%
   gather(pca, value, -line) %>% rename(feature = pca, sample = line) %>% mutate(view = "morphology_view") %>% 
   mutate(feature = paste0(feature, "_", view))
 
