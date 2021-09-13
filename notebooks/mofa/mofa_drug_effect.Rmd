@@ -523,7 +523,7 @@ z_projected_anno_tidy %>%
 ## concentration dependend effects
 
 ```{r}
-new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   # dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)",
   #                                                  "Trametinib (GSK1120212)") & 
   #                                       line %in% c("D046T01", "D018T01"))) %>% 
@@ -542,6 +542,9 @@ new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absol
   summarise_at(vars(contains("pc")), funs(mean)) %>% 
   ungroup() %>% column_to_rownames("line") %>% as.matrix()
 
+W <- get_weights(model, "morphology_view")[[1]]
+Winv <- pracma::pinv(W)
+
 z_projected_concentration <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
 
 z_projected_conc_anno <- z_projected_concentration %>% 
@@ -559,8 +562,9 @@ z_projected_conc_anno_tidy <- z_projected_conc_anno %>%
 
 ```{r}
 gg_f2_mek_conc <- z_projected_conc_anno_tidy %>% 
+  rbind(., z_projected_anno_tidy %>% filter(drug == "DMSO") %>% mutate(concentration = 0.00032)) %>% #adding a pseudo conc for plotting
   filter(drug %in% c("DMSO", "Binimetinib")) %>%
-  mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% #adding a pseudo conc for plotting
+  #mutate(concentration = if_else(drug == "DMSO", 0.00032, concentration)) %>% 
   ggplot(aes(concentration, V2)) + 
   geom_jitter(width = 0.1, aes(color = drug)) + 
   scale_x_log10() + 
@@ -708,9 +712,9 @@ z_projected %>% ggplot(aes(V1, V3, label = id)) +
 
 ```{r, eval=FALSE}
 drug_projection_test_result_drug <- rbind(
-  lm(V1 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
-  lm(V2 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
-  lm(V3 ~ drug, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor3")) 
+  lm(V1 ~ drug + line, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
+  lm(V2 ~ drug + line, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
+  lm(V3 ~ drug + line, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor3")) 
 
 drug_projection_test_result_drug <- drug_projection_test_result_drug %>% 
   filter(term != "(Intercept)") %>% 
