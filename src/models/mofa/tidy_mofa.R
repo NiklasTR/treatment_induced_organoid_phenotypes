@@ -48,21 +48,19 @@ mofa_size <- organoid_size_fit %>%
   dplyr::select(sample = line, feature, view, value)
 
 ## organoid morphology
-print("organoid morphology")
+## organoid morphology
 mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   dplyr::filter(drug == "DMSO") %>% 
   mutate(rep = paste0("r", replicate)) %>% 
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(line = paste0(line, "_", rep)) %>%
   #filter(size_log > 7.5) %>%
-  #group_by(line) %>% 
-  #summarise_at(vars(contains("pc")), funs(mean)) %>% 
-  #ungroup() %>% 
-  dplyr::select(line, contains("pc")) %>%
+  group_by(line) %>% 
+  summarise_at(vars(contains("pc")), funs(mean)) %>% 
+  ungroup() %>% 
   gather(pca, value, -line) %>% rename(feature = pca, sample = line) %>% mutate(view = "morphology_view") %>% 
-  mutate(feature = paste0(feature, "_", view)) %>%
-  # I average one more time over drug activity per line. This is necessary as D020 was imaged twice. In this particular case, I am creating the average activity score
-  dplyr::group_by(sample, feature, view) %>% summarise(value = mean(value))
+  mutate(feature = paste0(feature, "_", view))
+
 
 ## organoid drug activity
 print("organoid drug activity")
