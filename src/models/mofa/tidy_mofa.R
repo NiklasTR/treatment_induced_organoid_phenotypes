@@ -123,7 +123,7 @@ stochastic_opts <- get_default_stochastic_options(MOFAobject)
 print(stochastic_opts)
 
 # running model
-outfile = file.path(here::here("models/mofa/model_oldcode_newdocker.hdf5"))
+outfile = file.path(here::here("models/mofa/model_oldcode_newdata.hdf5"))
 MOFAobject <- prepare_mofa(
   object = MOFAobject,
   data_options = data_opts,
