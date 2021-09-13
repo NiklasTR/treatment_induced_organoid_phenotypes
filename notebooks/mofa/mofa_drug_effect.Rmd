@@ -52,7 +52,7 @@ new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absol
   # dplyr::filter(drug %in% c("DMSO") | drug %in% c("WYE-125132 (WYE-132)",
   #                                                  "Trametinib (GSK1120212)",
   #                                                 "AZD3759")) %>%
-  dplyr::filter(drug %in% c("DMSO")) %>%
+  #dplyr::filter(drug %in% c("DMSO")) %>%
   filter(concentration == "nan") %>%
   mutate(rep = paste0("r", replicate)) %>% 
   mutate(line = substr(line, 1, 4)) %>% 
@@ -78,16 +78,6 @@ Winv <- pracma::pinv(W)
 
 
 z_projected <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-```
-
-
-
-```{r}
-index <- c()
-for(i in 1:25){
-  index[i] <- cor(new_morphology[,i], new_morphology_sample[,i])
-}
-
 ```
 
 
@@ -559,6 +549,9 @@ new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absol
   #scale(center = TRUE, scale = FALSE) %>% 
   #sweep(2, model@intercepts$morphology_view %>% unlist() %>% unname()) %>% 
   scale(scale = TRUE, center = TRUE)
+
+W <- get_weights(model, "morphology_view")[[1]]
+Winv <- pracma::pinv(W)
 
 z_projected_concentration <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
 
