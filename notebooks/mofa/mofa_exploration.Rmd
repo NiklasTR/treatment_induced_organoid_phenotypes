@@ -1,6 +1,8 @@
 ---
 title: "MOFA exploration"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +20,8 @@ library(cowplot)
 library(enrichplot)
 library(dplyr)
 library(clusterProfiler)
+library(utils)
+library(stats)
 ```
 
 
@@ -48,7 +52,7 @@ organoid_morphology <- read_delim(here::here("references/imaging/visual_classifi
   mutate(morphology = if_else(is.na(morphology), "other", morphology))
 
 # drug activity data
-data('aucroc', package = 'SCOPEAnalysis')
+utils::data('aucroc', package = 'SCOPEAnalysis')
 drug_activity <- aucroc %>% filter(!line %in% c('D055T01', 'D021T01', 'D054T01'))
 
 # gene expression annotation 
