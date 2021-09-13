@@ -48,7 +48,7 @@ mofa_size <- organoid_size_fit %>%
   dplyr::select(sample = line, feature, view, value)
 
 ## organoid morphology
-## organoid morphology
+print("organoid morphology")
 mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   dplyr::filter(drug == "DMSO") %>% 
   mutate(rep = paste0("r", replicate)) %>% 
