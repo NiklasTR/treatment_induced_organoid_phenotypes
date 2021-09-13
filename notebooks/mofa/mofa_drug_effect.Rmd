@@ -21,7 +21,7 @@ library(cowplot)
 
 ```{r}
 # input
-model <- load_model(here("models/mofa/model_oldcode_newdocker.hdf5"))
+model <- load_model(here("models/mofa/model_oldcode_newdata.hdf5"))
 
 umap_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
@@ -45,7 +45,7 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 ```{r}
 
 
-new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   # dplyr::filter(drug %in% c("DMSO") | (drug %in% c("WYE-125132 (WYE-132)",
   #                                                  "Trametinib (GSK1120212)") & 
   #                                       line %in% c("D046T01", "D018T01"))) %>% 
