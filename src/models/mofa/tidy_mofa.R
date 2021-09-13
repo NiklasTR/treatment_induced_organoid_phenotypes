@@ -20,7 +20,7 @@ organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size
   mutate(rep = paste0("r", rep))
 
 ## organoid morphology
-mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.rds")) %>% 
+mofa_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   dplyr::filter(drug == "DMSO") %>% 
   mutate(rep = paste0("r", replicate)) %>% 
   mutate(line = substr(line, 1, 4)) %>% 
