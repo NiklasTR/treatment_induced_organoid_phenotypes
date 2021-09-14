@@ -267,6 +267,8 @@ z_projected_conc_anno_tidy <- z_projected_conc_anno %>%
 
 ```
 
+### MEK inhibitors
+
 ```{r}
 gg_f2_mek_conc <- z_projected_conc_anno_tidy %>% 
   filter(drug %in% c("DMSO", "Binimetinib")) %>%
@@ -368,57 +370,21 @@ umap_df %>%
   theme_cowplot()
 ```
 
-
+### mTOR inhibitors
 
 ```{r}
 doi <- c("mTOR", "ctrl")
 
 z_projected_anno_tidy %>% 
-  mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
+  filter(drug %in% c("DMSO","WYE-125132 (WYE-132)")) %>%
   left_join(drug_projection_test_result %>% rename(target = term)) %>%
-  #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
   filter(target %in% doi) %>%
   ggplot(aes(target, V1)) + 
-  geom_jitter(width = 0.2) + 
+  geom_jitter(width = 0.1) + 
   ggsignif::geom_signif(comparisons = list(doi)) + 
   labs(y = "factor 1") + 
   theme_cowplot()
 ```
-
-```{r}
-doi <- c("mTOR", "ctrl")
-
-z_projected_anno_tidy %>% 
-  mutate(target = if_else(drug == "DMSO", "ctrl", target)) %>%
-  left_join(drug_projection_test_result %>% rename(target = term)) %>%
-  #filter(line %in% c("D004_r1", "D004_r2", "D007_r1", "D007_r2", "D019_r1", "D019_r2")) %>%
-  filter(target %in% doi) %>% filter(drug %in% c("DMSO", "WYE-125132 (WYE-132)")) %>% 
-  
-  ggplot(aes(target, V1, label = id, color = target)) + 
-  geom_jitter() + 
-  ggsignif::geom_signif(comparisons = list(doi))
-```
-
-
-
-```{r}
-z_projected_anno %>%
-  filter(target %in% c("CTRL", "Trametinib")) %>%
-  ggplot(aes(V1, V2, color = target)) + 
-  geom_point() + 
-  geom_path(aes(group = line), color = "black")
-```
-
-
-
-```{r}
-z_projected %>% ggplot(aes(V1, V3, label = id)) + 
-  geom_point(size = 4) + 
-  ggrepel::geom_text_repel(color = "black") + 
-  #scale_color_viridis_c() + 
-  theme_cowplot()
-```
-
 
 # morhphology: drug
 
@@ -525,6 +491,7 @@ moa_factor_shift_line %>%
   ggrepel::geom_text_repel(data = moa_factor_shift %>% filter(term == "targetAurora Kinase"))
   NULL
 ```
+
 ## factor 1
 
 ```{r}
