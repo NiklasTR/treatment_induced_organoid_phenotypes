@@ -17,7 +17,7 @@ library(biomaRt)
 library(gridExtra)
 library(cowplot)
 ```
-
+## Introduction
 I start out by loading the trained MOFA model and additional gene expression data.
 
 ```{r}
@@ -132,291 +132,8 @@ z_projected_anno_plot_df %>%
 ```
 
 
-# gene expression -> factor
 
-## training data
-
-```{r}
-mofa_expression <- promise_long_filtered_top %>% 
-  # renaming columns
-  mutate(line = paste0(line, "_", rep)) %>%
-  dplyr::select(sample = line,
-                feature = symbol, # setting feature to symbol
-                value = expr) %>% 
-  mutate(view = "expression") %>% 
-  # averaging feature value
-  group_by(feature, sample, view) %>%
-  summarise(value = mean(value)) %>%
-  # renaming feature jic
-  mutate(feature = paste0(feature, "_", view)) %>%
-  dplyr::select(sample, feature, view, value) %>% 
-  drop_na() %>% 
-  filter(feature != "_expression")
-
-new_expression <- mofa_expression %>%
-  dplyr::select(-view) %>%
-  spread(sample, value) %>%
-  column_to_rownames("feature") %>%
-  as.matrix() %>%
-  t() %>% 
-  scale(center = TRUE, scale = TRUE)
-  
-
-W <- get_weights(model, "expression")[[1]]
-Winv <- pracma::pinv(W)
-
-z_projected_expression <-  new_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-```
-
-
-```{r}
-z_projected_exp_anno <- z_projected_expression %>% 
-  mutate(line = substr(id, 1, 7))
-
-z_projected_expression_plot <- z_projected_expression %>% 
-  left_join(weights) %>% 
-  
-  gather(variable, value, -id) %>% 
-  mutate(factor = if_else(variable %in% c("V1", "factor1"), "factor1", "none")) %>%
-  mutate(factor = if_else(variable %in% c("V2", "factor2"), "factor2", factor)) %>%
-  mutate(factor = if_else(variable %in% c("V3", "factor3"), "factor3", factor)) %>% 
-  mutate(source = if_else(grepl(variable, pattern = "factor"), "MOFA", "pseudoinverse")) %>% 
-  dplyr::select(-variable) 
-
-z_projected_expression_plot %>%
-  spread(source, value) %>% 
-  ggplot(aes(MOFA, pseudoinverse)) + 
-  geom_point() + 
-  facet_wrap(~ factor) + 
-  theme_cowplot() + 
-  geom_smooth(method = "lm") + 
-  labs(title = "gene expression")
-```
-```{r}
-z_projected_expression_plot %>% 
-  spread(factor, value) %>% 
-  ggplot(aes(factor1, factor2, color = source)) + 
-  geom_point() + 
-  geom_path(aes(group = id), color = "black") + 
-  theme_cowplot() + 
-  ggrepel::geom_text_repel(aes(label = id), data = z_projected_expression_plot %>% 
-  spread(factor, value) %>% filter(source == "MOFA"), color = "black")
-```
-
-
-## drug treatment 
-
-### GSK inhibitors
-
-```{r, eval = FALSE}
-gsk_expression <- expr_long_gsk %>%
-  mutate(sample = paste0(line, "_r", rep)) %>% 
-  mutate(sample = paste0(sample, "_", treatment)) %>% 
-  mutate(feature = paste0(symbol, "_expression")) %>%
-  dplyr::select(value = expr, sample, feature) %>% 
-  group_by(feature, sample) %>%
-  summarise(value = mean(value)) %>%
-  spread(sample, value) %>%
-  column_to_rownames("feature") %>%
-  as.matrix() %>%
-  t() %>% 
-  scale(center = TRUE, scale = FALSE)
-
-gsk_expression <- gsk_expression[,colnames(gsk_expression) %in% colnames(new_expression)]
-joint_expression <- rbind(gsk_expression, new_expression)
-
-W <- get_weights(model, "expression")[[1]]
-Winv <- pracma::pinv(W)
-
-z_projected_expression_gsk <-  gsk_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-z_projected_expression_joint <-  joint_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-
-joint_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
-
-```
-
-```{r, eval = FALSE}
-gsk_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
-```
-
-```{r, eval = FALSE}
-
-df <- z_projected_expression_gsk %>%
-  as.data.frame() %>%
-  separate(id, c("line", "replicate", "treatment")) 
-
-lm(V3 ~ line + treatment, data = df) %>% summary()
-
-df %>% 
-  ggplot(aes(treatment, V3, color = line)) + 
-  geom_point(size = 2) + 
-  theme_cowplot() + 
-  labs(y = "factor 3") + 
-  scale_color_brewer(type = "qual")
-```
-
-lines with high factor 3 appear to not respond morphologically to GSK inhibitors. Lines that have been treated with GSK inhibitors, move up in factor 3. We can interpret this as the organoids being pushed by the drug in factor space into a direction, which is associated with lower response to GSK inhibitors (possibly because GSK activity is already inhibited in this state).
-Factor 3 high organoids are more sensitive to AURK inhibitors. Existing literature suggests a crosstalk between AURK and GSK, Akt respectively. A possible mechanism could be that factor 3 high lines show a strong activiation of mTOR and Wnt signaling due to GSK3b inhibition, which could be partially explained by AURK based phosphorylation of GSK. In case GSK is inhibited pharmacologically, the lines do not respond much, because the pathway is already non-active. In case AURK is inhibited, the lines respond strongly - probably because they rely on AURK signaling to maintain viability, possibly via a crosstalk of GSK3b and Akt/mTOR signaling. (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2642527/)
-
-### MEK inhibitors
-
-```{r, eval = FALSE}
-mek_expression <- expr_long_mek %>%
-  mutate(sample = paste0(line, "_", treatment)) %>% 
-  mutate(sample = paste0(sample, "_", names)) %>% 
-  mutate(feature = paste0(Symbol, "_expression")) %>%
-  dplyr::select(value = expr, sample, feature) %>% 
-  group_by(feature, sample) %>%
-  summarise(value = mean(value)) %>%
-  spread(sample, value) %>%
-  column_to_rownames("feature") %>%
-  as.matrix() %>%
-  t()%>% 
-  scale(center = TRUE, scale = FALSE)
-
-
-joint_expression <- left_join(new_expression %>% t() %>% as.data.frame() %>% rownames_to_column("id"), 
-          mek_expression %>% t() %>% as.data.frame() %>% rownames_to_column("id")) %>% 
-  column_to_rownames("id") 
-
-joint_expression <- joint_expression %>% 
-  mutate_if(is.numeric,coalesce,0) %>%
-  as.matrix() 
-
-mek_expression <- joint_expression[,-c(1:22)] %>% t()
-joint_expression <- joint_expression %>% t()
-
-
-
-W <- get_weights(model, "expression")[[1]]
-Winv <- pracma::pinv(W)
-
-z_projected_expression_mek <-  mek_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-z_projected_expression_joint <-  joint_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
-
-mek_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
-
-```
-
-```{r, eval = FALSE}
-z_projected_expression_mek %>% 
-  ggplot(aes(V2, id)) + 
-  geom_point()
-```
-
-```{r, eval = FALSE}
-
-df <- z_projected_expression_mek %>%
-  as.data.frame() %>%
-  separate(id, c("line", "treatment", "name")) 
-
-lm(V3 ~ line + treatment, data = df) %>% summary()
-
-df %>% 
-  ggplot(aes(treatment, V3, color = line)) + 
-  geom_point(size = 2) + 
-  theme_cowplot() + 
-  labs(y = "factor 3") + 
-  scale_color_brewer(type = "qual")
-```
-
-```{r, eval = FALSE}
-lm(V2 ~ line + treatment, data = df) %>% summary()
-
-df %>% 
-  ggplot(aes(treatment, V2, color = line)) + 
-  geom_point(size = 2) + 
-  theme_cowplot() + 
-  labs(y = "factor 2") + 
-  scale_color_brewer(type = "qual")
-```
-
-
-```{r, eval = FALSE}
-joint_expression %*% t(Winv)  %>% pheatmap::pheatmap(cluster_cols = FALSE)
-```
-
-
-```{r, eval = FALSE}
-joint_expression %>% colSums(na.rm = TRUE) %>% hist()
-```
-
-#### factor weights for intestinal stemness related genes
-
-```{r, eval = FALSE}
-loadings_expression %>% 
-  filter(grepl(id, "LGR5"))
-```
-LGR5 or EPHB1 are not members of the top differentially expressed genes. However, they are a core marker of the  intestinal stem cell identity signature. I am now looking specifically at the expression of these target genes and how they are modulated under various drug treatments.  
-
-```{r, eval = FALSE}
-expr_long_mek %>% 
-  filter(Symbol %in% c("LGR5", "EPHB2", "ASCL2")) %>%
-  ggplot(aes(treatment, expr, color = line)) + 
-  geom_point() + 
-  theme_cowplot() + 
-  #ggsignif::geom_signif(comparisons = list(c("DMSO", "MEKi"))) +
-  facet_wrap(~Symbol)
-  
-```
-
-```{r, eval = FALSE}
-df <- expr_long_mek %>% 
-  filter(Symbol %in% c("LGR5"))
-
-lm(expr ~ line + treatment, data = df) %>% summary()
-```
-
-
-```{r, eval = FALSE}
-df <- expr_long_mek %>% 
-  filter(Symbol %in% c("EPHB2"))
-
-lm(expr ~ line + treatment, data = df) %>% summary()
-```
-
-```{r, eval = FALSE}
-df <- expr_long_mek %>% 
-  filter(Symbol %in% c("ASCL2"))
-
-lm(expr ~ line + treatment, data = df) %>% summary()
-```
-
-
-
-
-# factor -> gene expression
-
-```{r, eval = FALSE}
-z_projected_matrix <- z_projected %>% column_to_rownames("id") %>% as.matrix()
-
-expression_inference <- z_projected_matrix %*% t(get_weights(model, "expression")[[1]]) %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% 
-  separate(id, c("line", "drug"), sep = 7) %>% 
-  mutate(drug = substr(drug , 2, nchar(drug))) %>% 
-  mutate(drug = ifelse(drug == "", "DMSO", drug))
-```
-
-
-```{r, eval = FALSE}
-expression_inference_tidy <- expression_inference %>%  gather(symbol, expr, -drug, -line) %>% mutate(symbol = substr(symbol, 1, nchar(symbol)-nchar("_expression"))) 
-
-expression_dmso_inference <- promise_long_filtered_top %>% 
-  dplyr::select(-line) %>% 
-  dplyr::rename(line = id) %>% 
-  dplyr::select(line, expr, symbol) %>% 
-  left_join(expression_inference_tidy %>% filter(drug == "DMSO") %>% dplyr::rename(inference = expr))
-```
-
-```{r, eval = FALSE}
-expression_dmso_inference %>% 
-  drop_na() %>%
-  ggplot(aes(expr, inference)) + 
-  geom_point(alpha = 0.2) + 
-  geom_smooth(aes(group = line))
-```
-
-
-# morhphology MOA activity
+# morhphology: MOA
 
 
 ```{r}
@@ -703,7 +420,7 @@ z_projected %>% ggplot(aes(V1, V3, label = id)) +
 ```
 
 
-# morhphology drug activity
+# morhphology: drug
 
 
 ```{r, eval=TRUE}
@@ -854,6 +571,319 @@ factor 3
 * line 7 with *increase* to drugs
 
 
+# gene expression -> factor
 
+## training data
+
+```{r}
+mofa_expression <- promise_long_filtered_top %>% 
+  # renaming columns
+  mutate(line = paste0(line, "_", rep)) %>%
+  dplyr::select(sample = line,
+                feature = symbol, # setting feature to symbol
+                value = expr) %>% 
+  mutate(view = "expression") %>% 
+  # averaging feature value
+  group_by(feature, sample, view) %>%
+  summarise(value = mean(value)) %>%
+  # renaming feature jic
+  mutate(feature = paste0(feature, "_", view)) %>%
+  dplyr::select(sample, feature, view, value) %>% 
+  drop_na() %>% 
+  filter(feature != "_expression")
+
+new_expression <- mofa_expression %>%
+  dplyr::select(-view) %>%
+  spread(sample, value) %>%
+  column_to_rownames("feature") %>%
+  as.matrix() %>%
+  t() %>% 
+  scale(center = TRUE, scale = TRUE)
+  
+
+W <- get_weights(model, "expression")[[1]]
+Winv <- pracma::pinv(W)
+
+z_projected_expression <-  new_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+```
+
+
+```{r}
+z_projected_exp_anno <- z_projected_expression %>% 
+  mutate(line = substr(id, 1, 7))
+
+z_projected_expression_plot <- z_projected_expression %>% 
+  left_join(weights) %>% 
+  
+  gather(variable, value, -id) %>% 
+  mutate(factor = if_else(variable %in% c("V1", "factor1"), "factor1", "none")) %>%
+  mutate(factor = if_else(variable %in% c("V2", "factor2"), "factor2", factor)) %>%
+  mutate(factor = if_else(variable %in% c("V3", "factor3"), "factor3", factor)) %>% 
+  mutate(source = if_else(grepl(variable, pattern = "factor"), "MOFA", "pseudoinverse")) %>% 
+  dplyr::select(-variable) 
+
+z_projected_expression_plot %>%
+  spread(source, value) %>% 
+  ggplot(aes(MOFA, pseudoinverse)) + 
+  geom_point() + 
+  facet_wrap(~ factor) + 
+  theme_cowplot() + 
+  geom_smooth(method = "lm") + 
+  labs(title = "gene expression")
+```
+```{r}
+z_projected_expression_plot %>% 
+  spread(factor, value) %>% 
+  ggplot(aes(factor1, factor2, color = source)) + 
+  geom_point() + 
+  geom_path(aes(group = id), color = "black") + 
+  theme_cowplot() + 
+  ggrepel::geom_text_repel(aes(label = id), data = z_projected_expression_plot %>% 
+  spread(factor, value) %>% filter(source == "MOFA"), color = "black")
+```
+
+
+## drug treatment 
+
+### GSK inhibitors
+
+```{r, eval = FALSE}
+gsk_expression <- expr_long_gsk %>%
+  mutate(sample = paste0(line, "_r", rep)) %>% 
+  mutate(sample = paste0(sample, "_", treatment)) %>% 
+  mutate(feature = paste0(symbol, "_expression")) %>%
+  dplyr::select(value = expr, sample, feature) %>% 
+  group_by(feature, sample) %>%
+  summarise(value = mean(value)) %>%
+  spread(sample, value) %>%
+  column_to_rownames("feature") %>%
+  as.matrix() %>%
+  t() %>% 
+  scale(center = TRUE, scale = FALSE)
+
+gsk_expression <- gsk_expression[,colnames(gsk_expression) %in% colnames(new_expression)]
+joint_expression <- rbind(gsk_expression, new_expression)
+
+W <- get_weights(model, "expression")[[1]]
+Winv <- pracma::pinv(W)
+
+z_projected_expression_gsk <-  gsk_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+z_projected_expression_joint <-  joint_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+
+joint_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
+
+```
+
+```{r, eval = FALSE}
+gsk_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
+```
+
+```{r, eval = FALSE}
+
+df <- z_projected_expression_gsk %>%
+  as.data.frame() %>%
+  separate(id, c("line", "replicate", "treatment")) 
+
+lm(V3 ~ line + treatment, data = df) %>% summary()
+
+df %>% 
+  ggplot(aes(treatment, V3, color = line)) + 
+  geom_point(size = 2) + 
+  theme_cowplot() + 
+  labs(y = "factor 3") + 
+  scale_color_brewer(type = "qual")
+```
+
+lines with high factor 3 appear to not respond morphologically to GSK inhibitors. Lines that have been treated with GSK inhibitors, move up in factor 3. We can interpret this as the organoids being pushed by the drug in factor space into a direction, which is associated with lower response to GSK inhibitors (possibly because GSK activity is already inhibited in this state).
+Factor 3 high organoids are more sensitive to AURK inhibitors. Existing literature suggests a crosstalk between AURK and GSK, Akt respectively. A possible mechanism could be that factor 3 high lines show a strong activiation of mTOR and Wnt signaling due to GSK3b inhibition, which could be partially explained by AURK based phosphorylation of GSK. In case GSK is inhibited pharmacologically, the lines do not respond much, because the pathway is already non-active. In case AURK is inhibited, the lines respond strongly - probably because they rely on AURK signaling to maintain viability, possibly via a crosstalk of GSK3b and Akt/mTOR signaling. (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2642527/)
+
+### MEK inhibitors
+
+```{r, eval = FALSE}
+mek_expression <- expr_long_mek %>%
+  mutate(sample = paste0(line, "_", treatment)) %>% 
+  mutate(sample = paste0(sample, "_", names)) %>% 
+  mutate(feature = paste0(Symbol, "_expression")) %>%
+  dplyr::select(value = expr, sample, feature) %>% 
+  group_by(feature, sample) %>%
+  summarise(value = mean(value)) %>%
+  spread(sample, value) %>%
+  column_to_rownames("feature") %>%
+  as.matrix() %>%
+  t()%>% 
+  scale(center = TRUE, scale = FALSE)
+
+
+joint_expression <- left_join(new_expression %>% t() %>% as.data.frame() %>% rownames_to_column("id"), 
+          mek_expression %>% t() %>% as.data.frame() %>% rownames_to_column("id")) %>% 
+  column_to_rownames("id") 
+
+joint_expression <- joint_expression %>% 
+  mutate_if(is.numeric,coalesce,0) %>%
+  as.matrix() 
+
+mek_expression <- joint_expression[,-c(1:22)] %>% t()
+joint_expression <- joint_expression %>% t()
+
+
+
+W <- get_weights(model, "expression")[[1]]
+Winv <- pracma::pinv(W)
+
+z_projected_expression_mek <-  mek_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+z_projected_expression_joint <-  joint_expression %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("id")
+
+mek_expression %*% t(Winv) %>% pheatmap::pheatmap(cluster_cols = FALSE)
+
+```
+
+```{r, eval = FALSE}
+z_projected_expression_mek %>% 
+  ggplot(aes(V2, id)) + 
+  geom_point()
+```
+
+```{r, eval = FALSE}
+
+df <- z_projected_expression_mek %>%
+  as.data.frame() %>%
+  separate(id, c("line", "treatment", "name")) 
+
+lm(V3 ~ line + treatment, data = df) %>% summary()
+
+df %>% 
+  ggplot(aes(treatment, V3, color = line)) + 
+  geom_point(size = 2) + 
+  theme_cowplot() + 
+  labs(y = "factor 3") + 
+  scale_color_brewer(type = "qual")
+```
+
+```{r, eval = FALSE}
+lm(V2 ~ line + treatment, data = df) %>% summary()
+
+df %>% 
+  ggplot(aes(treatment, V2, color = line)) + 
+  geom_point(size = 2) + 
+  theme_cowplot() + 
+  labs(y = "factor 2") + 
+  scale_color_brewer(type = "qual")
+```
+
+
+```{r, eval = FALSE}
+joint_expression %*% t(Winv)  %>% pheatmap::pheatmap(cluster_cols = FALSE)
+```
+
+
+```{r, eval = FALSE}
+joint_expression %>% colSums(na.rm = TRUE) %>% hist()
+```
+
+#### factor weights for intestinal stemness related genes
+
+```{r, eval = FALSE}
+loadings_expression %>% 
+  filter(grepl(id, "LGR5"))
+```
+LGR5 or EPHB1 are not members of the top differentially expressed genes. However, they are a core marker of the  intestinal stem cell identity signature. I am now looking specifically at the expression of these target genes and how they are modulated under various drug treatments.  
+
+```{r, eval = FALSE}
+expr_long_mek %>% 
+  filter(Symbol %in% c("LGR5", "EPHB2", "ASCL2")) %>%
+  ggplot(aes(treatment, expr, color = line)) + 
+  geom_point() + 
+  theme_cowplot() + 
+  #ggsignif::geom_signif(comparisons = list(c("DMSO", "MEKi"))) +
+  facet_wrap(~Symbol)
+  
+```
+
+```{r, eval = FALSE}
+df <- expr_long_mek %>% 
+  filter(Symbol %in% c("LGR5"))
+
+lm(expr ~ line + treatment, data = df) %>% summary()
+```
+
+
+```{r, eval = FALSE}
+df <- expr_long_mek %>% 
+  filter(Symbol %in% c("EPHB2"))
+
+lm(expr ~ line + treatment, data = df) %>% summary()
+```
+
+```{r, eval = FALSE}
+df <- expr_long_mek %>% 
+  filter(Symbol %in% c("ASCL2"))
+
+lm(expr ~ line + treatment, data = df) %>% summary()
+```
+
+
+
+
+# factor -> gene expression
+
+```{r, eval = FALSE}
+z_projected_matrix <- z_projected %>% column_to_rownames("id") %>% as.matrix()
+
+expression_inference <- z_projected_matrix %*% t(get_weights(model, "expression")[[1]]) %>% as.data.frame() %>% rownames_to_column("id") %>% as_tibble() %>% 
+  separate(id, c("line", "drug"), sep = 7) %>% 
+  mutate(drug = substr(drug , 2, nchar(drug))) %>% 
+  mutate(drug = ifelse(drug == "", "DMSO", drug))
+```
+
+
+```{r, eval = FALSE}
+expression_inference_tidy <- expression_inference %>%  gather(symbol, expr, -drug, -line) %>% mutate(symbol = substr(symbol, 1, nchar(symbol)-nchar("_expression"))) 
+
+expression_dmso_inference <- promise_long_filtered_top %>% 
+  dplyr::select(-line) %>% 
+  dplyr::rename(line = id) %>% 
+  dplyr::select(line, expr, symbol) %>% 
+  left_join(expression_inference_tidy %>% filter(drug == "DMSO") %>% dplyr::rename(inference = expr))
+```
+
+```{r, eval = FALSE}
+expression_dmso_inference %>% 
+  drop_na() %>%
+  ggplot(aes(expr, inference)) + 
+  geom_point(alpha = 0.2) + 
+  geom_smooth(aes(group = line))
+```
+
+# single organoid morphology -> factor
+
+```{r, eval = FALSE}
+new_morphology <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds")) %>% 
+  dplyr::select(contains("pc"), uuid) %>% 
+  column_to_rownames("uuid") %>%
+  as.matrix() %>% scale(center = TRUE, scale = FALSE)
+
+z_projected_organoid <-  new_morphology %*% t(Winv) %>% as.data.frame()%>% rownames_to_column("uuid")
+
+umap_factor <- umap_df %>% 
+  inner_join(z_projected_organoid) %>%
+  filter(line != "D020T02") 
+
+gg_factor_umap <- umap_factor %>% 
+  dplyr::select(-size_factor) %>%
+  dplyr::rename(factor1 = V1, factor2 = V2, factor3 = V3) %>%
+  pivot_longer(cols = contains("factor"), names_to = "number", values_to = "value") %>%
+  ggplot(aes(v1, v2, color = log(value))) + 
+  ggrastr::geom_point_rast(alpha = 0.1, size = 0.35) + 
+  scale_color_viridis_c() +
+  cowplot::theme_cowplot() +
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       color = "factor value") + 
+  facet_wrap(~ number) +
+  theme(legend.position = "bottom") + 
+    coord_fixed()
+
+gg_factor_umap + ggsave(here("factor_overview_organoid_level.pdf"), height = 6 , width = 6)
+```
 
 
