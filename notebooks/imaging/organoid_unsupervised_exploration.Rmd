@@ -294,7 +294,7 @@ gg_size_supp <- df %>%
 gg_size_supp + ggsave(paste0(PATH, "reports/figures/imaging/gg_size_treatment.pdf"))
 ```
 
-# Organoid Size during Drug Treatment: Paclitaxel case study
+# Paclitaxel case study
 
 
 ```{r}

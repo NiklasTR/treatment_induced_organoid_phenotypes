@@ -763,7 +763,7 @@ within the group of mTOR inhibitors, activity towards treatment with the small m
 
 ```{r}
 gg_f1_egfr_pick <- drug_activity_joined %>% 
-  filter(drug %in% c("OSI-420", "Trametinib (GSK1120212)", "WYE-125132 (WYE-132)")) %>% 
+  filter(drug %in% c("OSI-420", "Trametinib (GSK1120212)", "BMS-536924")) %>% 
   ggplot(aes(factor1, auroc, color = drug)) +
   geom_point() + 
   cowplot::theme_cowplot() + 
@@ -1113,6 +1113,29 @@ drug_activity_joined %>%
 ```
 
 ```{r}
+drug_activity_joined <- weights %>%
+  mutate(id = substr(id, 1, 4)) %>% 
+  group_by(id) %>% 
+ summarise_all(funs(mean)) %>% 
+  mutate(line = paste0(id, "T01")) %>%
+  left_join(drug_activity)
+
+doi <- drug_activity_test %>% 
+  dplyr::filter(target == "ERK") %>% 
+  .$drug 
+
+
+drug_activity_joined %>% 
+  filter(drug %in% doi) %>% 
+  ggplot(aes(factor2, auroc)) +
+  geom_point() + 
+  cowplot::theme_cowplot() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(~ drug)
+```
+
+
+```{r}
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "Wnt/beta-catenin") %>% 
   .$drug 
@@ -1161,7 +1184,7 @@ again, within the group of mTOR inhibitors, activity towards treatment with the 
 
 ```{r}
 gg_f2_pick <- drug_activity_joined %>% 
-  filter(drug %in% c("PRI-724", "Trametinib (GSK1120212)", "WYE-125132 (WYE-132)")) %>% 
+  filter(drug %in% c("PRI-724", "Trametinib (GSK1120212)", "Ulixertinib (BVD-523, VRT752271)")) %>% 
   ggplot(aes(factor2, auroc, color = drug)) +
   geom_point() + 
   cowplot::theme_cowplot() + 

@@ -142,7 +142,8 @@ drug_anno <- readxl::read_excel(here::here('references/layouts/Compound_Annotati
 
 z_projected_anno_tidy <- z_projected_anno %>% 
   dplyr::rename(drug = target) %>%
-  left_join(drug_anno)
+  left_join(drug_anno) %>%
+  mutate(line = substr(id, 1, 4))
 
 z_projected_anno_test <- z_projected_anno_tidy %>% semi_join(z_projected_anno_tidy %>% 
                                                                dplyr::select(target, drug) %>%
@@ -198,30 +199,89 @@ moa_factor_shift %>%
   NULL
 ```
 
+
 ```{r}
 df <- moa_factor_shift %>%
-  filter(factor != "factor3") %>%
-  filter((term == "targetMEK" & factor == "factor2") | (term %in% c("targetAurora Kinase", "targetCDK")) & factor ==  "factor1")
+  filter(factor == "factor1") %>%
+  mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
+  filter((term == "targetmTOR") | (term %in% c("targetAurora Kinase", "targetCDK", "targetPLK")) & factor ==  "factor1")
+
+# gg_shift <- moa_factor_shift %>% 
+#   filter(factor == "factor1") %>%
+#   ggplot(aes(statistic)) + 
+#   geom_vline(xintercept = 0) +
+#   geom_histogram(aes(fill = factor), alpha = 0.2) + 
+#   geom_rug(aes(color = factor)) + 
+#   
+#   geom_vline(data = df, aes(xintercept = statistic, color = factor), linetype="dashed") + 
+#   geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic - .5, 
+#                 label= df %>% filter(factor == "factor1") %>% .$term, y=.350), color = "black") +
+#   geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[1] + .5, 
+#                 label= df %>% filter(factor == "factor1") %>% .$term %>% .[1], y=.350), color = "black") + 
+#   geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[2] + .5, 
+#               label= df %>% filter(factor == "factor1") %>% .$term %>% .[2], y=.370), color = "black") + 
+#   theme_cowplot() + 
+#   theme(legend.position = "bottom")
+# 
+# gg_shift + ggsave(here::here("reports/figures/mofa/drug_shift.pdf"), width = 3, height = 3)  
+
 
 gg_shift <- moa_factor_shift %>% 
-  filter(factor != "factor3") %>%
-  ggplot(aes(statistic)) + 
+  mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
+  filter(factor == "factor1") %>% 
+  ggplot(aes(statistic, factor, label = term, color = fdr_bool)) + 
+  geom_jitter(width = 0.1) +
   geom_vline(xintercept = 0) +
-  geom_density(aes(fill = factor), alpha = 0.2) + 
-  geom_rug(aes(color = factor)) + 
-  
-  geom_vline(data = df, aes(xintercept = statistic, color = factor), linetype="dashed") + 
-  geom_text(aes(x= df %>% filter(factor == "factor2") %>% .$statistic - .5, 
-                label= df %>% filter(factor == "factor2") %>% .$term, y=.350), color = "black") +
-  geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[1] + .5, 
-                label= df %>% filter(factor == "factor1") %>% .$term %>% .[1], y=.350), color = "black") + 
-  geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[2] + .5, 
-              label= df %>% filter(factor == "factor1") %>% .$term %>% .[2], y=.370), color = "black") + 
+   ggrepel::geom_text_repel(data = df) + 
   theme_cowplot() + 
-  theme(legend.position = "bottom")
+  scale_color_manual(values = c("grey", "black")) +
+  geom_rug() + 
+  theme(legend.position =  "nothing") + 
+  labs(caption = "FDR = 0.05")
 
-gg_shift + ggsave(here::here("reports/figures/mofa/drug_shift.pdf"), width = 3, height = 3)  
+gg_shift + ggsave(here::here("reports/figures/mofa/f1_moa_shift.pdf"), width = 6, height = 2)  
   
+```
+
+```{r}
+df <- moa_factor_shift %>%
+  filter(factor == "factor2") %>%
+  mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
+  filter((term %in% c("targetMEK", "targetFAK")))
+
+# gg_shift <- moa_factor_shift %>% 
+#   filter(factor != "factor3") %>%
+#   ggplot(aes(statistic)) + 
+#   geom_vline(xintercept = 0) +
+#   geom_density(aes(fill = factor), alpha = 0.2) + 
+#   geom_rug(aes(color = factor)) + 
+#   
+#   geom_vline(data = df, aes(xintercept = statistic, color = factor), linetype="dashed") + 
+#   geom_text(aes(x= df %>% filter(factor == "factor2") %>% .$statistic - .5, 
+#                 label= df %>% filter(factor == "factor2") %>% .$term, y=.350), color = "black") +
+#   geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[1] + .5, 
+#                 label= df %>% filter(factor == "factor1") %>% .$term %>% .[1], y=.350), color = "black") + 
+#   geom_text(aes(x= df %>% filter(factor == "factor1") %>% .$statistic %>% .[2] + .5, 
+#               label= df %>% filter(factor == "factor1") %>% .$term %>% .[2], y=.370), color = "black") + 
+#   theme_cowplot() + 
+#   theme(legend.position = "bottom")
+
+gg_shift <- moa_factor_shift %>% 
+  mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
+  filter(factor == "factor2") %>% 
+  ggplot(aes(statistic, factor, label = term, color = fdr_bool)) + 
+  geom_jitter(width = 0.1) +
+  geom_vline(xintercept = 0) +
+   ggrepel::geom_text_repel(data = df) + 
+  theme_cowplot() + 
+  scale_color_manual(values = c("grey", "black")) +
+  geom_rug() + 
+  theme(legend.position =  "nothing") + 
+  labs(caption = "FDR = 0.05")
+
+gg_shift + ggsave(here::here("reports/figures/mofa/f2_moa_shift.pdf"), width = 6, height = 2)  
+
+
 ```
 
 
@@ -372,24 +432,27 @@ umap_df %>%
 
 ### mTOR inhibitors
 
-```{r}
-doi <- c("mTOR", "ctrl")
 
-z_projected_anno_tidy %>% 
-  filter(drug %in% c("DMSO","WYE-125132 (WYE-132)")) %>%
-  left_join(drug_projection_test_result %>% rename(target = term)) %>%
-  filter(target %in% doi) %>%
-  ggplot(aes(target, V1)) + 
+```{r, eval = TRUE}
+doi <- c("DMSO", "WYE-125132 (WYE-132)")
+
+gg_f1_shift_signif<- z_projected_conc_anno_tidy %>% 
+  filter(drug %in% doi) %>%
+  ggplot(aes(drug, V2, label = id)) + 
   geom_jitter(width = 0.1) + 
   ggsignif::geom_signif(comparisons = list(doi)) + 
-  labs(y = "factor 1") + 
-  theme_cowplot()
+  theme_cowplot() 
+
+gg_f1_shift_signif + ggsave(here::here("reports/figures/mofa/f1_mtor_shift_test.pdf"), width = 4, height = 4)  
 ```
+
+
 
 # morhphology: drug
 
 
 ```{r, eval=TRUE}
+ 
 drug_projection_test_result_drug <- rbind(
   lm(V1 ~ drug + line, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor1"),
   lm(V2 ~ drug + line, data = z_projected_anno_test) %>% summary() %>% broom::tidy() %>% mutate(factor = "factor2"),
@@ -406,22 +469,82 @@ hist(drug_projection_test_result_drug$p.value)
 
 ```{r, eval =TRUE}
 moa_factor_shift <- drug_projection_test_result_drug %>% arrange(statistic) %>% 
-  mutate(fdr = p.adjust(p.value, method = "BH")) %>% 
-  filter(fdr <= 0.2) 
+  mutate(fdr = p.adjust(p.value, method = "BH")) 
 
 moa_factor_shift_tbl <- moa_factor_shift%>% 
+  filter(fdr <= 0.2) %>%
   head(15) %>%
   tableGrob(., theme = ttheme_default(), rows = NULL)
 
 grid.arrange(moa_factor_shift_tbl)
 ```
+
+
 ```{r}
 moa_factor_shift %>%
   filter(!grepl(term, pattern = "D0")) %>% 
   filter(factor == "factor1") %>%
   filter(statistic > 0) %>% 
   mutate(drug = substr(term, 5, nchar(.))) %>%
+  left_join(drug_anno) %>%
+  arrange(desc(statistic))
+```
+
+when accounting for line differences, mTOR inhibitors (PP242 and WYE-132) are among the strongest inductors of factor 1
+
+
+
+
+```{r}
+drug_shift_test <- moa_factor_shift %>%
+  filter(!grepl(term, pattern = "D0")) %>% 
+  filter(factor == "factor1") %>%
+  mutate(drug = substr(term, 5, nchar(.))) %>%
   left_join(drug_anno)
+
+aggregate_drugs <- drug_shift_test %>% group_by(target) %>% summarise_at(vars(contains("statistic")), funs("median"))
+
+include_drugs <- aggregate_drugs %>% arrange(desc(statistic)) %>% .$target
+
+gg_f1_drug_shift <- drug_shift_test %>%
+  drop_na() %>%
+  mutate(target = factor(target, levels = include_drugs)) %>%
+  ggplot(aes(y = target, x = statistic)) + 
+  #geom_point() + 
+  geom_vline(xintercept = 0, color = "grey") + 
+  ggridges::geom_density_ridges() +
+  
+  #coord_flip() + 
+  cowplot::theme_cowplot()
+
+gg_f1_drug_shift + ggsave(here::here("reports/figures/mofa/f1_ridge_drug_shift.pdf"), width = 4, height = 3)
+
+```
+
+```{r}
+drug_shift_test <- moa_factor_shift %>%
+  filter(!grepl(term, pattern = "D0")) %>% 
+  filter(factor == "factor2") %>%
+  mutate(drug = substr(term, 5, nchar(.))) %>%
+  left_join(drug_anno)
+
+aggregate_drugs <- drug_shift_test %>% group_by(target) %>% summarise_at(vars(contains("statistic")), funs("mean"))
+
+include_drugs <- aggregate_drugs %>% arrange(desc(statistic)) %>% .$target
+
+gg_f2_drug_shift <- drug_shift_test %>%
+  drop_na() %>%
+  mutate(target = factor(target, levels = include_drugs)) %>%
+  ggplot(aes(y = target, x = statistic)) + 
+  #geom_point() + 
+  geom_vline(xintercept = 0, color = "grey") + 
+  ggridges::geom_density_ridges() +
+  
+  #coord_flip() + 
+  cowplot::theme_cowplot()
+
+gg_f2_drug_shift + ggsave(here::here("reports/figures/mofa/f2_ridge_drug_shift.pdf"), width = 4, height = 3)
+
 ```
 
 
