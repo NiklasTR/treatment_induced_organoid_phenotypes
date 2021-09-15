@@ -163,7 +163,16 @@ easily be changed. For remote work, the subsampled dataset
 \CommentTok{# I wish I could solve my path problems with the here() package, but experienced unreliable behavior }
 \CommentTok{# PATH = "/dkfz/groups/shared/OE0049/B110-Isilon2/promise/"}
 \NormalTok{PATH =}\StringTok{ }\KeywordTok{paste0}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(), }\StringTok{"/"}\NormalTok{)}
+\NormalTok{here}\OperatorTok{::}\KeywordTok{here}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
 
+\begin{verbatim}
+## [1] "/home/rstudio/promise"
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
 \CommentTok{#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy.Rds"))}
 \CommentTok{#umap_df <- read_rds(paste0(PATH, "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))}
 \NormalTok{umap_df <-}\StringTok{ }\KeywordTok{read_rds}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(params}\OperatorTok{$}\NormalTok{data))}
@@ -261,7 +270,7 @@ this filtering step is robust
 \StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{legend.position =} \StringTok{"bottom"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{    }\KeywordTok{coord_fixed}\NormalTok{()}
 
-\NormalTok{gg_cluster }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/gg_cluster.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
+\NormalTok{gg_cluster }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures"}\NormalTok{, params}\OperatorTok{$}\NormalTok{output, }\StringTok{"gg_cluster.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -285,7 +294,8 @@ I plot a size-distribution.
 \NormalTok{gg_size_dist_log <-}\StringTok{ }\NormalTok{gg_size_dist }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{scale_x_log10}\NormalTok{()}
 
-\NormalTok{gg_size_dist_log }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/gg_size_dist.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
+\NormalTok{gg_size_dist_log }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures"}\NormalTok{, params}\OperatorTok{$}\NormalTok{output, }\StringTok{"gg_size_dist.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -376,7 +386,8 @@ For more details about distributions, please refer to
   \CommentTok{#geom_abline(slope = 1, color = "grey")}
   
 
-\NormalTok{gg_size_replicate}
+\NormalTok{gg_size_replicate }\OperatorTok{+}
+\StringTok{  }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures"}\NormalTok{, params}\OperatorTok{$}\NormalTok{output, }\StringTok{"gg_size_correlation.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -402,9 +413,10 @@ For more details about distributions, please refer to
        \DataTypeTok{fill =} \StringTok{"size"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{legend.position =} \StringTok{"bottom"}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{caption =} \StringTok{"DMSO treated, downsampled"}\NormalTok{)}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{caption =} \StringTok{"DMSO treated, downsampled"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{1}\NormalTok{)}
 
-\NormalTok{gg_size_dist_morph_ridge}
+\NormalTok{gg_size_dist_morph_ridge }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures"}\NormalTok{, params}\OperatorTok{$}\NormalTok{output, }\StringTok{"gg_size_dist_morph_ridge.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -429,7 +441,7 @@ For more details about distributions, please refer to
 \NormalTok{gg_size <-}\StringTok{ }\KeywordTok{umap_size}\NormalTok{(umap_df) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{caption =} \StringTok{"all treatments, downsampled"}\NormalTok{)}
 
-\NormalTok{gg_size  }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{paste0}\NormalTok{(PATH, }\StringTok{"reports/figures/imaging/gg_size_all.pdf"}\NormalTok{))}
+\NormalTok{gg_size  }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures"}\NormalTok{, params}\OperatorTok{$}\NormalTok{output, }\StringTok{"gg_size_all.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -461,9 +473,8 @@ untreated organoids in the dataset.
 
 \includegraphics{organoid_unsupervised_exploration_files/figure-latex/unnamed-chunk-13-1.pdf}
 
-\hypertarget{organoid-size-during-drug-treatment}{%
-\section{Organoid Size during Drug
-Treatment}\label{organoid-size-during-drug-treatment}}
+\hypertarget{paclitaxel-case-study}{%
+\section{Paclitaxel case study}\label{paclitaxel-case-study}}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -483,7 +494,7 @@ Treatment}\label{organoid-size-during-drug-treatment}}
        \DataTypeTok{title =} \StringTok{"Organoid size distribution"}\NormalTok{,}
        \DataTypeTok{x =} \StringTok{"ln(size)"}\NormalTok{)}
 
-\NormalTok{ggdrug_size }
+\NormalTok{ggdrug_size }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/size_treatment.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{5}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -504,7 +515,7 @@ Treatment}\label{organoid-size-during-drug-treatment}}
        \DataTypeTok{x =} \StringTok{"number of objects per well"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{scale_x_log10}\NormalTok{()}
 
-\NormalTok{ggdrug_count}
+\NormalTok{ggdrug_count }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/count_treatment.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{5}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -542,9 +553,10 @@ Treatment}\label{organoid-size-during-drug-treatment}}
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{line, }\DataTypeTok{ncol =} \DecValTok{2}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{legend.position =} \StringTok{"bottom"}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }\CommentTok{#theme_cowplot(font_size = 8) + }
-\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{legend.position =} \StringTok{"bottom"}\NormalTok{)}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{legend.position =} \StringTok{"bottom"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{coord_equal}\NormalTok{()}
  
-\NormalTok{gg_drug}
+\NormalTok{gg_drug }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/paclitaxel_shift.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{10}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -578,7 +590,7 @@ Treatment}\label{organoid-size-during-drug-treatment}}
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{line)}\OperatorTok{+}
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{()}
 
-\NormalTok{gg_size_drug}
+\NormalTok{gg_size_drug }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/imaging/paclitaxel_doseresponse.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{10}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -866,19 +878,19 @@ I am focusing on cystic vs solid organoid lines
 \StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(v1, v2)) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{geom_point_rast}\NormalTok{(}\DataTypeTok{alpha =} \DecValTok{1}\NormalTok{, }\DataTypeTok{size =} \FloatTok{0.35}\NormalTok{, }\DataTypeTok{color =} \StringTok{"#f1f1f1"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }
-\StringTok{  }\CommentTok{# geom_point_rast(data = df %>%}
-\StringTok{  }\CommentTok{#   filter(morphology == "cystic") %>% }
-\StringTok{  }\CommentTok{#     sample_frac(0.05),}
-\StringTok{  }\CommentTok{# aes(color = morphology),alpha = .4, size = 0.35, shape=16) + }
+\StringTok{  }\KeywordTok{geom_point_rast}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ df }\OperatorTok{%>%}
+\StringTok{    }\KeywordTok{filter}\NormalTok{(morphology }\OperatorTok{!=}\StringTok{ "other"}\NormalTok{) }\OperatorTok{%>%}
+\StringTok{      }\KeywordTok{sample_frac}\NormalTok{(}\DecValTok{1}\NormalTok{),}
+  \KeywordTok{aes}\NormalTok{(}\DataTypeTok{color =}\NormalTok{ morphology),}\DataTypeTok{alpha =} \FloatTok{.1}\NormalTok{, }\DataTypeTok{size =} \FloatTok{0.35}\NormalTok{, }\DataTypeTok{shape=}\DecValTok{16}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }
-\StringTok{  }\KeywordTok{geom_density_2d}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ df }\OperatorTok{%>%}\StringTok{ }\CommentTok{#geom_density_2d_filled}
-\StringTok{    }\KeywordTok{filter}\NormalTok{(morphology }\OperatorTok{!=}\StringTok{ "other"}\NormalTok{), }\CommentTok{# %>% }
-    \CommentTok{#  sample_frac(0.05)}
-    \KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill =}\NormalTok{ morphology), }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\CommentTok{# geom_density_2d(data = df %>% #geom_density_2d_filled}
+\StringTok{  }\CommentTok{#   filter(morphology != "other"), # %>% }
+\StringTok{  }\CommentTok{#   #  sample_frac(0.05)}
+\StringTok{  }\CommentTok{#   aes(fill = morphology), size = 1.5) +}
 
-\StringTok{  }\CommentTok{#scale_color_brewer(type = "qual", palette = "Set2") +}
+\StringTok{  }\KeywordTok{scale_color_brewer}\NormalTok{(}\DataTypeTok{type =} \StringTok{"qual"}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }\CommentTok{#scale_fill_manual(values = c("#0571b0", "#ca0020")) +    }
-\StringTok{  }\KeywordTok{scale_color_manual}\NormalTok{(}\DataTypeTok{values =} \KeywordTok{c}\NormalTok{(}\StringTok{"#0571b0"}\NormalTok{, }\StringTok{"#ca0020"}\NormalTok{)) }\OperatorTok{+}\StringTok{    }
+\StringTok{  }\CommentTok{#scale_color_manual(values = c("#0571b0", "#ca0020")) +   }
 \StringTok{  }\CommentTok{#geom_density2d(color = "black") + }
 \StringTok{  }\KeywordTok{theme_classic}\NormalTok{() }\OperatorTok{+}
 \StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"UMAP 1"}\NormalTok{,}
@@ -886,13 +898,14 @@ I am focusing on cystic vs solid organoid lines
 \StringTok{       }\CommentTok{#caption = "control treated organoids") + }
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{(}\DataTypeTok{font_size =} \DecValTok{8}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\CommentTok{#theme(legend.position = "nothing")  + }
-\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{() }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{scale_x_reverse}\NormalTok{()}
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{()}
 
 
-\NormalTok{gg_cystic}
+\NormalTok{gg_cystic }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/gg_cystic.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
+
+\includegraphics{organoid_unsupervised_exploration_files/figure-latex/unnamed-chunk-27-1.pdf}
 
 \hypertarget{plot-export}{%
 \section{Plot Export}\label{plot-export}}

@@ -8,8 +8,20 @@ rmarkdown::render(here::here('notebooks/imaging/organoid_unsupervised_exploratio
         remote = FALSE, 
         data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds", 
         sample = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds",
-        cache = FALSE))
-system("cp reports/figures/imaging/* results/figure_1/")
+        cache = TRUE))
 
 # figure 2
-# cp ../reports/panels/panel_size_drug.pdf figure_2/
+rmarkdown::render(here::here('notebooks/imaging/embedding_inspection.Rmd'), 
+    params = list(
+        data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds",
+        data_harmony = "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_sampled.Rds",
+        remote = FALSE,
+        cache = TRUE))
+rmarkdown::render(here::here('notebooks/drug_analysis/2.0-js-OrganoidViability.Rmd'))
+
+# figure 3
+rmarkdown::render(here::here('notebooks/drug_analysis/3.0-js-OrganoidPhenotypes.Rmd'))
+
+# figure 4 and 5
+rmarkdown::render(here::here('notebooks/mofa/mofa_exploration.Rmd'))
+rmarkdown::render(here::here('notebooks/mofa/mofa_drug_effect.Rmd'))
