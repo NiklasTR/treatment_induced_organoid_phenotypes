@@ -201,6 +201,7 @@ moa_factor_shift %>%
 
 
 ```{r}
+set.seed(12234533)
 df <- moa_factor_shift %>%
   filter(factor == "factor1") %>%
   mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
@@ -244,6 +245,8 @@ gg_shift + ggsave(here::here("reports/figures/mofa/f1_moa_shift.pdf"), width = 6
 ```
 
 ```{r}
+set.seed(123)
+
 df <- moa_factor_shift %>%
   filter(factor == "factor2") %>%
   mutate(fdr_bool = if_else(fdr < 0.05, TRUE, FALSE)) %>%
