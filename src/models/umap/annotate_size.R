@@ -108,3 +108,12 @@ df <- umap_df %>%
             median = median(size_log))
 
 df %>% saveRDS(here::here("data/processed/morphology/organoid_size_drug.Rds"))
+
+## channel intensity
+df <- umap_df %>% 
+  group_by(line, plate, replicate, well, drug, concentration) %>% 
+  summarise(permeability = mean(permeability),
+            dapi = mean(dapi),
+            actin = mean(actin))
+
+df %>% saveRDS(here::here("data/processed/morphology/organoid_intensity_drug.Rds"))

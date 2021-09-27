@@ -682,9 +682,71 @@ umap_df %>%
 
 ```
 
+# organoid size, viability and LDC classification
+
+For this analysis I am comparing orgaonid size, CTG data and LDC classification results
+
+```{r}
+utils::data("organoid_viability", package = "SCOPEAnalysis")
+auc_ctg <- auc_ctg %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01", "D015T01", "D052T01")) %>% 
+  mutate(id = paste0(Line, "_", library, "_", well)) %>%
+  arrange((id)) %>%
+  group_by(id) %>% 
+  summarise(viability = mean(viability)) %>%
+  dplyr::select(id, ctg = viability)
+mortality <- mortality %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01", "D015T01", "D052T01")) %>% 
+  mutate(id = paste0(Line, "_", Layout, "_", Well.ID)) %>%
+  group_by(id) %>% 
+  summarise(Percent.Live = mean(Percent.Live)) %>%
+  dplyr::select(ldc = Percent.Live, id)
+organoid_size_drug <- readRDS(here::here("data/processed/morphology/organoid_size_drug.Rds")) %>%
+  mutate(id = paste0(line, "_", substr(plate, 12,14), "_", well)) %>% 
+  group_by(id) %>% 
+  summarise(mean = mean(mean)) %>%
+  dplyr::select(size = mean, id)
+
+df <- left_join(auc_ctg, mortality) %>% 
+  left_join(organoid_size_drug)
+
+df %>%
+  ggplot(aes(ldc, ctg)) + 
+  geom_point() + 
+  theme(legend.title = element_blank()) + xlim(c(0, 1)) + ylim(c(0, 1)) + 
+  geom_hline(yintercept = 1) + 
+  geom_vline(xintercept = 1) +
+  theme_cowplot() + 
+   coord_equal()
+```
+
+```{r}
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(size, ctg)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) +
+  geom_hline(yintercept = 1) + 
+  #geom_vline(xintercept = 1) +
+  geom_smooth(se = FALSE) +
+  theme(legend.title = element_blank()) + ylim(c(0, 1)) +
+  theme_cowplot() + 
+  facet_wrap(~line)
+
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(size, ldc)) + 
+  geom_point() + 
+  geom_hline(yintercept = 1) + 
+  geom_smooth(se = FALSE) +
+  theme_cowplot() + 
+  facet_wrap(~line)
 
 
-I am focusing on cystic vs solid organoid lines
+cor(df$ldc, df$size, use = "complete.obs") %>% round(digits = 4)
+cor(df$ctg, df$size, use = "complete.obs") %>% round(digits = 4)
+```
+
+
+# cystic vs solid organoid lines
 
 ```{r, eval = TRUE}
 #UMAP Cystic (Lines 18, 13, 27, 30) vs. Solid (others) treated with DMSO, for Figure 1 / matching expression analysis done for cystic vs. rest
