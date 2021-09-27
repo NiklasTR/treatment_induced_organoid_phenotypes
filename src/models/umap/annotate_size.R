@@ -39,7 +39,16 @@ df <- line_param %>% unnest(param) %>%
   mutate(line = factor(line, levels = .$line %>% unique()))
 
 organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
-organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_fit.Rds"))
+
+### no fit
+df <- umap_df %>% 
+  group_by(line, replicate) %>% 
+  summarise(mean = mean(size_log),
+            median = median(size_log))
+
+df %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+
 
 ## DMSO size
 line_param <- umap_df %>% #filter(partition %in% c(1,2)) %>% 
@@ -57,7 +66,17 @@ df <- line_param %>% unnest(param) %>%
   mutate(line = factor(line, levels = .$line %>% unique()))
 
 organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
-organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO.Rds"))
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO_fit.Rds"))
+
+### no fit
+df <- umap_df %>% 
+  filter(drug == "DMSO") %>%
+  group_by(line, replicate) %>% 
+  summarise(mean = mean(size_log),
+            median = median(size_log))
+
+df %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO.Rds"))
+
 
 ## by drug size - CAUTION make sure to run the estimation of drug effects on size with the complete dataset, not a subsample
 line_param <- umap_df %>% #filter(partition %in% c(1,2)) %>% 
@@ -74,5 +93,12 @@ df <- line_param %>% unnest(param) %>%
   mutate(line = factor(line, levels = .$line %>% unique()))
 
 organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
-organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_DMSO.Rds"))
+organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size_drug_fit.Rds"))
 
+### no fit
+df <- umap_df %>% 
+  group_by(line, replicate, drug, concentration) %>% 
+  summarise(mean = mean(size_log),
+            median = median(size_log))
+
+df %>% saveRDS(here::here("data/processed/morphology/organoid_size_drug.Rds"))
