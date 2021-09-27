@@ -103,7 +103,7 @@ umap_df <- read_rds(here::here(args[1]))
 
 ### no fit
 df <- umap_df %>% 
-  group_by(line, replicate, well, drug, concentration) %>% 
+  group_by(line, plate, replicate, well, drug, concentration) %>% 
   summarise(mean = mean(size_log),
             median = median(size_log))
 
