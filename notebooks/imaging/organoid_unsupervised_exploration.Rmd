@@ -195,8 +195,8 @@ df <- line_param %>% unnest(param) %>%
   mutate(line = factor(line, levels = .$line %>% unique()))
 
 organoid_size_fit <- df %>% dplyr::select(line, replicate, names, x, mean_meanlog)
-organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
-organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+# organoid_size_fit %>% saveRDS(here::here("data/processed/morphology/organoid_size.Rds"))
+# organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds"))
 
 organoid_size_factor <- organoid_size_fit$line %>% levels()
 df <- organoid_size_fit
@@ -387,6 +387,10 @@ df <- drug_size_param %>% unnest(param) %>%
   filter(names == "meanlog") %>%
   mutate(concentration = factor(concentration, levels = c("0", "0.0016", "0.008", "0.04", "0.2", "1.0"))) 
 
+df <- drug_size %>% 
+  group_by(drug, line, concentration) %>% 
+  summarise(x = median(size_log))
+
 gg_size_drug <- df %>%
   filter(line %in% loi) %>%
   #mutate(concentration = as.numeric(as.character(concentration))) %>%
@@ -404,9 +408,9 @@ gg_size_drug <- df %>%
 
 gg_size_drug + ggsave(here::here("reports/figures/imaging/paclitaxel_doseresponse.pdf"), width = 10, height = 5)
 ```
-## TODO
+## organoid viability classifier
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 umap_ldc <- function(umap){
   umap %>%
   #filter(Size < 1000) %>%
@@ -421,11 +425,59 @@ umap_ldc <- function(umap){
   guides(fill = guide_colourbar(barwidth = 0.5, barheight = 10))
 }
 
-gg_ldc <- umap_ldc(umap_df %>% filter(partition %in% c(1,2)))
+gg_ldc <- umap_ldc(umap_df)
 
 gg_ldc
 ```
 
+```{r}
+umap_df %>% 
+  ggplot(aes(size_log, permeability)) + 
+  geom_point_rast(alpha = 0.5, size = 0.35) + 
+  geom_smooth() + 
+  theme_cowplot()
+```
+
+```{r}
+umap_df %>% 
+  ggplot(aes(size_log, prob_live)) + 
+  #geom_jitter_rast(alpha = 0.5, size = 0.35) + 
+  geom_smooth() + 
+  theme_cowplot()
+```
+
+```{r}
+df <- umap_df %>%
+  group_by(plate, well) %>%
+  summarise(actin = mean(actin), 
+            permeability = mean(permeability),
+            dapi = mean(dapi),
+            size = mean(size_log),
+            prob_live = mean(prob_live)) 
+
+df %>%
+  ggplot(aes(size, prob_live)) + 
+  geom_point_rast(alpha = 0.2) +
+  geom_smooth()
+
+df %>%
+  ggplot(aes(actin, prob_live)) + 
+  geom_point_rast(alpha = 0.2)
+
+df %>%
+  ggplot(aes(dapi, prob_live)) + 
+  geom_point_rast(alpha = 0.2) + 
+  geom_smooth()
+
+df %>%
+  ggplot(aes(permeability, prob_live)) + 
+  geom_point_rast(alpha = 0.2) + 
+  geom_smooth()
+```
+
+CTG data
+LDC data
+average size data
 
 # Organoid Heterogeneity
 
@@ -559,28 +611,28 @@ gg_screen_id + ggsave(paste0(PATH, "reports/figures/imaging/gg_screen_id.pdf"), 
 
 # Dye Intensity
 
-```{r, eval = FALSE}
-umap_sample %>%
+```{r, eval = TRUE}
+umap_df %>%
   ggplot(aes(actin, fill = screen_id)) +
-  geom_density(alpha = 0.5) + 
+  geom_density(alpha = 0.25) + 
   scale_fill_brewer(type = 'qual') +
   facet_wrap(~ line) +
   theme_cowplot()
 ```
 
-```{r, eval = FALSE}
-df %>%
+```{r, eval = TRUE}
+umap_df %>%
   ggplot(aes(permeability, fill = screen_id)) +
-  geom_density(alpha = 0.5) + 
+  geom_density(alpha = 0.25) + 
   scale_fill_brewer(type = 'qual') +
   facet_wrap(~ line) +
   theme_cowplot()
 ```
 
-```{r, eval = FALSE}
-df %>%
+```{r, eval = TRUE}
+umap_df %>%
   ggplot(aes(dapi, fill = screen_id)) +
-  geom_density(alpha = 0.5) + 
+  geom_density(alpha = 0.25) + 
   scale_fill_brewer(type = 'qual') +
   facet_wrap(~ line) +
   theme_cowplot()
@@ -678,6 +730,7 @@ gg_cystic <- umap_df %>%
 
 gg_cystic + ggsave(here::here("reports/figures/mofa/gg_cystic.pdf"), width = 4, height = 4)
 ```
+
 
 
 # Plot Export
