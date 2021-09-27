@@ -1,17 +1,21 @@
-# defining lib path
-# .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
-# print(.libPaths())
-
 # example
-# Rscript --vanilla src/models/umap/annotate_size.R data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds
+# Rscript --vanilla src/models/umap/annotate_size.R data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds FALSE
+# Rscript --vanilla src/models/umap/annotate_size.R data/processed/PhenotypeSpectrum/umap_absolute_all_drugs.Rds TRUE
 
 # input
 args = commandArgs(trailingOnly=TRUE)
-if (!length(args)==1) {
-  stop("Arguments must be supplied (input file name).n", call.=FALSE)
+if (!length(args)==2) {
+  stop("Arguments must be supplied (input file name, remote? boolean).n", call.=FALSE)
 } 
 
 print(args)
+
+if (args[2] == TRUE) {
+  # defining lib path
+  .libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/3.6")
+  print("running in remote mode")
+  print(.libPaths())
+}
 
 ## library 
 library(dplyr)
