@@ -20,6 +20,7 @@ library(magrittr)
 library(purrr)
 library(readr)
 library(here)
+library(fitdistrplus)
 
 ## loading data
 umap_df <- read_rds(here::here(args[1]))
