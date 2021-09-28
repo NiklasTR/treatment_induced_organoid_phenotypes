@@ -1,6 +1,6 @@
 ---
 title: "Drug-Induced Phenotypes"
-author: "Jan Sauer"
+author: "Jan Sauer and Niklas Rindtorff"
 date: "`r Sys.Date()`"
 output:
   html_document:
@@ -182,7 +182,8 @@ ggplot(data = drug_effect_metadata,
     caption = paste("Spearman rho =", round(
       cor(drug_effect_metadata$AUC_Mean, 
           drug_effect_metadata$Distance, method = "spearman"), 2))) + 
-  xlab("AUROC") + labs(color = "")
+  xlab("AUROC") + labs(color = "") + 
+  geom_smooth()
 if(save_images) ggsave(
   filename = file.path(img_out_dir, "Scatterplot_AUCvsDistance.pdf"), 
   width = 3, height = 3, useDingbats = FALSE)
@@ -193,7 +194,8 @@ The SVM was trained with 10-fold cross validation and the resulting means and st
 ggplot(data = drug_effect_metadata, 
        mapping = aes(x = AUC_Mean, y = AUC_Std)) + 
   geom_point(size = 0.5) + theme_vignette() + 
-  labs(x = "AUROC Mean", y = "AUROC Standard Deviation", color = "")
+  labs(x = "AUROC Mean", y = "AUROC Standard Deviation", color = "") + 
+  geom_smooth()
 if(save_images) ggsave(
   filename = file.path(img_out_dir, "Scatterplot_AUCMeanvsAUCStd.pdf"), 
   width = 3, height = 3, useDingbats = FALSE)
@@ -1265,7 +1267,68 @@ if(save_images) pheatmap(
     main = sprintf("Angles Between Profile Vectors for all lines"), 
     border_color = NA, cellwidth = 1.5, cellheight = 1.5, height = 15, 
     filename = file.path(img_out_dir, "EffectVectorHeatmap_allDrugs.pdf"))
+
+if(save_images) pheatmap(
+    d, annotation_col = annotation, 
+    color = hm_colorscale, annotation_colors = anno_colorScale, 
+    show_rownames = TRUE, show_colnames = FALSE, 
+    cluster_rows = hc, cluster_cols = hc, 
+    main = sprintf("Angles Between Profile Vectors for all lines"), 
+    border_color = NA, cellwidth = 1.5, cellheight = 15, height = 150, 
+    filename = file.path(img_out_dir, "EffectVectorHeatmap_allDrugs_large.pdf"))
 ```
+
+```{r}
+active_drugs = rownames(d)
+
+drug_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
+  mutate(rep = paste0("r", replicate)) %>% 
+  mutate(line = substr(line, 1, 4)) %>% 
+  #filter(size_log > 7.5) %>%
+  group_by(line, drug) %>%
+  summarise_at(vars(contains("pc")), funs(mean)) %>% 
+  ungroup() %>% 
+  gather(pca, value, -line, -drug) %>%
+  mutate(feature = paste0(pca, "_", line)) %>% 
+  dplyr::select(-line, -pca)
+
+active_drug_df <- drug_df %>% 
+  filter(drug %in% active_drugs)
+
+drug_df_cor <- active_drug_df %>%
+  spread(drug, value) %>%
+  column_to_rownames("feature") %>% 
+  cor()
+
+pheatmap(
+    mat = drug_df_cor, annotation_col = annotation %>% dplyr::select(-Pathway), 
+    annotation_colors = anno_colorScale, 
+    show_rownames = FALSE, show_colnames = FALSE, 
+    #cluster_rows = hc, cluster_cols = hc, 
+    main = sprintf("Aggregated drug-induced PCA Profile Vectors for all lines"), 
+    border_color = NA)
+
+if(save_images) pheatmap(
+    drug_df_cor, annotation_col = annotation %>% dplyr::select(-Pathway), 
+    #color = hm_colorscale, 
+    annotation_colors = anno_colorScale, 
+    show_rownames = FALSE, show_colnames = FALSE, 
+    #cluster_rows = hc, cluster_cols = hc, 
+    main = sprintf("Aggregated drug-induced PCA Profile Vectors for all lines"), 
+    border_color = NA, cellwidth = 1.5, cellheight = 1.5, height = 15, 
+    filename = file.path(img_out_dir, "aggregate_pca_heatmap_allDrugs.pdf"))
+
+if(save_images) pheatmap(
+    drug_df_cor, annotation_col = annotation %>% dplyr::select(-Pathway), 
+    #color = hm_colorscale, 
+    annotation_colors = anno_colorScale, 
+    show_rownames = TRUE, show_colnames = FALSE, 
+    #cluster_rows = hc, cluster_cols = hc, 
+    main = sprintf("Aggregated drug-induced PCA Profile Vectors for all lines"), 
+    border_color = NA, cellwidth = 1.5, cellheight = 15, height = 150, 
+    filename = file.path(img_out_dir, "aggregate_pca_heatmap_allDrugs_large.pdf"))
+```
+
 
 Shown are the individual drug viabilities for each line according to the clustering for the drug effects to further showcase the compatibility between the methods
 ```{r viabilities_with_svm_clustering}
