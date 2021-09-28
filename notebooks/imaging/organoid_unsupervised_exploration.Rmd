@@ -425,9 +425,10 @@ umap_ldc <- function(umap){
   guides(fill = guide_colourbar(barwidth = 0.5, barheight = 10))
 }
 
-gg_ldc <- umap_ldc(umap_df)
+gg_ldc <- umap_ldc(umap_df) +  coord_equal()
 
-gg_ldc
+gg_ldc + 
+  ggsave(here::here("reports/figures/drug_viability/ldc_umap.pdf"), width = 6, height = 6)
 ```
 
 ```{r}
@@ -682,7 +683,7 @@ umap_df %>%
 
 ```
 
-# organoid size, viability and LDC classification
+# correlation of organoid size, viability and LDC classification
 
 For this analysis I am comparing orgaonid size, CTG data and LDC classification results
 
@@ -704,9 +705,17 @@ organoid_size_drug <- readRDS(here::here("data/processed/morphology/organoid_siz
   group_by(id) %>% 
   summarise(mean = mean(mean)) %>%
   dplyr::select(size = mean, id)
+organoid_intensity_drug <- readRDS(here::here("data/processed/morphology/organoid_intensity_drug.Rds")) %>%
+  mutate(id = paste0(line, "_", substr(plate, 12,14), "_", well)) %>% 
+  group_by(id) %>% 
+  summarise(permeability = mean(permeability),
+            dapi = mean(dapi),
+            actin = mean(actin)) %>%
+  dplyr::select(dapi, actin, permeability, id)
 
 df <- left_join(auc_ctg, mortality) %>% 
-  left_join(organoid_size_drug)
+  left_join(organoid_size_drug) %>%
+  left_join(organoid_intensity_drug)
 
 df %>%
   ggplot(aes(ldc, ctg)) + 
@@ -715,8 +724,61 @@ df %>%
   geom_hline(yintercept = 1) + 
   geom_vline(xintercept = 1) +
   theme_cowplot() + 
-   coord_equal()
+   coord_equal() + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_ldc_well.pdf"), width = 4, height = 4)
 ```
+
+```{r}
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(size, ctg)) + 
+  geom_point(color = "grey", alpha = 0.5) + 
+  geom_point(aes(color = line), data = df %>% 
+               mutate(line = substr(id, 1, 7)) %>% 
+               filter(line %in% c("D007T01", "D018T01", "D019T01"))) + 
+  geom_smooth(se = FALSE, 
+              method = "lm", 
+              aes(color = line), data = df %>% 
+               mutate(line = substr(id, 1, 7)) %>% 
+               filter(line %in% c("D007T01", "D018T01", "D019T01"))) +
+  geom_hline(yintercept = 1) + 
+  #geom_vline(xintercept = 1) +
+  #geom_smooth(se = FALSE) +
+  #theme(legend.title = element_blank()) + ylim(c(0, 1)) +
+  theme_cowplot() + 
+  theme(legend.position = "bottom") +
+  coord_fixed(ratio = 2) +
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  labs(caption = paste0("overall correlation ", cor(df$ctg, df$size, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_size_well_highlight.pdf"), width = 6, height = 6)
+```
+
+```{r}
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(ldc, ctg)) + 
+  geom_point(color = "grey", alpha = 0.5) + 
+  geom_point(aes(color = line), data = df %>% 
+               mutate(line = substr(id, 1, 7)) %>% 
+               filter(line %in% c("D007T01", "D018T01", "D019T01"))) + 
+  geom_smooth(se = FALSE, 
+              method = "lm", 
+              aes(color = line), data = df %>% 
+               mutate(line = substr(id, 1, 7)) %>% 
+               filter(line %in% c("D007T01", "D018T01", "D019T01"))) +
+  geom_hline(yintercept = 1) + 
+  geom_vline(xintercept = 1) +
+  #geom_smooth(se = FALSE) +
+  theme(legend.title = element_blank()) + ylim(c(0, 1)) + xlim(c(0, 1)) +
+  theme_cowplot() + 
+   coord_equal() + 
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  labs(caption = paste0("overall correlation ", cor(df$ctg, df$ldc, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_ldc_well_highlight.pdf"), width = 6, height = 6)
+```
+
+
+## correlation on line-level
 
 ```{r}
 df %>%
@@ -729,7 +791,9 @@ df %>%
   geom_smooth(se = FALSE) +
   theme(legend.title = element_blank()) + ylim(c(0, 1)) +
   theme_cowplot() + 
-  facet_wrap(~line)
+  facet_wrap(~line) + 
+  labs(caption = paste0("correlation ", cor(df$ctg, df$size, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_size_well_perline.pdf"), width = 6, height = 6)
 
 df %>%
   mutate(line = substr(id, 1, 7)) %>%
@@ -738,12 +802,69 @@ df %>%
   geom_hline(yintercept = 1) + 
   geom_smooth(se = FALSE) +
   theme_cowplot() + 
-  facet_wrap(~line)
+  facet_wrap(~line) + 
+  labs(caption = paste0("correlation ", cor(df$ldc, df$size, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ldc_size_well_perline.pdf"), width = 6, height = 6)
 
 
-cor(df$ldc, df$size, use = "complete.obs") %>% round(digits = 4)
-cor(df$ctg, df$size, use = "complete.obs") %>% round(digits = 4)
 ```
+
+```{r}
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(dapi, ctg)) + 
+  geom_point() + 
+  geom_hline(yintercept = 1) + 
+  geom_smooth(se = FALSE) +
+  theme_cowplot() + 
+  facet_wrap(~line) + 
+  labs(caption = paste0("correlation ", cor(df$ctg, df$dapi, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_dapi_well_perline.pdf"), width = 6, height = 6)
+
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(actin, ctg)) + 
+  geom_point() + 
+  geom_hline(yintercept = 1) + 
+  geom_smooth(se = FALSE) +
+  theme_cowplot() + 
+  facet_wrap(~line) + 
+  labs(caption = paste0("correlation ", cor(df$ctg, df$actin, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_actin_well_perline.pdf"), width = 6, height = 6)
+
+df %>%
+  mutate(line = substr(id, 1, 7)) %>%
+  ggplot(aes(permeability, ctg)) + 
+  geom_point() + 
+  geom_hline(yintercept = 1) + 
+  geom_smooth(se = FALSE) +
+  theme_cowplot() + 
+  facet_wrap(~line) + 
+  labs(caption = paste0("correlation ", cor(df$ctg, df$permeability, use = "complete.obs") %>% round(digits = 4))) + 
+  ggsave(paste0(PATH, "reports/figures/drug_viability/gg_ctg_perm_well_perline.pdf"), width = 6, height = 6)
+```
+
+```{r}
+cor_df <- df %>% 
+  mutate(line = substr(id, 1, 7)) %>% 
+  nest(-line) %>% 
+  mutate(r = purrr::map(data, ~ .x %>% as.data.frame() %>% 
+  column_to_rownames("id") %>%
+  cor(use = "complete.obs") %>% head(1) %>% as.data.frame())) %>% 
+  unnest(r) %>% 
+  as_tibble() %>% 
+  dplyr::select(-data) %>% 
+  as.data.frame()
+
+cor_df %>% 
+  dplyr::select(-ctg) %>%
+  column_to_rownames("line") %>% 
+  pheatmap::pheatmap(cluster_cols = FALSE,
+                     filename = here::here("reports/figures/drug_viability/ctg_correlation_heatmap.pdf"))
+
+
+```
+
 
 
 # cystic vs solid organoid lines
