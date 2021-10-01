@@ -253,6 +253,42 @@ gg_size_dist_morph_ridge + ggsave(here("reports/figures", params$output, "gg_siz
 ```
 
 ```{r}
+gg_size_dist_morph_violin <- umap_df_sample %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
+  mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
+  ggplot() +
+  geom_violin(aes(y = size_log, x = line, fill = stat(x)), scale = 1) +
+  #geom_density(aes(x = size_log, group = replicate, color = morphological_class)) + 
+  #facet_wrap(~ line) + 
+  scale_fill_viridis_c() +
+  labs(caption = "DMSO treated organoids",
+       x = "ln(size)",
+       fill = "size") + 
+  theme(legend.position = "bottom") +
+  theme_cowplot() + 
+  labs(caption = "DMSO treated, downsampled") +
+  coord_fixed(ratio = 1)
+
+gg_size_dist_morph_ridge_flip <- umap_df_sample %>% filter(partition %in% c(1,2)) %>% filter(drug == "DMSO") %>% 
+  mutate(line = factor(line, levels = organoid_size_factor_09)) %>% 
+  ggplot() +
+  geom_density_ridges_gradient(aes(y = line, x = size_log, fill = stat(x)), scale = 1) +
+  #geom_density(aes(x = size_log, group = replicate, color = morphological_class)) + 
+  #facet_wrap(~ line) + 
+  scale_fill_viridis_c() +
+  labs(caption = "DMSO treated organoids",
+       x = "ln(size)",
+       fill = "size") + 
+  theme(legend.position = "bottom") +
+  theme_cowplot() + 
+  labs(caption = "DMSO treated, downsampled") +
+  coord_fixed(ratio = 1) + 
+  coord_flip()
+
+gg_size_dist_morph_ridge + ggsave(here("reports/figures", params$output, "gg_size_dist_morph_ridge_flip.pdf"), width = 8, height = 4)
+```
+
+
+```{r}
 umap_size <- function(umap){
   umap %>%
   #filter(Size < 1000) %>%
