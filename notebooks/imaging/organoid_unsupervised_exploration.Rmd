@@ -284,7 +284,7 @@ gg_size_dist_morph_ridge_flip <- umap_df_sample %>% filter(partition %in% c(1,2)
   coord_fixed(ratio = 1) + 
   coord_flip()
 
-gg_size_dist_morph_ridge + ggsave(here("reports/figures", params$output, "gg_size_dist_morph_ridge_flip.pdf"), width = 8, height = 4)
+gg_size_dist_morph_ridge_flip + ggsave(here("reports/figures", params$output, "gg_size_dist_morph_ridge_flip.pdf"), width = 8, height = 4)
 ```
 
 
