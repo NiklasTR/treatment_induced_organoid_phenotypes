@@ -168,7 +168,8 @@ plot_df <- plot_df_raw %>%
 
 gg_irinotecan_traj <- draw_trajectory(plot_df)
 
-gg_irinotecan_traj
+gg_irinotecan_traj + coord_fixed() + 
+  ggsave(here::here("reports/figures/drug_effects/panel_irinotecan.pdf"), width = 4, height = 4)
 
 
 # e-7 good
