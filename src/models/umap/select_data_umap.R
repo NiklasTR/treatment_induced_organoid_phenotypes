@@ -34,6 +34,7 @@ umap_tidy_selected <- umap_tidy %>% filter(drug == "DMSO" | drug %in% args[1]) %
               replace = FALSE)
 
 # save output
-umap_tidy_selected %>% write_rds(here::here(paste0("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_", args[1], ".Rds")))
+filename = str_replace_all(args[1], pattern = " ", "") %>% str_replace_all(., pattern = "/", "_")
+umap_tidy_selected %>% write_rds(here::here(paste0("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_", filename, ".Rds")))
 
 
