@@ -8,4 +8,5 @@ Rscript --vanilla src/models/umap/select_data_umap.R Binimetinib 0.3 123
 Rscript --vanilla src/models/umap/select_data_umap.R Trametinib 0.3 123
 Rscript --vanilla src/models/umap/select_data_umap.R WYE-132 0.3 123
 Rscript --vanilla src/models/umap/select_data_umap.R CHIR-98014 0.3 123
+Rscript --vanilla src/models/umap/select_data_umap.R Irinotecan / SN-38 0.3 123
 

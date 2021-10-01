@@ -123,7 +123,7 @@ plot_grid(gg_bortezomib + coord_fixed(), gg_bortezomib_traj + coord_fixed(),
 I am repeating a similar plot with SN-38, the active metabolite of Irinotecan. 
 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 set.seed(123)
 
 gg_irinotecan <- umap_df %>%
@@ -151,7 +151,7 @@ gg_irinotecan
 
 I am generating a pseudotime plot for Irinotecan, a toxic drug 
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 set.seed(168763)
 
 plot_df_raw <- create_plot_df(drug_order = c("Irinotecan / SN-38"),
