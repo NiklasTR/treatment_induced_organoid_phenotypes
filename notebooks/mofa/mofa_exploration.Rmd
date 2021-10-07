@@ -667,9 +667,11 @@ drug_activity_joined <- weights %>%
 no_egfr <- c("Tyrphostin 9" # IC50 at >100uM, binds PDGFR
              )
 
+set.seed(123)
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "EGFR") %>% 
   dplyr::filter(drug != no_egfr) %>%
+  sample_n(9) %>%
   .$drug 
 
 
@@ -695,8 +697,10 @@ drug_activity_joined <- weights %>%
   mutate(line = paste0(id, "T01")) %>%
   left_join(drug_activity)
 
+set.seed(123)
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "MEK") %>% 
+   sample_n(9) %>%
   .$drug 
 
 
