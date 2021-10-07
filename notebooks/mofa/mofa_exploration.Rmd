@@ -36,7 +36,7 @@ promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promi
 umap_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"))
 
 # organoid size
-organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
+organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size_fit.Rds")) %>% 
   filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
   #filter(!line %in% c('D055T01','D020T02')) %>% 
   mutate(line = as.character(line)) %>% 
@@ -547,12 +547,15 @@ gseaplot2(
 
 ```{r}
 ## LGR5
-gseaplot2(
+gg_f1lgr <- gseaplot2(
   gse_sig, geneSetID = gse_sig$ID[3],
   title = paste0(gse_sig$ID[3], 
                 ' (p = ', round(gse_sig_tbl$pvalue[3], 3), 
                 '; NES = ', round(gse_sig_tbl$NES[3], 2), ')')
 )
+
+gg_f1lgr + 
+  ggsave(here::here("reports/figures/mofa/f1_lgr.pdf"), width = 4, height = 3)
 ```
 
 
@@ -952,7 +955,6 @@ gg_f2lgr5 +
 
 
 ```{r}
-## lgr5 signature
 gseaplot2(
   gse_sig, geneSetID = gse_sig$ID[2], 
   title = paste0(gse_sig$ID[2], 
