@@ -251,11 +251,14 @@ loadings_mutation %>%
 df <- loadings_mutation %>% 
   gather(key = "factor", value = "weight", -id) 
 
-df %>%
+gg_weight_mutation <- df %>%
   ggplot(aes(factor, weight, label = id)) +
   geom_point() + 
   theme_cowplot() + 
-  ggrepel::geom_text_repel(data = df %>% filter(id %in% c("NRAS", "ERBB2", "PTEN", "KRAS", "PIK3CA")))
+  ggrepel::geom_text_repel(data = df %>% filter(id %in% c("NRAS", "ERBB2", "PTEN", "KRAS", "PIK3CA"))) + 
+  geom_hline(yintercept = 0, linetype = "dashed")
+
+gg_weight_mutation + ggsave(here::here("reports/figures/mofa/mutation_weight.pdf"), width = 5, height = 5)
 ```
 
 
@@ -436,12 +439,7 @@ df <- loadings_expression %>%
   arrange(desc(factor1)) %>%
   mutate(order = nrow(.):1)
 
-df %>% 
-  ggplot(aes(order, factor1)) + 
-  geom_point()+ 
-  geom_point(data = df %>% filter(symbol %in% c("H19", "IGF2")), 
-             color = "blue") + 
-  theme_cowplot()
+
 ```
 
 
@@ -682,7 +680,8 @@ gg_f1_egfr <- drug_activity_joined %>%
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE, color = "red") + 
   facet_wrap(~ drug) + 
-  coord_fixed(ratio = 5)
+  coord_fixed(ratio = 5) + 
+  scale_y_continuous(limits = c(0.5, 1))
 
 
 gg_f1_egfr + ggsave(here::here("reports/figures/mofa/f1_egfr.pdf"), width = 6, height = 6)
@@ -711,7 +710,8 @@ gg_f1_mek <- drug_activity_joined %>%
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE) + 
   facet_wrap(~ drug) + 
-  coord_fixed(ratio = 5)
+  coord_fixed(ratio = 5) + 
+  scale_y_continuous(limits = c(0.5, 1))
 
 gg_f1_mek + ggsave(here::here("reports/figures/mofa/f1_mek.pdf"), width = 6, height = 6)
 ```
@@ -724,9 +724,10 @@ drug_activity_joined <- weights %>%
   mutate(line = paste0(id, "T01")) %>%
   left_join(drug_activity)
 
+set.seed(123)
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "IGF-1R") %>% 
-  .$drug 
+  .$drug
 
 
 gg_f1_igf <- drug_activity_joined %>% 
@@ -735,7 +736,9 @@ gg_f1_igf <- drug_activity_joined %>%
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE, color = "black") + 
-  facet_wrap(~ drug)
+  facet_wrap(~ drug) + 
+  coord_fixed(ratio = 5) + 
+  scale_y_continuous(limits = c(0.5, 1))
 
 gg_f1_igf + ggsave(here::here("reports/figures/mofa/f1_igf.pdf"), width = 6, height = 6)
 ```
@@ -749,8 +752,10 @@ drug_activity_joined <- weights %>%
   mutate(line = paste0(id, "T01")) %>%
   left_join(drug_activity)
 
+set.seed(123)
 doi <- drug_activity_test %>% 
   dplyr::filter(target == "mTOR") %>% 
+  sample_n(9, replace = TRUE) %>%
   .$drug 
 
 
@@ -760,7 +765,9 @@ gg_f1_mtor <- drug_activity_joined %>%
   geom_point() + 
   cowplot::theme_cowplot() + 
   geom_smooth(method = "lm", se = FALSE, color = "green") + 
-  facet_wrap(~ drug)
+  facet_wrap(~ drug) + 
+  coord_fixed(ratio = 5) + 
+  scale_y_continuous(limits = c(0.5, 1))
 
 gg_f1_mtor + ggsave(here::here("reports/figures/mofa/f1_mtor.pdf"), width = 6, height = 6)
 ```
