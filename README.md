@@ -2,7 +2,7 @@
 
 This repository contains all notebooks and supporting code for the Boutros lab cancer organoid image-based profiling project. The latest version of the corresponding manuscript is published on [bioarXiv](https://www.biorxiv.org/content/10.1101/660993v1.full). The manuscript is currently undergoing peer-review. If you have comments, criticism or questions, please feel free to create an issue in this repository, send us a [tweet](https://twitter.com/Niklas_TR) or comment at bioarXiv. 
 
-This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest), which contains all dependencies and additional raw data to re-run the analysis.
+This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/r/niklastr/promise/tags), which contains all dependencies and additional raw data to re-run the analysis.
 
 The repository structure is based on the [cookiecutter datascience](https://github.com/drivendata/cookiecutter-data-science) template and the [rocker](https://www.rocker-project.org/) docker template for R. In order to run the analysis, pull this repository from github abd install the [SCOPEAnalysis](https://figshare.com/s/e465d65a9964d3b999e9) package. Alternatively, pull the pre-built docker [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo) which has the repository, the package and most dependencies preinstalled. You can interact with Rstudio Server which is running in the docker container using your [local browser](localhost:8080).  
 
@@ -11,9 +11,9 @@ Sequencing and gene expression data has been deposited in public repositories, s
 ## Docker Containers
 The project can most easily be reproduced by pulling these docker containers: 
 
-* niklastr/MOFA:latest - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
-* niklastr/promise:latest - contains the promise git project together with large local files stored under *localdata*
-* niklastr/promise:interimdata - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis (available soon)
+* [niklastr/MOFA:latest](https://hub.docker.com/r/niklastr/mofa/tags) - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
+* [niklastr/promise:latest](https://hub.docker.com/r/niklastr/promise/tags) - contains the promise git project together with large local files stored under *localdata*
+* [niklastr/promise:interimdata](https://hub.docker.com/r/niklastr/promise/tags) - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis (available soon)
 
 ## Reproducing Notebooks
 
