@@ -2,9 +2,9 @@
 
 This repository contains all notebooks and supporting code for the Boutros lab cancer organoid image-based profiling project. The latest version of the corresponding manuscript is published on [bioarXiv](https://www.biorxiv.org/content/10.1101/660993v1.full). The manuscript is currently undergoing peer-review. If you have comments, criticism or questions, please feel free to create an issue in this repository, send us a [tweet](https://twitter.com/Niklas_TR) or comment at bioarXiv. 
 
-This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo), which contains all dependencies and additional raw data to re-run the analysis.
+This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest), which contains all dependencies and additional raw data to re-run the analysis.
 
-The repository structure is based on the [cookiecutter datascience](https://github.com/drivendata/cookiecutter-data-science) template and the [rocker](https://www.rocker-project.org/) docker template for R. In order to run the analysis, install the [SCOPEAnalysis](https://figshare.com/s/e465d65a9964d3b999e9) package or pull the pre-built docker [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo). You can interact with Rstudio Server which is running in the docker container using your [local browser](localhost:8080).  
+The repository structure is based on the [cookiecutter datascience](https://github.com/drivendata/cookiecutter-data-science) template and the [rocker](https://www.rocker-project.org/) docker template for R. In order to run the analysis, pull this repository from github abd install the [SCOPEAnalysis](https://figshare.com/s/e465d65a9964d3b999e9) package. Alternatively, pull the pre-built docker [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo) which has the repository, the package and most dependencies preinstalled. You can interact with Rstudio Server which is running in the docker container using your [local browser](localhost:8080).  
 
 Sequencing and gene expression data has been deposited in public repositories, such as [GEO](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE117548) and [EGA](https://ega-archive.org/studies/EGAS00001003140).
 
@@ -13,7 +13,17 @@ The project can most easily be reproduced by pulling these docker containers:
 
 * niklastr/MOFA:latest - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
 * niklastr/promise:latest - contains the promise git project together with large local files stored under *localdata*
-* niklastr/promise:interimdata - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis
+* niklastr/promise:interimdata - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis (available soon)
+
+## Reproducing Notebooks
+
+All notebooks can be reproduced by starting a niklastr/promise docker, navigating to the promise working directory and calling
+
+```
+Rscript --vanilla make_results.R
+```
+
+Knitted vignettes will appear in the notebook subdirectories. Individual figures are exported into the reports/figures directory.
 
 ## Directory Structure
 
@@ -70,7 +80,7 @@ The project can most easily be reproduced by pulling these docker containers:
 		* removing objects that are out of focus
 		* removing objects with unexpected size
 
-#### data/interim (public data, available via docker niklastr/promise:interimdata)
+#### data/interim (public data, **line_differences**  and **drug_effects** will be available via docker niklastr/promise:interimdata)
 the directory contains 3 larger projects that were started for particular purposes within the manuscript: 
 * **line_differences** - a collection of common features across all organoid lines, followed by PCA for Unsupervised Learning and EDA
 	* results/ReducedFeatures_all_drugs_human.h5 - 27GB large file containing all shared features across lines
@@ -78,7 +88,7 @@ the directory contains 3 larger projects that were started for particular purpos
 * **drug_effects** - a project to estimate the effect of each drug treatment on every individual organoid line. Common features across lines are identified, features for each line are scaled to their DMSO control and PCA is being performed.
 	* TransformedFeatures_human_25components.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines, the **important difference to ReducedFeaturesPCA_all_drugs_human.h5** is that input features were scaled to each line's respective DMSO control.
 	* incrementalPCA - pickle of PCA model
-	* lines/ - containing the linear models for each line and drug with their respective AUROC and pvalue
+	* lines/ - containing the logistic regression models for each line and drug with their respective AUROC and pvalue
 * **organoid_viability**
 	* classifiers/ - model checkpoint of random forest classifiers
 	* diagnostics/ 
