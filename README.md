@@ -8,6 +8,13 @@ The repository structure is based on the [cookiecutter datascience](https://gith
 
 Sequencing and gene expression data has been deposited in public repositories, such as [GEO](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE117548) and [EGA](https://ega-archive.org/studies/EGAS00001003140).
 
+## Docker Containers
+The project can most easily be reproduced by pulling these docker containers: 
+
+* niklastr/MOFA:latest - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
+* niklastr/promise:latest - contains the promise git project together with large local files stored under *localdata*
+* niklastr/promise:interimdata - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis
+
 ## Directory Structure
 
 ```
@@ -63,7 +70,7 @@ Sequencing and gene expression data has been deposited in public repositories, s
 		* removing objects that are out of focus
 		* removing objects with unexpected size
 
-#### data/interim (public data, available via docker niklastr/promise:latest)
+#### data/interim (public data, available via docker niklastr/promise:interimdata)
 the directory contains 3 larger projects that were started for particular purposes within the manuscript: 
 * **line_differences** - a collection of common features across all organoid lines, followed by PCA for Unsupervised Learning and EDA
 	* results/ReducedFeatures_all_drugs_human.h5 - 27GB large file containing all shared features across lines
@@ -77,21 +84,21 @@ the directory contains 3 larger projects that were started for particular purpos
 	* diagnostics/ 
 	* results/ - containing csv files with viability estimates
 
-## data/processed (public data, available via docker and git repository)
+#### data/processed (public data, available via docker niklastr/promise:latest and git repository)
 * umap_ ..
 	* umap_absolute_all_drugs_tidy.Rds - ca. 1GB large file with all included organoid objects as UMAP projection with metadata
 	* umap_absolute_all_drugs_sampled.Rds - a subset of the UMAP object above, that represents 5% randomly sampled organoids of the original corpus, ca. 300k objects
 
 
-# src - source code required to process data and run models
-## src/data
-the directory contains two libraries (PROMISE and S3O) required for the generation of (image and feature-level) raw data. 
+### src - source code required to process data and run models
+#### src/data
+the directory contains two libraries (PROMISE, S3O and SCOPEAnalysis). The first two packages are required for the generation of (image and feature-level) raw data. 
 * PROMISE - contains a scheduler and handles the processing of raw microscopy images, incl. the compression into hdf5 objects
 * S3O - is a segmentation toolbox for organoid projections and, together with PROMISE is required to generate the feature-level raw data
-* make_expression.R - R script to perform preprocessing on microarray data, starting with .CEL files
-## src/models
+* make_expression.R - R script to perform preprocessing on microarray data, starting with publicly deposited .CEL files
+#### src/models
 code within the models directory is used to process feature-level raw data (input in data/raw, output in data/interim and data/processed)
-*FeatureAnalysis - the library contains python scripts to process the raw feature data by filtering and scaling it
+* FeatureAnalysis - the library contains python scripts to process the raw feature data by filtering and scaling it
   * Utils.py - contains two functions that contain the manual annotation for every imaged plate and need adjustment when running on new data 
     * get_rep_ids
     * get_rep_ids_real
@@ -99,8 +106,4 @@ code within the models directory is used to process feature-level raw data (inpu
 * bsub - contains .bsub jobs for the DKFZ ODCF cluster, the scripts call other functions that can be run in a different compute environemnt as well
 * umap - contains code for the further embedding of PCA projections from (ReducedFeaturesPCA_all_drugs_human.h5); the final result are the umap files **umap_absolute_all_drugs_tidy** and the downsampled version **umap_absolute_all_drugs_sampled**
 * clustering contains code related to various clustering methods for UMAP or PCA level feature data
-* mofa - 
-## src/visualization
-
-hdf5_pca_absolute_all_drugs.Rds
-
+* mofa - contains code for data preparation and modeling. The central script is **tidy_mofa.R**
