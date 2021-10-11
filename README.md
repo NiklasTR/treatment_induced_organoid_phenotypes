@@ -1,118 +1,61 @@
-promise
-==============================
+# PROMISE: Image-based Profiling of Cancer Organoids
 
-Human Cancer Organoid Profiling Project at the German Cancer Research Center
+This repository contains all notebooks and supporting code for the Boutros lab cancer organoid image-based profiling project. The latest version of the corresponding manuscript is published on [bioarXiv](https://www.biorxiv.org/content/10.1101/660993v1.full). The manuscript is currently undergoing peer-review. If you have comments, criticism or questions, please feel free to create an issue in this repository, send us a [tweet](https://twitter.com/Niklas_TR) or comment at bioarXiv. 
 
-link to manuscript for authors: 
-https://docs.google.com/document/d/1PZgywYY0v0Rzy_qjCTxaqY-T9Bdu5FLd_Ny_gSiy16w/edit?usp=sharing
+This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo), which contains all dependencies and additional raw data to re-run the analysis.
 
+The repository structure is based on the [cookiecutter datascience](https://github.com/drivendata/cookiecutter-data-science) template and the [rocker](https://www.rocker-project.org/) docker template for R. In order to run the analysis, install the [SCOPEAnalysis](https://figshare.com/s/e465d65a9964d3b999e9) package or pull the pre-built docker [image](https://hub.docker.com/layers/158839806/niklastr/promise/latest/images/sha256-362bac7f1dc8bafa2bfb519413ed08ed1ec4023171cf618c17e47eca0686fbf7?context=repo). You can interact with Rstudio Server which is running in the docker container using your [local browser](localhost:8080).  
 
+Sequencing and gene expression data has been deposited in public repositories, such as [GEO](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE117548) and [EGA](https://ega-archive.org/studies/EGAS00001003140).
 
-Hackathon agenda: 
-* manuscript
-    * last version
-    * comments
-    * upcoming version
-* overview github repo
-    * separate existence of SCOPE package with rest of repository (especially relevant for package data within SCOPE)
-    * ground truth file for organoid classification
-    * RNA expression data harmonization
+## Docker Containers
+The project can most easily be reproduced by pulling these docker containers: 
 
+* niklastr/MOFA:latest - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
+* niklastr/promise:latest - contains the promise git project together with large local files stored under *localdata*
+* niklastr/promise:interimdata - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis
 
-Issues I needed to fix
-* document the analysis workflow
-* run code with latest freetype version to perform ggrastr plots -> I add a subset of the data for local processing
+## Directory Structure
 
-Note for contributors
-------------
-the most up-to-date branch is "niklas". Please merge your contributions to this branch.
-I plan to merge niklas and master in 08/21
+```
+├── LICENSE
+├── Makefile           <- Makefile with commands like `make data` or `make train`
+├── README.md          <- The top-level README for developers using this project.
+├── data
+│   ├── external       <- Data from third party sources including in-house R packages.
+│   ├── interim        <- Intermediate data that has been transformed.
+│   ├── processed      <- The final, canonical data sets for modeling.
+│   └── raw            <- The original, immutable data dump. Data in this directory is incomplete due to size constraints.
+│
+├── models             <- Trained models, including MOFA models and UMAP clustering results
+│
+├── notebooks          <- R markdown notebooks. Naming convention is a number (for ordering),
+│                         the creator's initials, and a short `-` delimited description, e.g.
+│                         `1.0-jqp-initial-data-exploration`. Notebooks are sorted by topic.
+│
+├── references         <- Data dictionaries, manuals, and all other explanatory materials such as supplementary tables.
+│
+├── reports            <- Generated graphics and figures to be used in reporting
+│
+├── results            <- Camera-ready figures as pdf and illustrator files
+│
+├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
+│                         generated with `pip freeze > requirements.txt`
+│
+├── src                <- Source code for use in this project.
+│   │
+│   ├── data           <- Scripts to download, generate and pre-process data
+│   │
+│   ├── models         <- Scripts to extract features, train models, create UMAP embeddings and run MOFA        
+│   │
+│   └── visualization  <- Scripts to create exploratory visualizations (only works with raw data access)
+│
+└── docker            <- dockerfiles for niklastr/promise:clean and niklastr/mofa:clean
+```
 
-To-Do
-------------
-File transfer:
-* ctg data
-
-
-Gene expression
-* data were generated via the DKFZ GPCF
-* raw data is stored in .CEL format under data/raw/expression, data relating to the latest manuscript is separated under microarray_manuscript
-* a normalized file, also deposited at GEO, is generated
-    
-the complete project is running on R3.6    
-    
-    
-Analysis Pipeline
-------------
-
-
-raw.hdf -- FeatureAnalysis -> pca.hdf & raw.hdf
-pca.hdf -- UMAP ->
-
-Vignettes
-------------
-
-Bene (all scripts are in notebooks/SCOPAnalysis/vignettes/):
-
-| Script                          | Figures                    | Input               |
-|:------------------------------- |:--------------------------:|:------------------- |
-| notebooks/1.0-br-CTGAnalysis.Rmd          | Supp. Fig. 5, Fig. 3d      | SCOPE R package     |
-| notebooks/br-gene_expression.Rmd          | Fig. 3g,h.                 | baseline expr. rda  |
-| notebooks/br_gene_expression_gsk3i.Rmd    | -                          | CEL files on server |
-| notebooks/br_gene_expression_meki.Rmd     | Fig. 5b                    | CEL files on server |
-| src/data/make_expression.R                | -                          | CEL files on server |
-
-
-Project Organization
-------------
-
-    ????????? LICENSE
-    ????????? Makefile           <- Makefile with commands like `make data` or `make train`
-    ????????? README.md          <- The top-level README for developers using this project.
-    ????????? data
-    ??????? ????????? external       <- Data from third party sources.
-    ??????? ????????? interim        <- Intermediate data that has been transformed.
-    ??????? ????????? processed      <- The final, canonical data sets for modeling.
-    ??????? ????????? raw            <- The original, immutable data dump.
-    ???
-    ????????? docs               <- A default Sphinx project; see sphinx-doc.org for details
-    ???
-    ????????? models             <- Trained and serialized models, model predictions, or model summaries
-    ???
-    ????????? notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    ???                         the creator's initials, and a short `-` delimited description, e.g.
-    ???                         `1.0-jqp-initial-data-exploration`.
-    ???
-    ????????? references         <- Data dictionaries, manuals, and all other explanatory materials.
-    ???
-    ????????? reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    ??????? ????????? figures        <- Generated graphics and figures to be used in reporting
-    ???
-    ????????? requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    ???                         generated with `pip freeze > requirements.txt`
-    ???
-    ????????? setup.py           <- makes project pip installable (pip install -e .) so src can be imported
-    ????????? src                <- Source code for use in this project.
-    ??????? ????????? __init__.py    <- Makes src a Python module
-    ???   ???
-    ??????? ????????? data           <- Scripts to download or generate data
-    ??????? ??????? ????????? make_dataset.py
-    ???   ???
-    ??????? ????????? features       <- Scripts to turn raw data into features for modeling
-    ??????? ??????? ????????? build_features.py
-    ???   ???
-    ??????? ????????? models         <- Scripts to train models and then use trained models to make
-    ???   ???   ???                 predictions
-    ??????? ??????? ????????? predict_model.py
-    ??????? ??????? ????????? train_model.py
-    ???   ???
-    ??????? ????????? visualization  <- Scripts to create exploratory and results oriented visualizations
-    ???????     ????????? visualize.py
-    ???
-    ????????? tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
-
-# data
-## data/raw/PROMISE (imaging)
+## Directory Details 
+### data
+#### data/raw/PROMISE (non-public imaging data)
 * hdf5dir - contains raw well-level hdf5 imaging data of each well (e.g. per object: 4 regions, 3 channels, 16 z-levels), ca. 1GB/well
 * hdf5projection - contains hdf5 objects with image projection information on a well level, ca. 50MB/well
 * hdf5validation - text files containing error reports in case checksum are not matching between hdf5 files after file transfer (data was originally moved after local projection to a remote compute environment and storage)
@@ -127,36 +70,35 @@ Project Organization
 		* removing objects that are out of focus
 		* removing objects with unexpected size
 
-## data/interim (created by ML tools/ scripts)
-the directory contains 3 larger ML projects that were started for particular purposes within the manuscript
+#### data/interim (public data, available via docker niklastr/promise:interimdata)
+the directory contains 3 larger projects that were started for particular purposes within the manuscript: 
 * **line_differences** - a collection of common features across all organoid lines, followed by PCA for Unsupervised Learning and EDA
-	* Features_human_all_drugs.h5 - 27GB large file containing all features across lines
 	* results/ReducedFeatures_all_drugs_human.h5 - 27GB large file containing all shared features across lines
-	* results/ReducedFeaturesPCA_all_drugs_human.h5 - 5G large file containing results of a PCA with 25 preserved components across all analyzed lines
+	* results/ReducedFeaturesPCA_all_drugs_human.h5 - 5G large file containing results of a PCA with 25 preserved principal components across all analyzed lines
 * **drug_effects** - a project to estimate the effect of each drug treatment on every individual organoid line. Common features across lines are identified, features for each line are scaled to their DMSO control and PCA is being performed.
 	* TransformedFeatures_human_25components.h5 - 5G large file containing results of a incremental PCA with 25 preserved components across all analyzed lines, the **important difference to ReducedFeaturesPCA_all_drugs_human.h5** is that input features were scaled to each line's respective DMSO control.
 	* incrementalPCA - pickle of PCA model
 	* lines/ - containing the linear models for each line and drug with their respective AUROC and pvalue
 * **organoid_viability**
-	* classifiers/ - model checkpoint of random forest
+	* classifiers/ - model checkpoint of random forest classifiers
 	* diagnostics/ 
 	* results/ - containing csv files with viability estimates
 
-## data/processed (data for notebook processing)
+#### data/processed (public data, available via docker niklastr/promise:latest and git repository)
 * umap_ ..
-	* umap_absolute_all_drugs_tidy.Rds - all included organoid objects in UMAP projection with metadata
-	* umap_absolute_all_drugs_sampled.Rds - a subset of the UMAP object above, that represents 5% of the original corpus, ca. 300k objects
+	* umap_absolute_all_drugs_tidy.Rds - ca. 1GB large file with all included organoid objects as UMAP projection with metadata
+	* umap_absolute_all_drugs_sampled.Rds - a subset of the UMAP object above, that represents 5% randomly sampled organoids of the original corpus, ca. 300k objects
 
 
-# src - source code required to process data and run models
-## src/data
-the directory contains two libraries (PROMISE and S3O) required for the generation of (image and feature-level) raw data. 
+### src - source code required to process data and run models
+#### src/data
+the directory contains two libraries (PROMISE, S3O and SCOPEAnalysis). The first two packages are required for the generation of (image and feature-level) raw data. 
 * PROMISE - contains a scheduler and handles the processing of raw microscopy images, incl. the compression into hdf5 objects
 * S3O - is a segmentation toolbox for organoid projections and, together with PROMISE is required to generate the feature-level raw data
-* make_expression.R - R script to perform preprocessing on microarray data, starting with .CEL files
-## src/models
+* make_expression.R - R script to perform preprocessing on microarray data, starting with publicly deposited .CEL files
+#### src/models
 code within the models directory is used to process feature-level raw data (input in data/raw, output in data/interim and data/processed)
-*FeatureAnalysis - the library contains python scripts to process the raw feature data by filtering and scaling it
+* FeatureAnalysis - the library contains python scripts to process the raw feature data by filtering and scaling it
   * Utils.py - contains two functions that contain the manual annotation for every imaged plate and need adjustment when running on new data 
     * get_rep_ids
     * get_rep_ids_real
@@ -164,13 +106,4 @@ code within the models directory is used to process feature-level raw data (inpu
 * bsub - contains .bsub jobs for the DKFZ ODCF cluster, the scripts call other functions that can be run in a different compute environemnt as well
 * umap - contains code for the further embedding of PCA projections from (ReducedFeaturesPCA_all_drugs_human.h5); the final result are the umap files **umap_absolute_all_drugs_tidy** and the downsampled version **umap_absolute_all_drugs_sampled**
 * clustering contains code related to various clustering methods for UMAP or PCA level feature data
-* mofa - 
-## src/visualization
-
-hdf5_pca_absolute_all_drugs.Rds
-
-
-
-new plates can be added here and deprecated plates can be commented out.
-
-<p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
+* mofa - contains code for data preparation and modeling. The central script is **tidy_mofa.R**

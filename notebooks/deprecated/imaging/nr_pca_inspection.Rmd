@@ -1,0 +1,197 @@
+---
+title: "PCA EDA"
+author: Niklas Rindtorff
+output:
+  pdf_document: default
+  html_document:
+    keep_md: true
+params:
+  data: "data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_sampled.Rds"
+  data_harmony: "data/processed/PhenotypeSpectrum/harmony_pca_absolute_all_drugs_sampled.Rds"
+  remote: FALSE
+  cache: FALSE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = params$cache,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(magrittr)
+library(purrr)
+library(readr)
+library(here)
+library(ggrastr)
+library(cowplot)
+library(princurve)
+library(scico)
+library(ggridges)
+library(cowplot)
+library(tibble)
+library(grDevices)
+
+# parameter
+print("parameter input:")
+print(params$data)
+```
+
+# input
+
+```{r}
+pca_df_raw <- read_rds(here::here(params$data))
+pca_df_harmony <- read_rds(here::here(params$data_harmony))
+
+pca_df <- rbind(pca_df_raw %>% mutate(status = "raw"),
+                pca_df_harmony %>% mutate(status = "harmony"))
+
+organoid_morphology <- read_delim(here::here("references/imaging/visual_classification_organoids.csv"), ";", escape_double = FALSE, trim_ws = TRUE) %>% 
+  dplyr::select(line = organoid, morphology = visual_inspection_v2)
+
+
+```
+
+I generate an aggregate table, that contains average loadings for all DMSO treated organoids by line and screening plate.
+
+```{r}
+pca_dmso <- pca_df %>% filter(drug == "DMSO") %>% 
+  #filter(size_log > 7.5) %>%
+  group_by(line, screen_id, replicate, status) %>% 
+  summarise_at(vars(contains("pc"), size_log), funs(mean)) %>% 
+  ungroup() %>%
+    left_join(organoid_morphology %>% mutate(line = paste0(line, "01"))) 
+```
+
+# size distribution of sample
+
+```{r}
+pca_df %>% 
+  ggplot(aes(size_log, color = status)) + 
+  geom_density() + 
+  facet_wrap(~ line) + 
+  theme_cowplot()
+```
+
+# PCA representation by normalization method
+
+```{r}
+anno_df = pca_dmso %>% 
+  filter(status == "raw") %>%
+  dplyr::select(size_log, morphology, screen_id, line) %>% 
+  mutate(id = paste0(line, "_", screen_id)) %>% 
+  as.data.frame() %>% column_to_rownames("id")
+  
+data_df = pca_dmso %>% 
+  filter(status == "raw") %>%
+  mutate(id = paste0(line, "_", screen_id)) %>% 
+  dplyr::select(-size_log, -morphology, -screen_id, -line, -replicate, -status) %>% 
+  as.data.frame() %>% column_to_rownames("id")
+
+pheatmap::pheatmap(data_df, 
+                   annotation_row = anno_df, 
+                   cluster_cols = FALSE,
+                   main = "raw PCA features")
+```
+
+```{r}
+anno_df = pca_dmso %>% 
+  filter(status == "harmony") %>%
+  dplyr::select(size_log, morphology, screen_id, line) %>% 
+  mutate(id = paste0(line, "_", screen_id)) %>% 
+  as.data.frame() %>% column_to_rownames("id")
+  
+data_df = pca_dmso %>% 
+  filter(status == "harmony") %>%
+  mutate(id = paste0(line, "_", screen_id)) %>% 
+  dplyr::select(-size_log, -morphology, -screen_id, -line, -replicate, -status) %>% 
+  as.data.frame() %>% column_to_rownames("id")
+
+pheatmap::pheatmap(data_df, 
+                   annotation_row = anno_df, 
+                   cluster_cols = FALSE,
+                   main = "harmony PCA features")
+```
+
+# organoid level representation
+
+```{r}
+pc12 <- pca_df %>% 
+  ggplot(aes(pc1, pc2, color = size_log)) + 
+  geom_point_rast() + 
+  scale_color_viridis_c() + 
+  facet_wrap(~ status) + 
+  cowplot::theme_cowplot()
+
+pc23 <- pca_df %>% 
+  #left_join(organoid_morphology %>% mutate(line = paste0(line, "01"))) %>%
+  ggplot(aes(pc3, pc2, color = size_log)) + 
+  geom_point_rast() + 
+  scale_color_viridis_c() + 
+  facet_wrap(~ status) + 
+  cowplot::theme_cowplot()
+
+plot_grid(pc12, pc23, ncol = 1)
+```
+
+# replicate level representation
+
+```{r}
+pca_dmso %>% 
+  ggplot(aes(pc1, pc2, color = size_log, label = line)) + 
+  geom_point() + 
+  ggrepel::geom_text_repel(color = "black") + 
+  scale_color_viridis_c() + 
+  facet_wrap(~ status) + 
+  cowplot::theme_cowplot()
+```
+
+```{r}
+pca_dmso %>% 
+  ggplot(aes(pc3, pc2, color = morphology, label = line)) + 
+  geom_point() + 
+  ggrepel::geom_text_repel() + 
+  #scale_color_viridis_c() + 
+  theme_cowplot() + 
+  facet_wrap(~ status) + 
+  cowplot::theme_cowplot()
+```
+
+# ANOVA: PC ~ screen_id
+
+```{r}
+screen_id_aov <- pca_dmso %>% 
+  pivot_longer(contains('pc'), values_to = 'value', names_to = "factor") %>%
+  nest(-factor, -status) %>%
+  mutate(aov = purrr::map(data, ~ stats::aov(value ~ screen_id, data = .x) %>% broom::tidy())) %>%
+  unnest(aov) %>%
+  filter(term != 'Residuals') %>% 
+  arrange((p.value)) %>%
+  mutate(fdr = p.adjust(p.value, method = "bonferroni"))
+
+screen_id_aov %>% filter(fdr < .2)
+
+ggbatch <- pca_dmso %>% 
+  pivot_longer(contains('pc'), values_to = 'value', names_to = "factor") %>%
+  filter(factor %in% (screen_id_aov %>% filter(fdr < .2) %>% .$factor)) %>%
+  ggplot(aes(screen_id, value, color = line)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0)+
+  cowplot::theme_cowplot() + 
+  labs(x = "Imaging Batch",
+       #y = "Factor 1",
+       title = "Significant Association of Imaging Batch with PCA") + 
+  facet_grid(status ~ factor)
+  
+
+ggbatch
+```
+
+
+
+

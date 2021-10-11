@@ -1,0 +1,1606 @@
+---
+title: "Patient Case and Doubling Time of organoid lines"
+author: "Niklas Rindtorff and Benedikt Rauscher"
+output: 
+   BiocStyle::html_document2:
+    code_folding: hide
+    df_print: paged
+    toc_depth: 4
+    toc_float: true
+    fig_height: 6
+    fig_width: 9.5
+vignette: >
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Introduction
+12 organoid lines were screened with about 70 compounds (5 concentrations) of the clinical cancer panel. After 7 days total (4 days of treatment) the organoids we lysed and a ctg assay was performed. The experiment was conducted in 2 replciates. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=9.5, fig.height=6) 
+# Set some global knitr options
+library("knitr")
+opts_chunk$set(tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=60), cache=TRUE, messages=FALSE)
+```
+
+## Load packages and data
+Load necessary packages for data analysis
+```{r load-packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+# library(readr)
+# library(dplyr)
+# library(tidyr)
+# library(ggplot2)
+#library(corrr)
+library(pheatmap)
+#library(gridExtra)
+#library(EBImage) #cite
+#library(HTSvis) #cite
+library(PharmacoGx) #cite
+library(growthcurve) #cite
+#library(jsonlite)
+#library(httr)
+#library(openxlsx)
+library(preprocessCore) #cite
+library(stringr)
+library(GRmetrics)
+#library(scales)
+#library(ggpubr)
+library(readxl)
+library(ggsignif)
+library(drc)
+library(corrr)
+library(here)
+```
+
+Four files are needed: 
+Clin_Data_Basic-cohort.xlsx 
+PROMISE_CTG_normalized_26021028.Rdata 
+auc_pgx_0318.Rdata
+RectalCancers_histol-RCTX-response.xlsx
+
+
+
+
+
+Load clinical data. The primary location of tumors is divided into three sights. 
+```{r, warning=FALSE, message = FALSE, eval = FALSE}
+#import clinical data
+# cohort <- read_excel("~/promise/local_data/clinical_data/Clin_Data_Basic-cohort.xlsx") %>%
+#   separate(ID, c("p", "no.line"), sep = 1) %>%
+#   mutate(line = paste0("D", no.line, "T01")) %>% #only works if there were no re-biopsies
+#   dplyr::select(-p, -no.line)
+
+cohort <- read_excel(here::here("references/clinical_data/Clin_Data_Basic-cohort.xlsx") %>%
+  separate(ID, c("p", "no.line"), sep = 1) %>%
+  mutate(line = paste0("D", no.line, "T01")) %>% #only works if there were no re-biopsies
+  dplyr::select(-p, -no.line)
+
+mutations <- read_excel("~/PowerFolders/2017-08 PDO [Johannes Betge Niklas Rintdorff]/Tables/S2_Mutations_PDOs.xlsx") %>%
+  dplyr::rename(sample = SAMPLE) %>% 
+  dplyr::rename(GENE = SYMBOL)
+
+mutations_freq <- read_excel("~/promise/local_data/sequencing/171114_Mutations_Organoids.xlsx")
+
+#mutation matrix based on thresholded AF
+mutations_contig <- mutations %>% #mutation_matrix <-
+  dplyr::select(sample, GENE) %>%
+  mutate(sample = paste0("D", str_sub(sample, 2, length(sample)), "01")) %>%
+  dplyr::rename(line = sample) %>%
+  mutate(status = "mutated") %>%
+  complete(line, GENE, fill = list(status = "wildtype")) %>%
+  distinct(line, GENE, status, .keep_all = TRUE) %>%
+  #group_by(line) %>%
+  spread(GENE, status) %>%
+  mutate(ras = if_else(KRAS == "mutated" | NRAS == "mutated", "mutated", "wildtype"))
+
+#mutation matrix with AF
+mutations_freq_contig <- mutations_freq %>%
+  dplyr::select(sample, GENE, AF) %>% 
+  mutate(sample = paste0("D", str_sub(sample, 2, length(sample)), "01")) %>%
+  dplyr::rename(line = sample) %>%
+  complete(line, GENE, fill = list(AF = 0)) %>%
+  distinct(line, GENE, .keep_all = TRUE) %>%
+  #group_by(line) %>%
+  spread(GENE, AF)
+
+#define RAS mutation status
+ras <- mutations %>% 
+  group_by(sample) %>%
+  summarise(ras = grepl(pattern = "RAS", GENE) %>% max()) %>%
+  mutate(ras = if_else(ras == 1, "mutant", "wildtype"),
+         line = paste0("D", str_sub(sample, 2, length(sample)), "01")) %>%
+  dplyr::select(-sample)
+
+cohort_short <- cohort %>%
+  #dplyr::select(line, Location) %>%
+  dplyr::select(line, age, Location, `T`, N, M, Stage, G, Treatment) %>%
+  full_join(., mutations_contig) %>%
+  mutate(Patient = line) %>%
+  dplyr::select(-line)
+  
+
+#Set locations
+cohort_short$Location[cohort_short$Location == "Asc"] <- "Right"
+cohort_short$Location[cohort_short$Location == "Sigm"] <- "Left"
+
+cohort_short <- cohort_short %>%
+  mutate(Location = factor(Location, levels = c("Right", "Left", "Rectum")))
+```
+
+
+#Load normlaized data from B. Rauscher
+I spike in the normalized data curated by B.Rauscher 04.03.2018
+
+```{r, warning=FALSE, message = FALSE}
+#load("~/promise/local_data/ctg_data/processed/PROMISE_CTG_normalized_26021028.rda")
+load("PROMISE_CTG_normalized_26021028.rda")
+ctg_norm <- ctg_norm %>%
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE, sep = "_") %>%
+  mutate(full_barcode = ifelse(nchar(full_barcode) != 14, substr(full_barcode, 5, nchar(full_barcode)), full_barcode)) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  group_by(line, drug) %>% arrange(rack.concentration)
+
+```
+
+#Quantification
+## Quantification of drug response with AUC
+
+Different ways of quantifying drug response might yield different response. We first use the PharmacoGx package to calculate AUCs based on both the actual data and the fitted curve (I would assume the first to be more reasonable).
+
+```{r, results='hide', warning = F, message=F, eval = FALSE}
+## takes a while
+# auc_pgx <- ctg_qnorm_tidy%>%
+#   mutate(pc_norm = pcount_norm) %>%
+#   group_by(screen, drug) %>% arrange(rack.concentration) %>% 
+#   ## calculate auc both for fitted curve and actual values
+#   mutate(s_AUC_fit = computeAUC(rack.concentration, pc_norm, verbose=F,
+#                               viability_as_pct = F, area.type = 'Fitted'), 
+#          s_AUC_actual = computeAUC(rack.concentration, pc_norm, verbose=F,
+#                                  viability_as_pct = F, area.type='Actual')) %>% 
+#   group_by(line, drug) %>% arrange(rack.concentration) %>% 
+#   ## calculate auc both for fitted curve and actual values
+#   mutate(l_AUC_fit = computeAUC(rack.concentration, pc_norm, verbose=F,
+#                               viability_as_pct = F, area.type = 'Fitted'), 
+#          l_AUC_actual = computeAUC(rack.concentration, pc_norm, verbose=F,
+#                                  viability_as_pct = F, area.type='Actual')) %>%
+#   ungroup()
+
+auc_pgx <- ctg_norm%>%
+  mutate(pc_norm = viability) %>%
+  #filter(drug == coi) %>%
+  group_by(screen, drug) %>% arrange(rack.concentration) %>%
+  ## calculate auc both for fitted curve and actual values
+  mutate(s_AUC_fit = computeAUC(rack.concentration, pc_norm, verbose=T,
+                              viability_as_pct = F, area.type = 'Fitted'),
+         s_AUC_actual = computeAUC(rack.concentration, pc_norm, verbose=T,
+                                 viability_as_pct = F, area.type='Actual')) %>%
+  group_by(line, drug) %>% arrange(rack.concentration) %>%
+  ## calculate auc both for fitted curve and actual values
+  mutate(l_AUC_fit = computeAUC(rack.concentration, pc_norm, verbose=F,
+                              viability_as_pct = F, area.type = 'Fitted'),
+         l_AUC_actual = computeAUC(rack.concentration, pc_norm, verbose=F,
+                                 viability_as_pct = F, area.type='Actual')) %>%
+  ungroup()
+
+save(auc_pgx, file = "auc_pgx_0318.Rdata")
+```
+
+We plot a scatter plot to see if both ways of calculating the AUC agree. 
+
+```{r, results='hide', warning=F, message=F, eval = TRUE}
+#load("~/promise/auc_pgx_0318.Rdata")
+load("auc_pgx_0318.Rdata")
+auc_pgx %>% ggplot(aes(s_AUC_fit, s_AUC_actual)) + geom_point() + theme_classic()
+auc_pgx %>% ggplot(aes(l_AUC_fit, l_AUC_actual)) + geom_point() + theme_classic()
+```
+
+It seems that they agree very well, with the exception of some outliers generated by cases with NAs. Looking through the results manually it seems that the values estimated by the fitted curve are more reasonable. It would be interesting to compare these results with the results of a different AUC quantification, for example using a multilevel model.
+
+
+
+
+
+
+
+# Illustration of dose response curves 
+
+```{r, eval = FALSE}
+ctg_qnorm_tidy <- ctg_qnorm %>%
+   ## separate annotation of screen name 
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  group_by(line, drug) %>% arrange(rack.concentration) 
+```
+
+I rename some objects for historic reasons
+
+```{r}
+ctg_qnorm_tidy <- ctg_norm
+```
+
+
+###Patient case dose-response
+An alternative representation, which avoids curve fitting is the following. It will later be used during the patient case. 
+
+```{r}
+
+
+coi <- c(  "5-FU", "Irinotecan / SN-38", "Erlotinib", "Gefitinib") %>% rev()
+#oi <- c(  "5-FU")
+#loi <- c("D004T01", "D007T01")
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_norm %>% #ctg_qnorm_tidy %>% 
+  #mutate(viability = pc_norm) %>%
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, viability, conc) %>%
+  filter(drug %in% coi) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = coi)) %>%
+  group_by(line, drug, conc) %>%
+     dplyr::summarise(mean_photons = mean(viability, na.rm = TRUE),
+                     sd_photons = sd(viability, na.rm = TRUE),
+                     range_low_photons = range(viability)[1],
+                     range_high_photons = range(viability)[2]) 
+
+tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+    geom_point(data = tmp %>% filter(line == "D027T01"), position = dodge,  stat = "identity", size = 2, colour = "#F0390B", alpha = 0.8)  + 
+    ##geom_point(data = tmp %>% filter(line != loi), position = dodge,  stat = "identity", size = 1, colour = "#9E9A99", alpha = 0.4)  +
+    geom_path(data = tmp %>% filter(line == "D027T01"), aes(group = line), colour = "#F0390B", alpha = 0.8, position = dodge, size = 1.5) + 
+    geom_path(data = tmp %>% filter(line != "D027T01"), aes(group = line), colour = "#9E9A99", alpha = 0.2, position = dodge, size = 1) + 
+  scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+    theme_classic() +
+    #geom_errorbar(data = tmp %>% filter(line == "D027T01"), aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    geom_ribbon(data = tmp %>% filter(line == "D027T01"), aes(x=conc, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = "#F0390B") 
+    #geom_ribbon(data = tmp %>% filter(line != loi), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), alpha=0.05, fill = "#9E9A99") +
+    #geom_smooth(method = "gam")
+    
+```
+
+I wonder which concentrations have low viabilities in Irinotecan and why.
+
+```{r}
+ctg_norm %>% filter(drug == "Irinotecan / SN-38") %>% ungroup() %>% dplyr::select(well, drug, rack.concentration) %>% distinct()
+```
+
+The volatile dose-response curve is caused by edge placement of the treatments.
+
+#Selected dose-response cruves
+
+For figure 5 we are going to show some further dose-response curves to show explainable and unexplainable differential drug responses. First I define a function for plotting dose response curves.
+
+```{r}
+plot_dose_response <- function(coi, loi){
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_norm %>% #ctg_qnorm_tidy %>% 
+  #mutate(viability = pc_norm) %>%
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  unite(line_date, line, date, remove = FALSE) %>%
+  dplyr::select(line, drug, viability, conc, line_date) %>%
+  filter(drug %in% coi) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = coi)) %>%
+  group_by(line, drug, conc) %>%
+     dplyr::summarise(mean_photons = mean(viability, na.rm = TRUE),
+                     sd_photons = sd(viability, na.rm = TRUE),
+                     range_low_photons = range(viability)[1],
+                     range_high_photons = range(viability)[2]) 
+
+p <- tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+  geom_path(data = tmp %>% filter(!line %in% loi), aes(group = line), colour = "#9E9A99", alpha = 0.8, position = dodge, size = 1) +
+ # geom_point(data = tmp %>% filter(line %in% loi), position = dodge,  stat = "identity", size = 2,  alpha = 0.8)  + 
+  geom_path(data = tmp %>% filter(line %in% loi), aes(group = line),  alpha = 0.8, position = dodge, size = 1.5) +
+     
+    scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+  scale_colour_brewer(palette = "Paired") +
+  ggrepel::geom_text_repel(data = tmp %>% filter(line %in% loi, conc == 0.04), aes(label = line)) + 
+    theme_classic() #+ 
+  
+
+return(p)
+}
+```
+
+
+```{r}
+coi <- c("Gefitinib")
+loi <- mutations_contig %>% filter(NRAS == "mutated") %>% .$line %>% unique()
+
+plot_dose_response(coi, loi) + 
+  ggsave("gefi_nras.pdf", width = 4, height = 4)
+```
+
+
+```{r}
+coi <- c("Nutlin3a")
+loi <- mutations_contig %>% filter(TP53 == "mutated") %>% .$line %>% unique()
+
+plot_dose_response(coi, loi) + 
+  ggsave("nutlin_p53.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("Paclitaxel") %>% rev()
+loi <- c("D022T01", "D020T01", "D013T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("taxane_22_20_13.pdf", width = 4, height = 4)
+```
+
+
+```{r}
+coi <- c("Ponatinib") %>% rev()
+loi <- c("D021T01", "D015T01", "D052T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("ponatinib_21_15_52.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("Birinapant") %>% rev()
+loi <- c("D020T01", "D022T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("birinapant_22_20.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("MK-1775") %>% rev()
+loi <- c("D018T01", "D010T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("mk1775.pdf", width = 4, height = 4)
+```
+
+
+#Using LDC data to plot dose-response curves of patient case and selected dose-responses
+
+I overwrite the ctg_norm object temporarily. 
+
+```{r}
+ctg_norm <- read_rds("ImageViability_with_AUC_twoChannels.rds") %>%
+  mutate(rack.concentration = Concentration %>% as.numeric(),
+         line = Line, 
+         date = Replicate,
+         drug = Product.Name,
+         viability = Percent.Live) %>% 
+  filter(line != "D020T01")
+```
+
+```{r}
+
+
+coi <- c(  "5-FU", "Irinotecan / SN-38", "Erlotinib", "Gefitinib") %>% rev()
+#oi <- c(  "5-FU")
+#loi <- c("D004T01", "D007T01")
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_norm %>% #ctg_qnorm_tidy %>% 
+  #mutate(viability = pc_norm) %>%
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, viability, conc) %>%
+  filter(drug %in% coi) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = coi)) %>%
+  group_by(line, drug, conc) %>%
+     dplyr::summarise(mean_photons = mean(viability, na.rm = TRUE),
+                     sd_photons = sd(viability, na.rm = TRUE),
+                     range_low_photons = range(viability)[1],
+                     range_high_photons = range(viability)[2]) 
+
+tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+    geom_point(data = tmp %>% filter(line == "D027T01"), position = dodge,  stat = "identity", size = 2, colour = "#F0390B", alpha = 0.8)  + 
+    ##geom_point(data = tmp %>% filter(line != loi), position = dodge,  stat = "identity", size = 1, colour = "#9E9A99", alpha = 0.4)  +
+    geom_path(data = tmp %>% filter(line == "D027T01"), aes(group = line), colour = "#F0390B", alpha = 0.8, position = dodge, size = 1.5) + 
+    geom_path(data = tmp %>% filter(line != "D027T01"), aes(group = line), colour = "#9E9A99", alpha = 0.2, position = dodge, size = 1) + 
+  scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+    theme_classic() +
+    #geom_errorbar(data = tmp %>% filter(line == "D027T01"), aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    geom_ribbon(data = tmp %>% filter(line == "D027T01"), aes(x=conc, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = "#F0390B") + 
+  ggsave("patient_case_ldc.pdf", width = 6, height = 6)
+    #geom_ribbon(data = tmp %>% filter(line != loi), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), alpha=0.05, fill = "#9E9A99") +
+    #geom_smooth(method = "gam")
+    
+```
+
+```{r}
+coi <- c("MK-1775") %>% rev()
+loi <- c("D018T01", "D010T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("mk1775_ldc.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("Nutlin3a")
+loi <- mutations_contig %>% filter(TP53 == "mutated") %>% .$line %>% unique()
+
+plot_dose_response(coi, loi) + 
+  ggsave("nutlin_p53_ldc.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("Paclitaxel") %>% rev()
+loi <- c("D022T01", "D020T02", "D013T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("taxane_22_20_13_ldc.pdf", width = 4, height = 4)
+```
+
+
+```{r}
+coi <- c("Ponatinib") %>% rev()
+loi <- c("D021T01", "D015T01", "D052T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("ponatinib_21_15_52_ldc.pdf", width = 4, height = 4)
+```
+
+```{r}
+coi <- c("Birinapant") %>% rev()
+loi <- c("D020T02", "D022T01")
+
+plot_dose_response(coi, loi) + 
+  ggsave("birinapant_22_20_ldc.pdf", width = 4, height = 4)
+```
+
+#Reload ctg-based data 
+
+
+```{r, warning=FALSE, message = FALSE}
+#load("~/promise/local_data/ctg_data/processed/PROMISE_CTG_normalized_26021028.rda")
+load("PROMISE_CTG_normalized_26021028.rda")
+ctg_norm <- ctg_norm %>%
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE, sep = "_") %>%
+  mutate(full_barcode = ifelse(nchar(full_barcode) != 14, substr(full_barcode, 5, nchar(full_barcode)), full_barcode)) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  group_by(line, drug) %>% arrange(rack.concentration)
+
+```
+
+
+##Rectal cancer radiation response
+
+I load the rectal cancer histological regression data. 
+```{r, warning=FALSE, message = FALSE}
+library(readxl)
+# rectal_response <- read_excel("~/promise/local_data/clinical_data/RectalCancers_histol-RCTX-response.xlsx", 
+#     sheet = "Blatt1") %>% `colnames<-` (c("line", "therapy", "regimen", "dworak", "description")) %>% mutate(dworak = substr(dworak,6,8) %>% as.roman() %>% as.numeric()) %>% mutate(line = substr(line, 2,4) %>% paste0("D", ., "T01")) %>% dplyr::select(line, dworak)
+
+rectal_response <- read_excel("RectalCancers_histol-RCTX-response.xlsx", 
+    sheet = "Blatt1") %>% `colnames<-` (c("line", "therapy", "regimen", "dworak", "description")) %>% mutate(dworak = substr(dworak,6,8) %>% as.roman() %>% as.numeric()) %>% mutate(line = substr(line, 2,4) %>% paste0("D", ., "T01")) %>% dplyr::select(line, dworak)
+```
+
+Now I plot the dose response curves as well as the regression score.
+
+```{r, warning=FALSE, message = FALSE}
+#coi <- c(  "5-FU", "Irinotecan / SN-38", "Erlotinib", "Gefitinib") %>% rev()
+coi <- c(  "5-FU")
+loi <- c("D004T01", "D007T01", "D054T01", "D055T01", "D046T01", "D052T01")
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_norm %>% 
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, viability, conc, date) %>%
+  #dplyr::select(line, drug, viability, conc) %>%
+  
+  filter(drug %in% coi) %>%
+  left_join(., rectal_response %>% mutate(dworak = as.factor(dworak))) %>%
+  unite(line_date, line, date, remove = FALSE) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = coi)) %>%
+  mutate(mean_photons = viability)
+  
+
+tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+  geom_point(data = tmp %>% filter(line %in% loi), position = dodge,  stat = "identity", size = 2, aes(colour = dworak), alpha = 0.8)  + 
+  geom_path(data = tmp %>% filter(line %in% loi), aes(group = line_date, color = dworak),  alpha = 0.8, position = dodge, size = 1.5) +
+    geom_path(data = tmp %>% filter(!line %in% loi), aes(group = line_date), colour = "#9E9A99", alpha = 0.2, position = dodge, size = 1) + 
+    scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+  scale_colour_brewer(palette = "Paired") +
+    theme_classic() 
+  
+```
+
+For the supplement I show the dose-response curve of a responder and non-responder . 
+
+```{r, warning=FALSE, message = FALSE}
+#coi <- c(  "5-FU", "Irinotecan / SN-38", "Erlotinib", "Gefitinib") %>% rev()
+coi <- c(  "5-FU")
+loi <- c("D004T01", "D007T01")
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_norm %>% #ctg_qnorm_tidy %>% 
+  #mutate(viability = pc_norm) %>%
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, viability, conc) %>%
+  filter(drug %in% coi) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = coi)) %>%
+  group_by(line, drug, conc) %>%
+     dplyr::summarise(mean_photons = mean(viability, na.rm = TRUE),
+                     sd_photons = sd(viability, na.rm = TRUE),
+                     range_low_photons = range(viability)[1],
+                     range_high_photons = range(viability)[2]) 
+
+tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+    geom_point(data = tmp %>% filter(line == "D004T01"), position = dodge,  stat = "identity", size = 2, colour = "#009933", alpha = 0.8)  + 
+    geom_point(data = tmp %>% filter(line == "D007T01"), position = dodge,  stat = "identity", size = 2, colour = "#000099", alpha = 0.8)  + 
+    #geom_point(data = tmp %>% filter(!line %in% loi), position = dodge,  stat = "identity", size = 1, colour = "#9E9A99", alpha = 0.4)  +
+    geom_path(data = tmp %>% filter(line == "D004T01"), aes(group = line), colour = "#009933", alpha = 0.8, position = dodge, size = 1.5) + 
+    geom_path(data = tmp %>% filter(line == "D007T01"), aes(group = line), colour = "#000099", alpha = 0.8, position = dodge, size = 1.5) + 
+    geom_path(data = tmp %>% filter(!line %in% loi), aes(group = line), colour = "#9E9A99", alpha = 0.2, position = dodge, size = 1) + 
+    #geom_errorbar(data = tmp %>% filter(line == "D027T01"), aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    #geom_ribbon(data = tmp %>% filter(line == "D004T01"), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = "#009933") +
+  #geom_ribbon(data = tmp %>% filter(line == "D007T01"), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = "#000099") +
+    #geom_ribbon(data = tmp %>% filter(line != loi), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), alpha=0.05, fill = "#9E9A99") +
+    #geom_smooth(method = "gam")+
+    scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+    theme_classic()
+```
+
+
+Now I want to take a look at the auc values for the different patients and if I can see the differences here as well. 
+I changed the plot to show the AUC, not the 1-AUC.
+
+```{r, warning=FALSE, message = FALSE}
+coi <- c(  "5-FU")
+loi <- c("D004T01", "D007T01", "D054T01", "D055T01", "D046T01", "D052T01")
+
+auc_pgx %>% 
+  filter(drug == coi, line %in% loi) %>% 
+  left_join(., rectal_response) %>% 
+  dplyr::select(line, dworak, s_AUC_actual) %>%
+  mutate(responder = ifelse((dworak %>% as.numeric()) > 1, "responder", "non-responder")) %>%
+  mutate(dworak = as.factor(dworak)) %>%
+  mutate(s_AUC_actual = 1-s_AUC_actual) %>%
+  distinct() %>%
+  ggplot(aes(responder, s_AUC_actual)) + 
+  geom_boxplot(aes(group = responder), width = 0.5, outlier.alpha = 0) + 
+  #geom_point(aes(color = dworak)) + 
+  #geom_jitter(width = 0.125, aes(color = dworak)) + 
+  #geom_jitter(width = 0.125) + 
+  geom_jitter(width = 0.125, aes(color = line)) + 
+  ggsignif::geom_signif(comparisons = list(c("responder", "non-responder"))) + 
+  theme_classic() + 
+  ggtitle("5-FU response in-vitro is in accordance \n with patholocial response grading in the clinic") + 
+  ylab("5FU response in-vitro, 1-AUC") + 
+  xlab("Dworak regression score, responder with score > 1") + 
+  scale_colour_brewer(palette = "Paired", direction = -1) + 
+  ggsave("dworak_test.pdf", width = 4, height = 4)
+```
+
+
+##Worksheet for personlaized treatment decisions
+
+Overview plot for personalized treatment decision (not shown)
+
+```{r, eval = FALSE}
+#coi <- c(  "5-FU")
+loi <- c("D022T01")
+color_id <- "#009933"
+dodge <- position_dodge(width=0)
+
+tmp <- ctg_qnorm_tidy %>% 
+  ungroup() %>%
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, pc_norm, conc) %>%
+  #filter(drug %in% coi) %>%
+  group_by(line, drug, conc) %>%
+     dplyr::summarise(mean_photons = mean(pc_norm, na.rm = TRUE),
+                     sd_photons = sd(pc_norm, na.rm = TRUE),
+                     range_low_photons = range(pc_norm)[1],
+                     range_high_photons = range(pc_norm)[2]) 
+
+tmp %>%
+  ungroup() %>%
+  mutate(line = as.character(line)) %>%
+    ggplot(data = ., aes(y = mean_photons, x = conc)) + 
+    geom_point(data = tmp %>% filter(line == loi), position = dodge,  stat = "identity", size = 2, colour = color_id, alpha = 0.8)  + 
+    #geom_point(data = tmp %>% filter(line == "D007T01"), position = dodge,  stat = "identity", size = 2, colour = "#000099", alpha = 0.8)  + 
+    geom_point(data = tmp %>% filter(!line %in% loi), position = dodge,  stat = "identity", size = 1, colour = "#9E9A99", alpha = 0.4)  +
+    geom_path(data = tmp %>% filter(line == loi), aes(group = line), colour = color_id, alpha = 0.8, position = dodge, size = 1.5) + 
+    #geom_path(data = tmp %>% filter(line == "D007T01"), aes(group = line), colour = "#000099", alpha = 0.8, position = dodge, size = 1.5) + 
+    geom_path(data = tmp %>% filter(!line %in% loi), aes(group = line), colour = "#9E9A99", alpha = 0.2, position = dodge, size = 1) + 
+    #geom_errorbar(data = tmp %>% filter(line == "D027T01"), aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    geom_ribbon(data = tmp %>% filter(line == loi), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = color_id) +
+  #geom_ribbon(data = tmp %>% filter(line == "D007T01"), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2, fill = "#000099") +
+    #geom_ribbon(data = tmp %>% filter(line != loi), aes(x=conc, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), alpha=0.05, fill = "#9E9A99") +
+    #geom_smooth(method = "gam")+
+    scale_x_log10(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) + 
+    ylab("normalized viability") + 
+    facet_wrap(~drug) + 
+    xlab("concentration factor") + 
+    theme_classic() +
+  ggtitle(paste0(loi, "_", "Response in CTG assay")) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+
+
+
+# Evaluate growth-rate 
+
+Next to quantile normalization, two recent papers suggest growth rate adjusted auc calculation to account for differences in doubling times of cell lines. 
+First I load growth rate data from separate experiments and perform first annotation of the dataset. I filter the proliferation dataset further by removing empty wells.
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+#define datasets to load ctg data into R
+filelist <- list.files("~/promise/rsync_data/ctg_data/proliferation_true", pattern = '_Prolif_', recursive = TRUE, full.names = TRUE)
+
+#define a function to load proliferation ctg files into R once they match the given definitions
+load_delim <- function(full.name){
+  read_delim(full.name, 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) %>% 
+    mutate(plate_name = full.name %>% str_split(., "/") %>% .[[1]] %>% .[length(.)] %>% str_sub(.,1,-5))
+}
+
+#load ctg data
+ctg_prolif_raw <- lapply(filelist, load_delim) %>% bind_rows() %>% `colnames<-` (c('original_name', 'well_id_384', 'photons', "plate_barcode")) %>%
+  #ugly processing -it works
+  separate(plate_barcode, c("tmp.plate_barcode", "tmp.mu"), sep = -6, remove = FALSE) %>% 
+  #mutate(tmp.mu = substr(tmp.mu, 2,6)) %>%
+  mutate(tmp.mu = substr(tmp.mu, 2,6)) %>%
+  separate(tmp.mu, c("mithras", "user"), sep = "_") %>%
+  separate(tmp.plate_barcode, c("date", "experiment", "timepoint", "lines" ), sep= "_", extra = "merge") %>%
+  mutate(no_lines = str_count(lines, "D0")) %>%
+  separate(well_id_384, c("letter", "number"), sep = 1, remove = FALSE) %>% 
+  #data from seeding timepoints was generated in 96 well plates. For now it will be removed from the dataset to enable standardized analysis
+  filter(! timepoint %in% c("seeding")) %>%
+#on multiple dates (170613, 170724 and 171010) not the complete plate was filled with organoids. Here the unseeded wells are removed from the dataset. 
+  filter(!(date %in% c("170613") & number %in% 13:24))%>%
+  filter(!(date %in% c("170724") & number %in% 21:24))%>%
+  filter(!(date %in% c("171010") & number %in% 19:24))%>%
+  filter(!(date %in% c("180125") & number %in% 22:24))%>%
+  filter(!(date %in% c("180210") & number %in% 22:24))%>%
+#one single well in the dataset has a photon count of exactly 0 (second lowest value being 658). It is set to NA
+  mutate(photons = replace(photons, which(photons == 0), NA))
+
+#the data has the following distribution 
+# ctg_prolif_raw %>%
+#   ggplot(aes(photons)) + 
+#   geom_density(adjust = 0.3) + 
+#   scale_x_continuous(limits = c(0,50000)) + 
+#   theme_minimal() + 
+#   ggtitle("Distribution of Photon counts for all Proliferation Experiments")
+
+```
+
+There was an error at one experimental date. Citation by CD on the 8/2/2018: 
+"Hatte anscheinend doch ein bisschen zu wenig CTG drin leider (waren eher 14 als 15 ml dachte aber 15 wären schon mit Puffer und das ginge schon :/)
+Man sieht von oben, dass in den Wells O6, O7, O8, P7, P8, O21 und O22 sowie einige in den letzten drei Columns unten ( hier war eh nur AD3+ drin) weniger CTG drin ist als in den anderen. Hoffe das ist nicht allzu schlimm."
+
+I complete the annotation of the dataset by linking organoid lines to photon counts and time.
+
+```{r,  results='hide', warning=F}
+#get an overview of the lines and timepoints available. On each seeding-date there was only one set of lines processed and the plate-layout did not change between measurments.
+#define a function to annotate a dataset for a defined seeding-date
+annotate_prolif <- function(df){
+  tmp.lines <- df %>% 
+    dplyr::select(lines) %>%
+    .$lines %>% #turn output into a string
+    unique() %>%
+    str_split(., "_") %>%
+    unlist()
+  
+  tmp.anno <- tibble(number = df %>% .$number %>%  unique(),
+                     ratio = length(number)/length(tmp.lines),
+                     anno_line = rep(tmp.lines, each = ratio),
+                     no_lines = df %>% .$no_lines %>% unique(),
+                      #for control reasons the product of the columsn per line and the number of lines is calculated
+                     anno_number = no_lines*ratio) 
+return(tmp.anno)
+}
+
+#redefine and annotate the ctg_prolif dataset
+ctg_prolif <- ctg_prolif_raw %>%
+  #filter(date == "171010") %>%
+  group_by(date) %>%
+  do(annotate_prolif(.)) %>%
+  merge(ctg_prolif_raw, ., by = c("date", "number", "no_lines")) %>%
+  filter(!(number %in% c(1,24) | letter %in% c("A", "P"))) %>%
+  #wells loacted on the edge of the plates are removed. However, this filtration step has no impact on the median photon count per plate.  
+  mutate(timepoint_num = substr(timepoint,2,2) %>% as.numeric(),
+         photons_log2 = log2(photons)) %>%
+  filter(!(date %in% c("170515", "170606"))) %>%
+  filter((date != "170711") | (anno_line != "D015T01")) %>%
+  #seeding-dates that contained a protocol-deviation are removed from the dataset
+  dplyr::rename(line = anno_line) 
+
+
+calc <- ctg_prolif %>% 
+  dplyr::select(timepoint_num, date, line, photons) %>%
+  filter(timepoint_num %in% c(2,4)) %>% #there is no difference when starting the model at t=2/t=0
+  group_by(line, date) %>%
+  mutate(timepoint_num = timepoint_num - 2) %>%
+  group_by(line, date, timepoint_num) %>% 
+  summarise(median.count = median(photons, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  spread(timepoint_num, median.count) %>%
+  mutate(gr = log(`2`/`0`)/2,
+         dt = log(2)/gr)
+```
+
+I gain a first overview about the proliferation dataset. Proliferation data for lines D015T01 and D030T01 appear discordant. Proliferation data for D019T01, D021T01 and D022T01 appear to follow a linear growth pattern
+
+```{r, warning=FALSE}
+ctg_prolif %>%
+  group_by(date, timepoint_num, line) %>%
+  summarise(median = median(photons, na.rm = TRUE),
+            mad = mad(photons, na.rm = TRUE)) %>%
+  ggplot(aes(timepoint_num, median, color = date)) +
+  geom_point() +
+  geom_path(aes(group = date)) +
+  facet_wrap(~line) +
+  theme_minimal() +
+  ggtitle("Proliferation curves for 12 organoid lines") +
+  ylab("Median photon count for each timepoint") +
+  xlab("Time (d)")
+```
+
+I like to estimate the growth rate of each line in the initial phase of the prolifereation experiment. During this phase all lines show a reproducible growth rate after photon counts have been log2 transformed.
+
+```{r, warning=FALSE, eval = FALSE}
+ctg_prolif %>% 
+  dplyr::select(timepoint_num, date, line, photons, photons_log2) %>%
+  group_by(date, timepoint_num, line) %>%
+  ggplot(aes(timepoint_num, photons_log2, group = date)) + 
+  geom_jitter(alpha = 0.2, width = 0.2) + 
+  stat_growthcurve(model = "linear") + 
+  facet_wrap(~line) + 
+  theme_minimal() + 
+  scale_x_continuous(limits = c(2,4), breaks = c(2,4)) + 
+  ggtitle("Proliferation curves for 12 organoid lines over 4 days") + 
+  ylab("Log2 of median photon count for each timepoint") + 
+  xlab("Time (d)")# + 
+  #geom_smooth(alpha = 0.5)
+```
+
+
+## Illustrate differences in growth rates
+
+For future analysis it might be interesting to know the growth rate of each line as an additional feature. I will calculate a growth rate and attach it to the annotation data which we have previously defined for each organoid line. 
+
+```{r, warning=FALSE}
+calc %>%
+  group_by(line) %>% 
+  summarise(m_mean = mean(dt)) %>%
+  arrange((m_mean)) %>%
+  ungroup(line) %>%
+  mutate(line = factor(line, levels = line %>% unique())) %>%
+ggplot() + 
+  geom_col(aes(x=line, y=m_mean), fill="grey", stat = "identity",  alpha = 0.9) + #"tomato2"
+  geom_point(data = calc %>%
+  group_by(line) %>% 
+  mutate(m_mean = mean(dt)) %>%
+  arrange((m_mean)) %>%
+  ungroup(line) %>%
+  mutate(line = factor(line, levels = line %>% unique())),
+  aes(x=line, y=dt), col="black", size=2, alpha = 1) +   # Draw points
+  # geom_point(aes(x=line, y=m_mean, col = date), size=5, alpha = 0.9) + #"tomato2"
+  # geom_point(aes(x=line, y=m, col = date), size=2, alpha = 0.9) +   # Draw points
+  # geom_segment(aes(x=line, 
+  #                  xend=line, 
+  #                  y=min(m), 
+  #                  yend=max(m)), 
+  #              linetype="dashed", 
+  #              size=0.1) +   # Draw dashed lines
+  labs(title="Organoid Doubling Time", 
+       subtitle="Cell doubling time was estimated inbetween 48 and 96 hours after seeding") +  #caption
+  coord_flip() + 
+  theme_classic() + 
+  xlab("Organoid line") + 
+  ylab("Doubling times [days]") + 
+  scale_y_log10(breaks = c(1:10))
+```
+
+```{r, warning=FALSE, message = FALSE}
+calc %>%
+  group_by(line) %>% 
+  summarise(m_mean = mean(dt)) %>%
+  arrange((m_mean)) %>%
+  ungroup(line) %>%
+  mutate(line = factor(line, levels = line %>% unique())) %>% 
+  ggplot(aes(m_mean)) + 
+  geom_dotplot() + 
+  scale_x_sqrt()
+```
+
+#Correlate growth rate with auc 
+I wonder if the proliferation rate is directly associated with a compounds differential sensitivity data.
+
+```{r, warning=FALSE, message = FALSE}
+library(corrr)
+library(broom)
+
+auc_gr <- auc_pgx %>% 
+  dplyr::select(line, drug, l_AUC_fit) %>% 
+  arrange(drug, line) %>% 
+  distinct() %>% 
+  spread(drug, l_AUC_fit) %>% 
+  full_join(., calc %>%
+  group_by(line) %>% 
+  summarise(m_mean = mean(dt)) %>%
+  arrange((m_mean)) %>%
+  ungroup(line)) %>% 
+  arrange(line) 
+
+auc_gr%>%
+  filter(line != "D021T01") %>%
+  as.data.frame() %>% 
+  remove_rownames() %>% 
+  column_to_rownames("line") %>% 
+  correlate(method = "spearman") %>% 
+  dplyr::select(rowname, m_mean) %>% 
+  arrange(m_mean) %>% 
+  mutate(rowname = factor(rowname, levels = .$rowname)) %>% 
+  ggplot(aes(rowname, m_mean)) + 
+  geom_point() + 
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  geom_rug()
+
+auc_gr %>%
+  #dplyr::select(line, m_mean, Methotrexate) %>% 
+  filter(line != "D021T01") %>%
+  mutate(Methotrexate = 1-Methotrexate) %>%
+  ggplot(aes(Methotrexate, m_mean)) + 
+  geom_point() + 
+  theme_classic() + 
+  geom_smooth(method = "glm", se = FALSE, color = "black", linetype = 2) +
+  ggrepel::geom_text_repel(aes(label = line)) + 
+  scale_y_sqrt() +
+  
+  ggsave("MTx_spearman.pdf", width = 4, height = 4)
+  
+  
+auc_gr%>%
+  #dplyr::select(line, m_mean, Paclitaxel) %>% 
+  #filter(line != "D021T01") %>%
+  mutate(Methotrexate = 1-Methotrexate) %>%
+do(tidy(cor.test(.$m_mean, .$Methotrexate, method = "spearman")))  
+auc_gr%>%do(broom::tidy(cor.test(.$m_mean, .$Methotrexate, method = "spearman")))  
+```
+
+
+# Illustrate overal compound responses 
+
+```{r, eval = FALSE}
+# row <- ctg_qnorm_tidy %>%
+#   # group_by(drug) %>%
+#   # summarise(Target = sample(target, 1),
+#   #           Pathway = sample(broad_summary, 1)) %>%
+#   # mutate(Class = if_else(Pathway %in% c("DNA damage", "Topoisomerase", "Cytoskeleton", "Metabolism"), "un-targeted", "targeted"),
+#   #        #using "" as alternative is not desired
+#   #        Targeted = if_else(Class == "targeted", Pathway, ""),
+#   #        Untargeted = if_else(Class == "un-targeted", Pathway, "")) %>%
+#   as.data.frame() %>%
+#   remove_rownames() %>%
+#   column_to_rownames('drug') %>%
+#   dplyr::select(Pathway)
+  
+anno_col <- cohort_short %>%
+  filter(!(Patient %in% c("D015T01", "D010T01"))) %>%
+  distinct(Patient, .keep_all = TRUE) %>%
+  #Remove Patient color bar below
+  dplyr::select(-ras) %>%
+  #.[,c(1:8, 21)] %>%
+  .[,-c(1:8)] %>%
+  as.data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames('Patient') 
+
+# Specify colors
+anno_colors <- list(
+    TP53 = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    APC = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    KRAS = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    SMAD4 = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    PTEN = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    PIK3CA = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    NRAS = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    GNAS = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    FBXW7 = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    ERBB2 = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    ARID1A = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')),
+    AMER1 = c("#FFFFFF", "#000000") %>% `names<-`(c('wildtype', 'mutated')))
+
+# tmp <- anno_col %>% t() %>% as.data.frame %>% rownames_to_column() %>% mutate(mutated = "#FFFFFF", wildtype = "#000000") %>% dplyr::select(rowname, mutated, wildtype) %>% as.data.frame() %>% remove_rownames() %>% split(f = .$rowname)
+# 
+# test <- lapply(tmp, function(df) df %>% dplyr::select(mutated, wildtype))
+
+#scaled
+auc_pgx %>%
+  #filter(!(line %in% c("D015T01", "D010T01"))) %>%
+  dplyr::filter(!grepl(drug, pattern = 'mit')) %>%
+  filter(!drug %in% c( "DMSO", "Staurosporine_500nM")) %>%
+  dplyr::select(line, drug, l_AUC_fit) %>% 
+  distinct(., .keep_all = TRUE) %>%
+  spread(line, l_AUC_fit) %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  pheatmap( 
+  scale = "row",
+  cluster_rows = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c('#ca0020','#f4a582','#f7f7f7', '#f7f7f7', '#92c5de','#0571b0'))(6),
+  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
+  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
+  #annotation_col = anno_col,
+  annotation_colors = anno_colors,
+  #annotation_row = row
+  cutree_cols = 2,
+  cutree_rows = 4
+  ) 
+
+#unscaled
+auc_pgx %>%
+  filter(!(line %in% c("D015T01", "D010T01"))) %>%
+  dplyr::filter(!grepl(drug, pattern = 'mit')) %>%
+  filter(!drug %in% c( "DMSO", "Staurosporine_500nM")) %>%
+  dplyr::select(line, drug, l_AUC_fit) %>% 
+  distinct(., .keep_all = TRUE) %>%
+  spread(line, l_AUC_fit) %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  pheatmap( 
+  #scale = "row",
+  cluster_rows = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(rev(c('#ca0020','#f4a582','#f7f7f7')))(6),
+  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
+  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
+  annotation_col = anno_col,
+  annotation_colors = anno_colors,
+  #annotation_row = row,
+  cutree_cols = 2,
+  cutree_rows = 4
+  ) 
+```
+
+
+
+# Session info 
+
+```{r}
+sessionInfo()
+```
+
+#Abandoned approaches 
+
+I list steps that are now covered by B. Rasucher or other alternative approaches in the .Rmd below.
+
+```{r}
+knitr::knit_exit()
+```
+
+##Quantile normalization 
+So it seems that a cross plate normalization doesn't actually make a difference, indicating that the growth rates might be affecting the variation in phenotype mostly. Let's see if this could be adjusted using a quantile normalization.
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+## generate a matrix with a column per sample and a row per well
+ctg_loess <- ctg_norm
+
+ctg_mat <- ctg_loess %>% ungroup() %>%
+  dplyr::select(screen, well, viability) %>% 
+  spread(screen, viability) %>% data.frame() %>% `rownames<-`(.$well) %>% 
+  dplyr::select(-well)
+
+## boxplot 
+boxplot(ctg_mat)
+
+## remember rownames and colnames
+rn <- rownames(ctg_mat); cn <- colnames(ctg_mat)
+
+## quantile normalize
+qnorm_mat <- ctg_mat %>% as.matrix() %>% normalize.quantiles()
+rownames(qnorm_mat) <- rn; colnames(qnorm_mat) <- cn
+
+## boxplot of normalized matrix
+boxplot(qnorm_mat)
+
+## bring back together with the meta data
+ctg_qnorm <- ctg_loess %>% dplyr::select(-c(pcount, pcount_norm, norm_fac)) %>% 
+  inner_join(qnorm_mat %>% data.frame() %>% mutate(well = rownames(.)) %>% 
+               tbl_df %>% gather(screen, pc_norm, -well) %>% 
+               mutate(screen = gsub('^X', '', screen)))
+
+## look at bortezomib
+ctg_qnorm %>% filter(drug %in% c('Bortezomib', 'DMSO', 'Gefitinib')) %>% 
+  ggplot(aes(screen, pc_norm, colour = drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic() + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+This looks reasonable to me. As a final check we can look at the 5-10 overall most toxic drugs and checkif there are differences between the lines (expecting that there are none).
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+## select 5 most toxic drugs
+dtox <- ctg_qnorm %>% group_by(drug) %>% 
+  summarise(medpc = median(pc_norm, na.rm=T)) %>% ungroup() %>% 
+  arrange(medpc) %>% .$drug %>% .[1:2]
+
+## boxplot of these drugs across lines and concentrations
+ctg_qnorm %>% filter(drug %in% dtox) %>% 
+  ggplot(aes(screen, pc_norm)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic() + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+
+
+
+## Normalize CTG photon counts
+
+### Validation of different normalization strategies
+
+Appropriate normalization of CTG photon counts is key to ensure robust quantification of drug response. Many different strategies are available to remove potential technical bias from the data and some of them might be more appropriate than others depending on the kinds of bias present in the data. Hence, we examine carefully the kinds of technical bias present in our data set and employ different normalization strategies in order to correct these. We assess and compare performance of these different strategies by looking at various controls.
+
+### Assessment of technical bias present in the data
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+##read ctg data files
+ctg_data <- lapply(list.files('~/promise/rsync_data/ctg_data/HC1092/', full.names=T), 
+                   function(f) read_tsv(f, col_names=F, col_types = 'cci') %>%
+                     `colnames<-`(c('screen', 'well', 'pcount'))) %>% bind_rows()
+```
+
+For now we load again the plate annotation and merge that to the data to know which drug at which concentration went where.
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+## read excel file, convert to tibble
+plate_anno <- tbl_df(read_excel('~/promise/rsync_data/layouts/raw_layout_files/Clin_Cancer_Panel_V170511.xlsx'))
+## rename drug and well columns
+colnames(plate_anno)[c(1, 6)] <- c('drug', 'well')
+## join with ctg data
+ctg_data <- ctg_data %>% inner_join(plate_anno) %>% 
+  extract(well, c('row', 'col'), regex='([A-P])(\\d{2})', remove=F) %>% 
+  mutate(row=match(row, LETTERS), col=as.integer(col))
+```
+
+There was a technical issue with one of the plates. Wells have to be flagged accordingly. 
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+ctg_data <- ctg_data %>% 
+  mutate(pcount = ifelse(screen == '170502_NR_M2_D004T01P006L08' & 
+                         (row %in% seq(1, 15, by=2)) & 
+                         (col %in% 1:13), NA, pcount))
+```
+
+Now we can get an idea of what the data looks like. First we look at only one plate at a time and look at the photon counts of DMSO controls to see how they vary and if there might be a positional bias that needs correction.
+
+```{r, results='hide', warning=F, message=F, include=FALSE, eval = FALSE}
+## box plot of DMSO photon counts
+ctg_data %>% filter(drug == 'DMSO') %>% 
+  ggplot(aes(rack.concentration, pcount)) + geom_jitter(width=0.2) + 
+  facet_wrap(~screen) + 
+  geom_boxplot(alpha=0) + theme_classic()
+
+## heat map of DMSO photon counts, ignoring other values
+p <- ctg_data %>% filter(screen == unique(ctg_data$screen)[3])
+p %>% mutate(pcount = ifelse(drug != 'DMSO', -1000, pcount)) %>% 
+  dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+  dplyr::select(-row) %>% as.matrix() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F)
+```
+
+DMSO controls are scattered across the plate and there is no obvious spacial bias with the exception, maybe, of the control at the bottom right of the plate. However, some of the controls clearly failed and have to be flagged form the analysis. What is concerning is that these controls are all in the same area. Maybe plotting the plate as a whole reveals a spacial bias across all drugs.
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+# p %>% filter(screen == "170502_NR_M3_D007T01P006L08") %>% 
+#   dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+#   dplyr::select(-row) %>% as.matrix() %>% 
+#   pheatmap(cluster_rows=F, cluster_cols=F)
+
+ctg_data %>%
+  group_by(row, col) %>%
+  summarise(pcount = sum(pcount, na.rm = TRUE)) %>%
+  ungroup() %>%  
+  dplyr::select(row, col, pcount) %>% spread(col, pcount) %>% 
+  dplyr::select(-row) %>% as.matrix() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F)
+```
+
+I would say that there is definitely a spacial bias where photon counts get higher towards the bottom and the edges of the plate perhaps.
+
+```{r, results='hide', warning=FALSE, message=F, eval = FALSE}
+## scatter plot with robust loess fit for rows.
+ctg_data %>% ggplot(aes(row, pcount)) + geom_point() + 
+  geom_smooth(method.args=list(family='symmetric')) +
+  facet_wrap(~screen) + theme_classic() + ggtitle("Spatial effects of rows")
+
+## scatter plot with robust loess fit for columns
+ctg_data %>% ggplot(aes(col, pcount)) + geom_point() + 
+  geom_smooth(method.args=list(family='symmetric')) +
+  facet_wrap(~screen) + theme_classic() + ggtitle("Spatial effects of columns")
+```
+
+### Normlization of photon count data by plate DMSO controls
+
+Looking at above plots this seems to be true for rowwise and also some columnwise effects. Hence, for spacial bias we apply a loess-normalization to the data.
+
+```{r, results='hide', warning=F, message=F, eval = FALSE} 
+## split data by plate and apply loess normalization
+ctg_loess <- ctg_data %>% dplyr::select(row, col, pcount, screen) %>% 
+  # remove first plate of screen which had pipetting errors 
+  drop_na() %>%
+  split(.$screen) %>% lapply(function(s){
+  ## loess fit. family is 'symmetric' to be robust to outliers
+  fit <- loess(pcount ~ row + col, data=s, family='symmetric')
+  ## apply normalization
+  tibble(norm_fac = fit$fitted) %>% cbind(s,.) %>% 
+    mutate(pcount_norm = pcount - (norm_fac - median(norm_fac)))
+}) %>% bind_rows() %>% full_join(ctg_data)
+```
+
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+## plot row vs photon count of normalized values
+ctg_loess %>% ggplot(aes(row, pcount_norm)) + geom_point() + 
+  geom_smooth(method.args = list(family='symmetric')) + theme_classic() + 
+  facet_wrap(~screen)
+```
+
+
+Next we can investigate plate specific biases and if correcting for these would actually change anything compared to just normalizing to the DMSO controls on every plate individually. We compare the effects by looking at the drug Bortezomib which we expect to be toxic regardless of the organoid line.
+
+Of note, the 32 DMSO controls yield a reference median which is, across all plates, more robust and greater in relative size than a plate-wise median. Hence the DMSO control dependent median should be used for calibration of plates. 
+
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+## no cross-plate normalization
+ctg_norm %>% 
+  left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+              summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>% 
+  group_by(screen) %>% mutate(rv = pcount_norm/ctrl) %>% ungroup() %>% 
+  filter(drug %in% c('DMSO', 'Bortezomib')) %>% 
+  ggplot(aes(screen, rv, colour=drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic() + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+I do not see anything that seems to really be strikingly off so I think it's ok to precede and calculate IC50/AUC values. Viability values of > 100 % do not really make sense as we wouldn't expect drug treatment to result in a gain of viability phenotype. Hence, we clip the values at 1 to achieve better AUC/IC50 models.
+
+```{r, results='hide', warning=F, message=F, eval = FALSE}
+#ctg_qnorm <- ctg_qnorm %>% mutate(pc_norm = ifelse(pc_norm > 1, 1, pc_norm))
+ctg_qnorm <- ctg_norm %>% mutate(viability = ifelse(viability > 1, 1, viability))
+##The max. vaibility equals 1
+```
+
+
+
+###Cross-plate normalization 
+
+Without cross-plate normalization we can see that the drug is toxic, especially at higher concentrations, but we can definitely see some variation. I'm not sure at this point whether this could be a real effect or whether there is variation for different reasons (such as varying growth rate) that is better normalized away. Let's see if a cross-plate normalization changes anything.
+
+```{r, results='hide', warning=F, message=F, eval = F}
+## median photon count across all dmso controls of all plates
+all_dmso <- ctg_loess %>% filter(drug == 'DMSO') %>% .$pcount_norm %>% median(na.rm=T)
+
+## cross-plate normalization
+ctg_pn <- ctg_loess %>% 
+  left_join(ctg_loess %>% filter(drug == 'DMSO') %>% group_by(screen) %>% 
+                summarise(ctrl = median(pcount_norm, na.rm=T)) %>% ungroup()) %>% 
+  group_by(screen) %>% mutate(pcn = pcount_norm * (all_dmso/ctrl)) %>% ungroup()
+## plot bortezomib
+ctg_pn %>% dplyr::select(-ctrl) %>%
+    left_join(ctg_pn %>% filter(drug == 'DMSO') %>% group_by(screen) %>%
+                  summarise(ctrl = median(pcn, na.rm=T)) %>% ungroup()) %>% 
+    group_by(screen) %>% mutate(rv = pcn/ctrl) %>% ungroup() %>% 
+  filter(drug %in% c('Bortezomib', 'DMSO')) %>% 
+  ggplot(aes(screen, rv, colour=drug)) + geom_point() + 
+  facet_wrap(~rack.concentration) + theme_classic() + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+
+
+
+
+###Fit Dose response curves
+I first want to gain an overview of treatment response profiles with the quantile normalized dataset. Therefore I plot some example compounds I am interested in for our case study patient. 
+Using the PharamcoGx package these nice dose-response curves can be fitted. 
+
+
+```{r, warning=F, eval = FALSE}
+ctg_qnorm_tidy <- ctg_qnorm %>%
+   ## separate annotation of screen name 
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  group_by(line, drug) %>% arrange(rack.concentration) 
+save(ctg_qnorm_tidy, file = "ctg_qnorm_tidy.Rdata")
+
+coi <- c("Gefitinib")
+loi <- c("D027T01")
+
+list <- ctg_qnorm_tidy %>%
+  full_join(., ras) %>%
+  filter(drug %in% coi & line %in% loi) %>% 
+  mutate(concentration = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, concentration, pc_norm, drug, ras) %>%
+  ungroup() %>%
+  split(., .$line)
+
+c.list <- lapply(list, function(df){df$concentration})
+v.list <- lapply(list, function(df){df$pc_norm})
+  PharmacoGx::drugDoseResponseCurve(concentrations=c.list,
+                        viabilities=v.list,
+                        plot.type="Fitted",
+                        viability_as_pct = FALSE)
+  
+```
+
+Based on question asked on StackOverflow, I build a function to plot dose-response curves using the tidyverse and drc for curve fitting. Link: https://stackoverflow.com/questions/36780357/plotting-dose-response-curves-with-ggplot2-and-drc
+
+```{r, warning=FALSE, eval = FALSE}
+tidy_drc_fit <- function(df){  
+  # predictions and confidence intervals.
+  org.fits <- expand.grid(conc=exp(seq(log(1), log(0.0016), length=1000)))
+  
+  fits <- drm(data = df, pc_norm ~ conc, fct=LL.4(), na.action = na.omit) %>%
+  predict(., newdata = org.fits, interval = "confidence")
+  
+  org.fits %>%
+    mutate(p = fits[,1],
+           pmin = fits[,2],
+           pmax = fits[,3],
+           line = df$line %>% unique(),
+           drug = df$drug %>% unique()) %>%
+    full_join(df) %>%
+  return(.)
+}
+
+coi <- c("Trametinib")
+loi <- c("D027T01")
+
+tmp <- ctg_qnorm_tidy %>% 
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, pc_norm, conc) %>%
+  filter(line != "D030T01", drug %in% coi) %>%
+  group_by(drug, line) %>%
+  do(., tidy_drc_fit(.))
+
+tmp %>% 
+  full_join(mutations_contig) %>%
+  #filter(line %in% loi) %>%
+ggplot(., aes(color = ras, group = line)) +
+  geom_point(aes(x = conc, y = pc_norm), size = 1, shape=1) +
+  #geom_ribbon(data=tmp, aes(x=conc, y=p, ymin=pmin, ymax=pmax), alpha=0.2) +
+  geom_line(aes(x=conc, y=p)) +
+  coord_trans(x="log") + 
+  scale_y_continuous(limits = c(0,1)) + 
+  scale_x_continuous(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric())) +
+  theme_classic() + 
+  ylab("Photon count normalized to control") + 
+  xlab("Concentration factor") + 
+  theme_classic() + 
+  facet_wrap(~line)
+
+```
+
+I now use the curve fitting results to plot an example figure, which might be used for the patient case later on. 
+
+```{r, eval = FALSE}
+coi <- c("5-FU", "Irinotecan / SN-38", "Erlotinib", "Gefitinib")
+#loi <- c("D027T01")
+
+tmp_fit <- ctg_qnorm_tidy %>% 
+  mutate(conc = rack.concentration %>% as.numeric()) %>%
+  dplyr::select(line, drug, pc_norm, conc) %>%
+  filter(line != "D030T01", drug %in% coi) %>%
+  group_by(drug, line) %>%
+  do(., tidy_drc_fit(.)) 
+
+tmp_fit %>%
+  #drop_na(conc, p, pmin, pmax) %>%
+  #full_join(mutations_contig) %>%
+  #filter(line %in% loi) %>%
+ggplot(., aes(group = line)) +
+  geom_point(aes(x = conc, y = pc_norm), size = 1, shape=1) +
+  #geom_ribbon(data=tmp, aes(x=conc, y=p, ymin=pmin, ymax=pmax), alpha=0.2) +
+  geom_line(aes(x=conc, y=p)) +
+  coord_trans(x="log") + 
+  scale_y_continuous(limits = c(0,1)) + 
+  scale_x_continuous(breaks = c(ctg_qnorm_tidy$rack.concentration %>% unique() %>% as.numeric() %>% round(4))) +
+  theme_classic() + 
+  ylab("Photon count normalized to control") + 
+  xlab("Concentration factor") + 
+  theme_classic() + 
+  facet_wrap(~drug)
+```
+
+
+
+## Rank based testing of gene~drug interactions
+
+```{r, warning=F, eval = FALSE}
+coi <- c("Gefitinib", "Erlotinib")
+loi <- c("D007T01")
+
+
+auc_pgx %>%
+  full_join(., mutations_contig) %>% 
+  filter(drug %in% coi) %>% 
+  group_by(screen, drug, line, KRAS) %>%
+  summarise(auc = mean(s_AUC_actual)) %>%
+  ggplot(aes(x=KRAS,y=auc)) + 
+  geom_boxplot() +
+  geom_jitter(aes(color = line), width = 0.1) + 
+  facet_wrap(~drug) + 
+  geom_signif(comparisons = list(c("wildtype","mutated")), test = "wilcox.test") + 
+  theme_classic()
+
+
+auc_pgx$s_AUC_fit %>% hist()
+```
+
+Even with dynamic adjustment of AF cutoffs, no clear KRAS - EGFRi interaction can be measured. 
+
+```{r, warning=F, eval = FALSE}
+coi <- c("Gefitinib", "Erlotinib")
+
+auc_pgx %>%
+  full_join(., mutations_freq_contig) %>% 
+  filter(drug %in% coi) %>% 
+  group_by(screen, drug, line, KRAS) %>%
+  summarise(auc = mean(s_AUC_actual)) %>%
+  mutate(goi = if_else(KRAS < 0.3, "wildtype","mutated")) %>%
+  ggplot(aes(x=goi,y=auc)) + 
+  geom_boxplot() +
+  geom_jitter(aes(color = line), width = 0.1) + 
+  facet_wrap(~drug) + 
+  geom_signif(comparisons = list(c("wildtype","mutated")), test = "wilcox.test") + 
+  theme_classic()
+
+```
+
+For the Tumor supressor p53 a AF cutoff of 70% is defined. 
+
+```{r, warning=F, eval = FALSE}
+coi <- c("Nutlin3a")
+
+auc_pgx %>%
+  full_join(., mutations_freq_contig) %>% 
+  filter(drug %in% coi) %>% 
+  group_by(screen, drug, line, TP53) %>%
+  summarise(auc = mean(s_AUC_actual)) %>%
+  mutate(goi = if_else(TP53 < 0.7, "wildtype","mutated")) %>%
+  ggplot(aes(x=goi,y=auc)) + 
+  geom_boxplot() +
+  geom_jitter(aes(color = line), width = 0.1) + 
+  facet_wrap(~drug) + 
+  geom_signif(comparisons = list(c("wildtype","mutated")), test = "wilcox.test") + 
+  theme_classic() #+ 
+  #RColorBrewer::brewer.pal(12, "Set3")
+```
+
+For the oncogene PIK3CA a AF cutoff of 30% is defined.
+
+```{r, warning=F, eval = FALSE}
+coi <- c("Everolimus")
+
+auc_pgx %>%
+  full_join(., mutations_freq_contig) %>% 
+  filter(drug %in% coi) %>% 
+  group_by(screen, drug, line, PIK3CA) %>%
+  summarise(auc = mean(s_AUC_actual)) %>%
+  mutate(goi = if_else(PIK3CA < 0.3, "wildtype","mutated")) %>%
+  ggplot(aes(x=goi,y=auc)) + 
+  geom_boxplot() +
+  geom_jitter(aes(color = line), width = 0.1) + 
+  facet_wrap(~drug) + 
+  geom_signif(comparisons = list(c("wildtype","mutated")), test = "wilcox.test") + 
+  theme_classic() #+ 
+  #RColorBrewer::brewer.pal(12, "Set3")
+```
+
+
+
+
+
+###Use GR metric package to correct different proliferation rates 
+Now I used the transformed photon counts to estimate a doubling rate by fitting linear models to each dataset (line and replicate).
+
+```{r, warning=FALSE, eval = FALSE}
+#if multiple timepoints are estimated only these cell lines can be used, since they show log2 linear growth over all measured timepoints
+picks <- c("D004T01", "D019T01", "D021T01", "D022T01")
+#a classic formula for growth rate calulcation
+calc <- ctg_prolif %>% 
+  dplyr::select(timepoint_num, date, line, photons) %>%
+  filter(timepoint_num %in% c(2,4)) %>% #there is no difference when starting the model at t=2/t=0
+  group_by(line, date) %>%
+  mutate(timepoint_num = timepoint_num - 2) %>%
+  group_by(line, date, timepoint_num) %>% 
+  summarise(median.count = median(photons, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  spread(timepoint_num, median.count) %>%
+  mutate(gr = log(`2`/`0`)/2,
+         dt = log(2)/gr)
+  
+  
+```
+
+I use the fitted data to estimate the treatment date (day 3) of the screen. With this data at hand we can calculate growth rate corrected AOC and IC50 values. Moreover, I tested that the estimation of doubling time is not considerably improved if positional effects are respected and every well is handled as a separate experiment.
+
+```{r, eval = FALSE}
+ctg_gr <- ctg_loess %>% 
+  mutate(time = 168) %>%
+  dplyr::rename(concentration = rack.concentration,
+                photons = pcount) %>%
+   ## separate annotation of screen name 
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  dplyr::select(full_barcode, line, drug, time, concentration, photons) %>% 
+  #full_join(fit %>% dplyr::select(line, time, photons, drug, full_barcode)) %>%
+  #only lines which were still in a log phase of growth on the measured timepoints can be used for estimating the needed timepoints t=3 and t=7
+  #filter(line %in% picks) %>%
+  filter(line != "D015T01") %>%
+  dplyr::rename(cell_count = photons,
+                cell_line = line,
+                treatment = drug) %>%
+  as.tibble() %>%
+  arrange(time)
+
+# ctg_gr %>%
+#   filter(cell_line %in% picks & treatment == "DMSO" & time == 168) %>%
+#   ggplot(aes(full_barcode, cell_count)) +
+#   geom_boxplot() +
+#   facet_grid(~cell_line) + 
+#   theme_minimal() + 
+#   theme(axis.title.x=element_blank(),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank()) + 
+#   ggtitle("Screen replicates and estimated viability at day 7") + 
+#   ylab("Photon counts for DMSO treated wells")
+
+drc_output <- ctg_gr %>% 
+  dplyr::select(-full_barcode) %>%
+  mutate(concentration = if_else(treatment == "DMSO", "0", concentration),
+         treatment = if_else(treatment == "DMSO", "-", treatment),
+         concentration = as.numeric(concentration)) %>%
+  mutate(time = time - 72) %>%
+  GRfit(., case = "C", groupingVariables = c('cell_line','treatment'))
+GRdrawDRC(drc_output, experiments = c(paste0(ctg_gr$cell_line %>% unique(), " ", c("D010T01 Gefitinib", "D027T01 Gefitinib"))))
+
+GRgetMetrics(drc_output) %>% 
+  filter(pval_GR < 1) %>%
+  dplyr::select(cell_line, treatment, GR_AOC) %>%
+  as.tibble() %>%
+  ungroup() %>%
+  dplyr::rename(line = cell_line,
+         drug = treatment, 
+         aoc.mean = GR_AOC) %>%
+  filter(!drug %in% c( "DMSO")) %>%
+  #filter(!line %in% c("D015T01", "D010T01")) %>%
+  #filter(!grepl(.$drug, pattern = 'mit')) %>%
+  spread(line, aoc.mean) %>%
+  na.omit() %>%
+  as.data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames('drug') %>%
+  pheatmap( 
+  #scale = "row",
+  cluster_rows = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c('#ca0020','#f4a582','#f7f7f7', '#92c5de','#0571b0'))(5),
+  #color = colorRampPalette(c('#f9f902','#000000','#3701f9'))(10),
+  #color = c('#ca0020','#f4a582','#f7f7f7','#92c5de','#0571b0'),
+  annotation_col = col,
+  annotation_colors = ann_colors,
+  #annotation_row = row
+  #cutree_cols = 2,
+  cutree_rows = 4,
+  na_col = "grey"
+  ) 
+
+```
+
+Compare AUC by the GRmetric package with the PharmacoGx analysis by correlating responses. First fit AUC data irrespective of timepoints.
+
+```{r, eval=FALSE}
+compare_methods <- GRgetMetrics(drc_output) %>% 
+  as.tibble() %>%
+  ungroup() %>%
+  dplyr::rename(line = cell_line,
+         drug = treatment, 
+         aoc.mean = GR_AOC) %>%
+  dplyr::select(line, drug, aoc.mean) %>%
+  mutate(aoc.mean.scale = )
+  left_join(auc_pgx %>%
+  dplyr::select(line, drug, l_AUC_fit, l_AUC_actual, s_AUC_fit, s_AUC_actual) %>%
+  distinct(line, drug, .keep_all = TRUE)) 
+
+compare_methods %>% 
+  ggplot(aes(l_AUC_fit, l_AUC_actual)) + geom_point() + theme_classic()
+
+compare_methods %>% 
+  ggplot(aes(s_AUC_fit, l_AUC_fit)) + geom_point() + theme_classic()
+
+compare_methods %>% 
+  ggplot(aes(aoc.mean, l_AUC_fit)) + geom_point() + theme_classic()
+
+```
+
+##Plotting idividual drug treatments 
+
+```{r, eval = FALSE}
+compound_of_interest <- c("Trifluoridin/Tipiracil")
+dodge <- position_dodge(width=0.15)
+ctg_qnorm %>%
+  separate(screen, c("date", "operator", "mithras", "full_barcode"), remove = FALSE) %>%
+  separate(full_barcode, c("line", "plate", "library"), remove = FALSE, sep = c(7, 11)) %>%
+  filter(drug %in% compound_of_interest) %>%
+  mutate(line = as.factor(line),
+         drug = factor(drug, levels = compound_of_interest),
+         concentration_factor = as.numeric(rack.concentration)) %>%
+  group_by(line, drug, concentration_factor) %>%
+     dplyr::summarise(mean_photons = mean(pc_norm, na.rm = TRUE),
+                     sd_photons = sd(pc_norm, na.rm = TRUE),
+                     range_low_photons = range(pc_norm)[1],
+                     range_high_photons = range(pc_norm)[2]) %>%
+    ggplot(aes(y = mean_photons, x = concentration_factor)) + 
+    geom_point(position = dodge,  stat = "identity", aes( colour = line), size = 2)  + 
+    geom_path(aes( colour = line), alpha = 0.6, position = dodge, size = 2) + 
+    #geom_errorbar(aes(ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons, group = line), width=0, position = dodge, size = 1, alpha = 0.5) +
+    #geom_ribbon( aes(x=concentration_factor, y=mean_photons, ymin=mean_photons-sd_photons, ymax=mean_photons+sd_photons), alpha=0.2) +
+    scale_x_log10(breaks = c(7,14)) + 
+    ylab("Photon count normalized to control") + 
+    facet_wrap(~drug) + 
+    xlab("Concentration factor 5-fold, mean of n=2") + 
+    scale_colour_brewer(palette = "Set3") + 
+    theme_minimal()
+```
