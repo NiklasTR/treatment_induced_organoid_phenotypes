@@ -1,0 +1,553 @@
+---
+title: "Cell Line Differences (Human)"
+author: "Jan Sauer"
+# date: "10.11.2018"
+output: 
+   BiocStyle::html_document:
+    code_folding: hide
+    df_print: paged
+    toc_depth: 4
+    # toc_float: true
+    # fig_height: 6
+    # fig_width: 9.5
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, message=FALSE}
+library(h5)
+library(MASS)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(Rtsne)
+library(pheatmap)
+library(data.table)
+library(knitr)
+library(RColorBrewer)
+source("../r_functions/PublicationTheme_ggplot.R")
+source("../r_functions/feature_class.R")
+source("../r_functions/Color_Palette.R")
+source("../r_functions/Replicates.R")
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+
+htmldir = "/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/htmldir"
+
+species = "human"
+feature_type = "organoids"
+
+lines = sort(get_lines(species))
+colorScale = setNames(
+  object = get_color_palette(species, length(lines)), 
+  nm = lines)
+```
+
+# Introduction
+I reduce the features and select the most informative features using a PCA, i.e. I retain the features that contribute the most to the variance as measured by their relative contribution to each PC component.
+
+# Line Differences of DMSO Organoids
+## Load Data
+```{r c1}
+dmso_dir = sprintf("%s/DMSO/results", species)
+f = h5file(file.path(dmso_dir, sprintf("ReducedFeatures_%s_DMSO.h5", species)), "r")
+features = data.frame(t(f[sprintf("features_%s", feature_type)][]))
+colnames(features) = f[sprintf("feature_names_%s", feature_type)][]
+metadata = data.frame(f[sprintf("metadata_%s", feature_type)][], stringsAsFactors = FALSE)
+colnames(metadata) = f[sprintf("metadata_names_%s", feature_type)][]
+h5close(f)
+```
+
+## Organoid Features
+The features are sampled to ensure a balance between classes.
+```{r c2}
+sample_size = min(table(metadata$Line))
+features_organoids = features %>% 
+  group_by("Line" = metadata$Line) %>%
+  sample_n(sample_size) %>% as.data.frame
+```
+
+### LDA
+I want to test several feature set sizes to compare them visually
+```{r c3}
+expl_var_plots = list()
+lda_proj_plots = list()
+num_features_list = c(5, 10, 25, 50, 100, 200)
+num_features_list = num_features_list[num_features_list < ncol(features)]
+num_features_list = c(num_features_list, ncol(features))
+
+for(num_features in num_features_list) {
+  model = lda(
+    x=features_organoids %>% select(-Line) %>%
+      select(seq_len(num_features)), 
+    grouping=features_organoids$Line)
+  plda = predict(object = model, newdata = features_organoids %>% select(-Line) %>%
+      select(seq_len(num_features)))
+  transformed = as.data.frame(plda$x)
+  transformed$Line = features_organoids$Line
+  
+  # Accuracy
+  acc = mean(as.character(plda$class) == features_organoids$Line)
+  print(sprintf("Accuracy for %s features = %s", num_features, acc))
+  
+  # Explained Variance
+  expl_var_plots[[length(expl_var_plots) + 1]] = ggplot_df = data.frame(
+    "Component" = paste0("LD", seq_along(model$svd)), 
+    "Value" = model$svd**2 / sum(model$svd**2), 
+    "NumFeatures" = num_features)
+  # ggplot(data = ggplot_df) + 
+  #   geom_col(aes(x = Component, y = Value)) + 
+  #   xlab("") + ylab("") + ggtitle("Proportion of Variance") + 
+  #   theme_Publication() + scale_fill_Publication() + 
+  #   theme(legend.position = "none")
+  
+  # 2D LDA Projection
+  transformed$NumFeatures = num_features
+  lda_proj_plots[[length(lda_proj_plots) + 1]] = transformed[, c("LD1", "LD2", "Line", "NumFeatures")]
+  # ggplot(data = transformed) +
+  #   geom_point(aes(x = LD1, y = LD2, color = Line)) +
+  #   theme_Publication() + scale_fill_Publication() +
+  #   theme(legend.position = "right", legend.direction = "vertical",
+  #         legend.key.size = unit(0.5, "cm"))
+}
+
+lda_proj_plots = do.call(rbind, lda_proj_plots)
+expl_var_plots = do.call(rbind, expl_var_plots)
+
+ggplot(data = lda_proj_plots) + 
+  geom_point(aes(x = LD1, y = LD2, color = Line)) +
+  facet_wrap(facets =  ~ NumFeatures) + 
+  theme_Publication() + scale_color_manual(values = colorScale) +
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.key.size = unit(0.5, "cm"))
+```
+
+
+
+## Well Features
+
+A better separation becomes visible if features are averaged across wells
+
+```{r c4}
+well_id = paste0(metadata$Plate, "_", metadata$Well)
+features_wells = aggregate(x = features, by = list(well_id), FUN = median)
+rownames(features_wells) = features_wells$Group.1
+features_wells$Line = substr(features_wells$Group.1, 1, 7)
+features_wells$Group.1 = NULL
+
+metadata_wells = aggregate(x = metadata, by = list(well_id), FUN = first)
+rownames(metadata_wells) = metadata_wells$Group.1
+metadata_wells$Group.1 = NULL
+```
+
+### LDA
+```{r c5}
+expl_var_plots = list()
+lda_proj_plots = list()
+contribs = list()
+num_features_list = c(5, 10, 25, 50, 100, 200)
+num_features_list = num_features_list[num_features_list < ncol(features)]
+num_features_list = c(num_features_list, ncol(features))
+
+for(num_features in num_features_list) {
+  model = lda(
+    x=features_wells %>% select(-Line) %>%
+      select(seq_len(num_features)), 
+    grouping=features_wells$Line)
+  plda = predict(object = model, newdata = features_wells %>% select(-Line) %>%
+      select(seq_len(num_features)))
+  transformed = as.data.frame(plda$x)
+  transformed$Line = features_wells$Line
+  
+  # Accuracy
+  acc = mean(as.character(plda$class) == features_wells$Line)
+  print(sprintf("Accuracy for %s features = %s", num_features, acc))
+  
+  # Explained Variance
+  expl_var_plots[[length(expl_var_plots) + 1]] = data.frame(
+    "Component" = paste0("LD", seq_along(model$svd)), 
+    "Value" = model$svd**2 / sum(model$svd**2), 
+    "NumFeatures" = num_features)
+  # ggplot(data = ggplot_df) + 
+  #   geom_col(aes(x = Component, y = Value)) + 
+  #   xlab("") + ylab("") + ggtitle("Proportion of Variance") + 
+  #   theme_Publication() + scale_fill_Publication() + 
+  #   theme(legend.position = "none")
+  
+  # 2D LDA Projection
+  transformed$NumFeatures = num_features
+  lda_proj_plots[[length(lda_proj_plots) + 1]] = transformed[
+    , c("LD1", "LD2", "LD3", "Line", "NumFeatures")]
+  # ggplot(data = transformed) +
+  #   geom_point(aes(x = LD1, y = LD2, color = Line)) +
+  #   theme_Publication() + scale_fill_Publication() +
+  #   theme(legend.position = "right", legend.direction = "vertical",
+  #         legend.key.size = unit(0.5, "cm"))
+  
+  # Feature contributions to LD1 and LD2
+  contrib = list()
+  for(ldc in colnames(model$scaling)) {
+    contrib[[ldc]] = model$scaling[,ldc]
+    contrib[[ldc]] = contrib[[ldc]][order(abs(contrib[[ldc]]), decreasing = TRUE)]
+    contrib[[ldc]] = data.frame(
+      "var" = names(contrib[[ldc]]), 
+      "value" = contrib[[ldc]], 
+      "LD" = ldc,
+      "NumFeatures" = num_features)
+  }
+  contribs[[length(contribs) + 1]] = do.call(rbind, contrib)
+}
+
+lda_proj_plots = do.call(rbind, lda_proj_plots)
+expl_var_plots = do.call(rbind, expl_var_plots)
+contribs = do.call(rbind, contribs)
+
+ggplot(data = lda_proj_plots) + 
+  geom_point(aes(x = LD1, y = LD2, color = Line)) +
+  facet_wrap(facets =  ~ NumFeatures) + 
+  theme_Publication() + scale_color_manual(values = colorScale) +
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.key.size = unit(0.5, "cm"))
+
+ggplot(data = lda_proj_plots) + 
+  geom_point(aes(x = LD2, y = LD3, color = Line)) +
+  facet_wrap(facets =  ~ NumFeatures) + 
+  theme_Publication() + scale_color_manual(values = colorScale) +
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.key.size = unit(0.5, "cm"))
+```
+
+### PCA
+```{r c6}
+expl_var_plots = list()
+pca_plots = list()
+contribs = list()
+num_features_list = c(5, 10, 25, 50, 100, 200)
+num_features_list = num_features_list[num_features_list < ncol(features)]
+num_features_list = c(num_features_list, ncol(features))
+
+for(num_features in num_features_list) {
+  model = prcomp(
+    x = features_wells %>% select(-Line) %>%
+      select(seq_len(num_features)),
+    scale. = TRUE, center = TRUE)
+  transformed = as.data.frame(model$x)
+  transformed$Line = features_wells$Line
+  
+  # Explained Variance
+  expl_var_plots[[length(expl_var_plots) + 1]] = data.frame(
+    "Component" = paste0("PC", seq_along(model$sdev)), 
+    "Value" = model$sdev / sum(model$sdev), 
+    "NumFeatures" = num_features)
+  
+  # 2D LDA Projection
+  transformed$NumFeatures = num_features
+  pca_plots[[length(pca_plots) + 1]] = transformed[, c("PC1", "PC2", "Line", "NumFeatures")]
+}
+
+pca_plots = do.call(rbind, pca_plots)
+expl_var_plots = do.call(rbind, expl_var_plots)
+
+ggplot(data = pca_plots) + 
+  geom_point(aes(x = PC1, y = PC2, color = Line)) +
+  facet_wrap(facets =  ~ NumFeatures) + 
+  theme_Publication() + scale_color_manual(values = colorScale) +
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.key.size = unit(0.5, "cm"))
+```
+
+### t-SNE
+```{r c7}
+tsne = Rtsne(features_wells %>% select(-Line), perplexity = 50)
+ggplot_df = data.frame(
+  "Line" = features_wells$Line,
+  "X1" = tsne$Y[,1],
+  "X2" = tsne$Y[,2])
+ggplot(data = ggplot_df) + geom_point(aes(x = X1, y = X2, color = Line)) +
+  theme_Publication() + xlab("X") + ylab("Y") +
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.key.size = unit(0.5, "cm")) + 
+  scale_color_manual(values = colorScale)
+```
+
+## Line Clusters
+
+```{r, eval = FALSE}
+library(tidyverse)
+#I load the prepared well feature data directly and skip most parts
+features_wells <- readRDS("~/promise/local_data/image_analysis/WellFeatures_human.rds") %>%
+  rownames_to_column("Line") %>%
+  mutate(Line = substr(Line, 1, 7))
+
+metadata_wells <- readRDS("~/promise/local_data/image_analysis/WellMetadata_human.rds")
+```
+
+
+I perform a clustering on the lines
+```{r c8}
+
+# model = lda(
+#   x=features_wells %>% select(-Line), 
+#   grouping=features_wells$Line)
+# plda = predict(
+#   object = model, 
+#   newdata = features_wells %>% select(-Line))
+# transformed = as.data.frame(plda$x)
+# 
+# # Explained Variance
+# expl_var_plots = data.frame(
+#   "Component" = paste0("LD", seq_along(model$svd)), 
+#   "Value" = model$svd**2 / sum(model$svd**2),
+#   "NumFeatures" = num_features)
+
+model = prcomp(
+  x = features_wells %>% select(-Line),
+  scale. = TRUE, center = TRUE)
+transformed = as.data.frame(model$x)
+transformed$Line = features_wells$Line
+
+features_lines = aggregate(
+  x = transformed %>% select(-Line), 
+  by = list(features_wells$Line), 
+  FUN = median)
+rownames(features_lines) = features_lines$Group.1
+features_lines$Group.1 = NULL
+
+rep_id = paste0(
+  metadata_wells$Line, "_", 
+  substr(metadata_wells$Plate, 12, 14), "_", 
+  metadata_wells$Replicate)
+
+features_replicates = aggregate(
+  x = transformed %>% select(-Line),
+  by = list("Replicate.ID" = rep_id),
+  FUN = median)
+rownames(features_replicates) = features_replicates$Replicate.ID
+features_replicates$Replicate.ID = NULL
+
+d = dist(features_lines[-7,])
+hc = hclust(d, method = "ward.D2")
+
+annotation = data.frame(
+  "Line" = substr(rownames(features_replicates[-7,]), 1, 7) %>% unique(),
+  row.names = substr(rownames(features_replicates[-7,]), 1, 7) %>% unique(),
+  stringsAsFactors = FALSE)
+
+pheatmap(
+  mat = t(as.matrix(features_lines[-7, 1:9])), cluster_rows = FALSE, 
+  cluster_cols = hc, cutree_cols = 6, annotation_col = annotation, border_color = NA)
+```
+
+```{r}
+summary(model)$importance[2,c(1:9)] %>% as.data.frame() %>% rownames_to_column("PC") %>% gather(pc, proportion, -PC) %>% dplyr::select(-pc) %>% as.tibble() %>% ggplot(aes(PC, proportion)) + geom_point() + theme_classic()
+```
+
+Now I wonder what is the optimal number of clusters on this limited dataset
+
+```{r}
+library(fpc)
+library(gclus)
+
+
+set.seed(13)
+df <- t(as.matrix(features_lines[,20:ncol(features_lines)])) %>% as.data.frame()
+
+pamk.best <- pamk(df)
+cat("number of clusters estimated by optimum average silhouette width:", pamk.best$nc, "\n")
+## number of clusters estimated by optimum average silhouette width: 3
+plot(pam(df, pamk.best$nc))
+```
+
+
+```{r}
+library(cluster)
+k <- clusGap(df, FUN = kmeans,  nstart = 2, K.max = 15)
+k %>% plot()
+```
+
+```{r}
+pheatmap(
+  mat =scale(df), cluster_rows = FALSE, 
+  cluster_cols = hc, cutree_cols = 6, annotation_col = annotation, border_color = NA)
+```
+
+
+### Quality Control
+I repeat the clustering but for individual replicates of lines to test the screen quality.
+
+```{r c8b}
+rep_id = paste0(
+  metadata_wells$Line, "_", 
+  substr(metadata_wells$Plate, 12, 14), "_", 
+  metadata_wells$Replicate)
+
+annotation = data.frame(
+  "Line" = substr(rownames(features_replicates), 1, 7),
+  row.names = rownames(features_replicates, 1, 7),
+  stringsAsFactors = FALSE)
+
+anno_colorScale = list(
+  "Line" = setNames(
+    object = colorScale, 
+    nm = sort(unique(annotation$Line))))
+
+d = dist(features_replicates)
+hc = hclust(d, method = "ward.D2")
+
+pheatmap(
+  mat = t(as.matrix(features_replicates[, 1:5])), 
+  cluster_rows = FALSE, cluster_cols = hc, annotation_col = annotation, 
+  #annotation_colors = anno_colorScale, 
+  show_colnames = FALSE, 
+  border_color = NA)
+
+ph = pheatmap(
+  mat = d, cluster_rows = hc, cluster_cols = hc, 
+  annotation_col = annotation, # annotation_row = annotation,
+  annotation_colors = anno_colorScale, 
+  annotation_names_col = FALSE, annotation_names_row = FALSE, 
+  border_color = NA)
+```
+
+### Example Wells
+
+```{r c9}
+set.seed(100)
+num_imgs = 3
+metadata_wells = aggregate(x = metadata, by = list(well_id), FUN = first)
+random_wells = metadata_wells %>% dplyr::group_by(Line) %>% sample_n(num_imgs)
+all_imgs = list()
+captions = c()
+for(line in sort(unique(random_wells$Line))) {
+  subdat = random_wells[random_wells$Line == line, ]
+  imgs = list()
+  plates = c()
+  for(ii in seq_len(num_imgs)) {
+    plate = subdat[ii, "Plate"]
+    plates = c(plates, as.character(plate))
+    row = substr(subdat[ii, "Well"], 1, 1)
+    col = substr(subdat[ii, "Well"], 2, 3)
+    img_url = file.path(htmldir, plate, sprintf("%s_%s_%s_1.jpeg", plate, row, col))
+    imgs[[ii]] = EBImage::readImage(img_url)
+  }
+  all_imgs[[length(all_imgs)+1]] = EBImage::abind(imgs, along = 1)
+  captions = c(captions, paste0(plates, collapse = ", "))
+}
+```
+
+```{r c10, fig.cap=captions[1], fig.width=10}
+EBImage::display(all_imgs[[1]])
+```
+
+```{r c11, fig.cap=captions[2], fig.width=10}
+EBImage::display(all_imgs[[2]])
+```
+
+```{r c12, fig.cap=captions[3], fig.width=10}
+EBImage::display(all_imgs[[3]])
+```
+
+```{r c13, fig.cap=captions[4], fig.width=10}
+EBImage::display(all_imgs[[4]])
+```
+
+```{r c14, fig.cap=captions[5], fig.width=10}
+EBImage::display(all_imgs[[5]])
+```
+
+```{r c15, fig.cap=captions[6], fig.width=10}
+EBImage::display(all_imgs[[6]])
+```
+
+```{r c16, fig.cap=captions[7], fig.width=10}
+EBImage::display(all_imgs[[7]])
+```
+
+```{r c17, fig.cap=captions[8], fig.width=10}
+EBImage::display(all_imgs[[8]])
+```
+
+```{r c18, fig.cap=captions[9], fig.width=10}
+EBImage::display(all_imgs[[9]])
+```
+
+```{r c19, fig.cap=captions[10], fig.width=10}
+EBImage::display(all_imgs[[10]])
+```
+
+```{r c20, fig.cap=captions[11], fig.width=10}
+EBImage::display(all_imgs[[11]])
+```
+
+```{r c21, fig.cap=captions[12], fig.width=10}
+EBImage::display(all_imgs[[12]])
+```
+
+```{r c22, fig.cap=captions[13], fig.width=10}
+EBImage::display(all_imgs[[13]])
+```
+
+```{r c23, fig.cap=captions[14], fig.width=10}
+EBImage::display(all_imgs[[14]])
+```
+
+```{r c24, fig.cap=captions[15], fig.width=10}
+EBImage::display(all_imgs[[15]])
+```
+
+## Individual Features
+
+The features are sorted by importance, i.e. how well they distinguish organoid lines. I look at the first few features to see how lines cluster along them.
+
+### Organoid Features
+
+```{r c25, fig.height=12}
+ggplot_df = melt(features_wells %>% select(1:12, Line), id.vars = "Line")
+ggplot(data = ggplot_df) +
+  geom_histogram(mapping = aes(value, fill = Line), 
+                 position = "identity", alpha = 0.5, bins = 50) + 
+  facet_wrap(facets = ~variable, nrow = 4) + 
+  theme_Publication() + scale_fill_manual(values = colorScale) + 
+  labs(title = "Histogram of Organoid Area", x = "", y = "")
+```
+
+<!-- ### 2D Plots -->
+<!-- I select pairs of features and show the resulting scatterplots -->
+<!-- ```{r} -->
+<!-- ggplot_df = features_wells %>% select(1:12) -->
+<!-- ggplot_df = as.data.frame( -->
+<!--   apply(ggplot_df, 2, function(x) (x - mean(x)) / sd(x))) -->
+<!-- ggplot_df$Line = features_wells$Line -->
+
+<!-- ggplot(data = ggplot_df) +  -->
+<!--   geom_point(mapping = aes(x = x.0.s.area, y = x.c.h.f12.s4, color = Line)) +  -->
+<!--   theme_Publication() + scale_color_manual(values = colorScale) -->
+<!-- ``` -->
+
+## Phenoprints
+
+```{r c26, fig.height=8}
+features_lines = aggregate(features, list(metadata$Line), median)
+# Reshape into a ggplot-compatible format
+features_lines = melt(features_lines, id.vars = "Group.1")
+# Rename features into more readable names
+rename_dict = c(
+  "x.0.s.area" = "Area", "x.a.b.q05" = "Actin Intensity Median", 
+  "x.b.b.q05" = "FITC Intensity Median", "x.c.b.q05" = "DAPI Intensity Median", 
+  "x.b.h.asm.s2" = "FITC Haralick ASM", "x.b.b.q001" = "FITC Intensity 1-Percentile", 
+  "x.Bac.b.mad" = "Actin*DAPI Intensity MAD", "x.a.h.f13.s4" = "Actin Haralick F13", 
+  "x.Ba.h.sav.s4" = "Actin Haralick SAV", "x.c.h.f13.s4" = "DAPI Haralick F13")
+
+features_lines = features_lines[features_lines$variable %in% names(rename_dict), ]
+features_lines$variable = rename_dict[as.character(features_lines$variable)]
+colnames(features_lines) = c("Line", "Feature", "Value")
+
+ggplot(data = features_lines) + geom_col(aes(x = Feature, y = Value, fill = Feature)) + 
+  facet_wrap(facets = ~Line) + theme_Publication() + xlab("") + ylab("") + 
+  theme(legend.position = "right", legend.direction = "vertical", 
+        axis.text.x = element_blank(), legend.key.size = unit(0.5, "cm")) + 
+  scale_fill_manual(values = colorScale)
+```
+
