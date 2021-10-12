@@ -2,7 +2,7 @@
 title: "Organoid Unsupervised Exploration"
 author: Niklas Rindtorff
 output:
-  pdf_document: default
+  #pdf_document: default
   html_document:
     keep_md: true
 params:
