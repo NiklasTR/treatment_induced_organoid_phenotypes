@@ -36,6 +36,7 @@ Loading packages
 library(tidyverse)
 library(here)
 library(ggrastr)
+library(tibble)
 library(cowplot)
 library(princurve)
 library(scico)

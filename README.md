@@ -11,12 +11,12 @@ Sequencing and gene expression data has been deposited in public repositories, s
 ## Docker Containers
 The project can most easily be reproduced by pulling these docker containers: 
 
-* [niklastr/MOFA:latest](https://hub.docker.com/r/niklastr/mofa/tags) - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
 * [niklastr/promise:latest](https://hub.docker.com/r/niklastr/promise/tags) - contains the promise git project together with large local files stored under *localdata*
+* [niklastr/MOFA:latest](https://hub.docker.com/r/niklastr/mofa/tags) - contains a MOFA2 implementation to run the multi-omics factor analysis. The code can be run without GPU support
 * [niklastr/promise:interimdata](https://hub.docker.com/r/niklastr/promise/tags) - contains all contents of the niklastr/promise:latest with additional interim data from the original analysis (available soon)
 
 ## Reproducing Notebooks
-
+### Figures
 All notebooks can be reproduced by starting a niklastr/promise docker, navigating to the promise working directory and calling
 
 ```
@@ -24,6 +24,15 @@ Rscript --vanilla /home/rstudio/promise/make_results.R
 ```
 
 Knitted vignettes will appear in the notebook subdirectories. Individual figures are exported into the reports/figures directory.
+
+### MOFA modeling
+The MOFA model can be trained using a niklastr/MOFA docker. 
+In order to run the model, the promise git directory will have to be mounted as a volume, for example via **docker run -d -v /Users/myuser/github/promise:/promise niklastr/mofa**. Once running, call the below command to initiate the data preparation and MOFA modeling. 
+
+```
+Rscript --vanilla /promise/src/models/mofa/tidy_mofa.R
+```
+The model will be trained and a **model.hdf5** will be created under **promise/models/mofa**.
 
 ## Directory Structure
 
