@@ -35,5 +35,5 @@ rmarkdown::render(here::here('notebooks/drug_activity/3.0-js-DrugPhenotypes.Rmd'
 # figure 4 and 5
 # running these vignettes requires a trained MOFA model. A MOFA model can be trained from within the MOFA2 docker container
 # by calling the tidy_mofa.R script
-rmarkdown::render(here::here('notebooks/mofa/mofa_exploration.Rmd'))
-rmarkdown::render(here::here('notebooks/mofa/mofa_drug_effect.Rmd'))
+rmarkdown::render(here::here('notebooks/mofa/1.0-nr-mofa_exploration.Rmd'))
+rmarkdown::render(here::here('notebooks/mofa/2.0-nr-mofa_drug_effect.Rmd'))

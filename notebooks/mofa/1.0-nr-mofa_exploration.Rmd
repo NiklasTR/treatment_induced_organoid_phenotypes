@@ -1,7 +1,7 @@
 ---
 title: "MOFA exploration"
 output:
-  pdf_document: default
+  #pdf_document: default
   html_document: default
 ---
 
@@ -127,11 +127,20 @@ model@cache$variance_explained$r2_per_factor$single_group
 ```{r}
 model@cache$variance_explained$r2_per_factor$single_group %>% as.data.frame() %>% 
   rownames_to_column("factor") %>% 
-  mutate(overall_variance = expression + morphology_view + size_view + drug_activity) %>%
-  mutate(overall_variance = overall_variance/4) %>%
+  mutate(overall_variance = expression + morphology_view + size_view + drug_activity + mutation) %>%
+  mutate(overall_variance = overall_variance/5) %>%
   ggplot(aes(factor, overall_variance)) + 
   geom_point(size = 2) + 
-  theme_cowplot()
+  theme_cowplot() + 
+  ggsave(here::here("reports/figures/mofa/var_explained_avg.pdf"))
+```
+
+```{r}
+# variance explained for different factors
+model@cache$variance_explained$r2_per_factor$single_group %>% as.data.frame() %>% 
+    rownames_to_column("factor") %>% 
+    mutate(overall_variance = expression + morphology_view + size_view + drug_activity) %>% 
+    filter(factor != "Factor3") %>% dplyr::select(-factor) %>% colSums()
 ```
 
 

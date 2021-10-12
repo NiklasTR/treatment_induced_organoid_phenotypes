@@ -110,7 +110,7 @@ plot_grid(
   p1, p2,
 #  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(here::here("reports/gg_size_panel.pdf"), 
+) +  ggsave(here::here("reports/figures/imaging/gg_size_panel.pdf"), 
             width = 8,
             height = 4)
 ```
@@ -144,7 +144,7 @@ plot_grid(
   p1, p2,
 #  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(here::here("gg_ldc_panel.pdf"),
+) +  ggsave(here::here("reports/figures/imaging/gg_ldc_panel.pdf"),
             width = 8,
             height = 4)
 
@@ -240,7 +240,7 @@ plot_grid(
   p1, p2,
 #  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(here::here("gg_replicate_panel.pdf"),
+) +  ggsave(here::here("reports/figures/imaging/gg_replicate_panel.pdf"),
             width = 8,
             height = 4)
 
@@ -273,7 +273,7 @@ plot_grid(
   p1, p2,
 #  p3, p4,
   labels = "AUTO", ncol = 2
-) +  ggsave(here::here("gg_screen_panel.pdf"),
+) +  ggsave(here::here("reports/figures/imaging/gg_screen_panel.pdf"),
             width = 8,
             height = 4)
 
@@ -323,7 +323,7 @@ umap_sampled %>%
        y = "UMAP 2",
        title = "Actin staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(here::here("reports/figures/gg_actin.pdf"), width = 4, height = 4)
+  ggsave(here::here("reports/figures/imaging/gg_actin.pdf"), width = 4, height = 4)
 
 umap_sampled %>%
   filter(drug == "DMSO") %>%
@@ -336,7 +336,7 @@ umap_sampled %>%
        y = "UMAP 2",
        title = "Nuclear staining intensity") + 
   theme(legend.position = "bottom") + 
-  ggsave(here::here("reports/figures/gg_dapi.pdf"), width = 4, height = 4)
+  ggsave(here::here("reports/figures/imaging/gg_dapi.pdf"), width = 4, height = 4)
 
 ```
 
@@ -374,7 +374,7 @@ p2 <- umap_morph_filter(umap_sampled, loi, "Raw Data, All data")
 plot_grid(
   p1, p2,
  # p3, p4,
-  labels = "AUTO", ncol = 2) +  ggsave(here::here(paste0("gg_morph_panel", loi, ".pdf")), 
+  labels = "AUTO", ncol = 2) +  ggsave(here::here(paste0("reports/figures/imaging/gg_morph_panel", loi, ".pdf")), 
             width = 8,
             height = 8)
 
