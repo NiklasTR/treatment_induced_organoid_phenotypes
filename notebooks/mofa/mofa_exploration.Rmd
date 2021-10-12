@@ -33,7 +33,7 @@ model <- load_model(here("models/mofa/model.hdf5"))
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
 
 # organoid morphology
-umap_df <- readRDS(here::here("data/processed/imaging/umap_absolute_all_drugs_sampled.Rds"))
+umap_df <- readRDS(here::here("data/processed/morphology/umap_absolute_all_drugs_sampled.Rds"))
 
 # organoid size
 organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size_fit.Rds")) %>% 

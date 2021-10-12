@@ -6,8 +6,8 @@ output:
   html_document:
     keep_md: true
 params:
-  data: "data/processed/imaging/umap_absolute_all_drugs_sampled.Rds"
-  sample: "data/processed/imaging"
+  data: "data/processed/morphology/umap_absolute_all_drugs_sampled.Rds"
+  sample: "data/processed/morphology"
   output: "imaging"
   remote: FALSE
   cache: FALSE
