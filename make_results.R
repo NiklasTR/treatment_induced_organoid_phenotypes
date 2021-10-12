@@ -2,26 +2,34 @@
 #.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
 print(.libPaths())
 
+# the git directory and accompanying docker container comer "batteries included". This script can be run to recreate all figures in one go.
+
 # figure 1
-# rmarkdown::render(here::here('notebooks/imaging/organoid_unsupervised_exploration.Rmd'), 
-#     params = list(
-#         remote = FALSE, 
-#         data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds", 
-#         sample = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds",
-#         cache = TRUE))
+# requires running the line_difference scripts within the FeatureAnalysis module
+rmarkdown::render(here::here('notebooks/imaging/1.0-nr-organoid_unsupervised_exploration.Rmd'), 
+    params = list(
+        remote = FALSE, 
+        data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds", 
+        sample = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds",
+        cache = TRUE))
 
 # # figure 2
-# rmarkdown::render(here::here('notebooks/imaging/embedding_inspection.Rmd'), 
-#     params = list(
-#         data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds",
-#         data_harmony = "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_sampled.Rds",
-#         remote = FALSE,
-#         cache = TRUE))
-# rmarkdown::render(here::here('notebooks/drug_analysis/2.0-js-OrganoidViability.Rmd'))
+# requires running the line_difference scripts within the FeatureAnalysis module
+rmarkdown::render(here::here('notebooks/imaging/2.0-nr-embedding_inspection.Rmd'), 
+    params = list(
+        data = "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds",
+        data_harmony = "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_sampled.Rds",
+        remote = FALSE,
+        cache = TRUE))
+rmarkdown::render(here::here('notebooks/drug_activity/2.0-js-OrganoidViability.Rmd'))
 
 # # figure 3
-# rmarkdown::render(here::here('notebooks/drug_analysis/3.0-js-OrganoidPhenotypes.Rmd'))
+# requires running the drug_effect scripts within the FeatureAnalysis module
+rmarkdown::render(here::here('notebooks/drug_analysis/3.0-js-OrganoidPhenotypes.Rmd'))
+
 
 # figure 4 and 5
-#rmarkdown::render(here::here('notebooks/mofa/mofa_exploration.Rmd'))
+# running these vignettes requires a trained MOFA model. A MOFA model can be trained from within the MOFA2 docker container
+# by calling the tidy_mofa.R script
+rmarkdown::render(here::here('notebooks/mofa/mofa_exploration.Rmd'))
 rmarkdown::render(here::here('notebooks/mofa/mofa_drug_effect.Rmd'))
