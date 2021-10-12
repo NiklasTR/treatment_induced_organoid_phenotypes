@@ -109,152 +109,15 @@
 \begin{Shaded}
 \begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(tidyverse)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Warning: package 'tidyverse' was built under R version 4.0.3
-\end{verbatim}
-
-\begin{verbatim}
-## -- Attaching packages --------------------------------------- tidyverse 1.3.0 --
-\end{verbatim}
-
-\begin{verbatim}
-## v ggplot2 3.3.1     v purrr   0.3.4
-## v tibble  3.0.1     v dplyr   1.0.0
-## v tidyr   1.1.0     v stringr 1.4.0
-## v readr   1.3.1     v forcats 0.5.0
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: package 'purrr' was built under R version 4.0.3
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: package 'stringr' was built under R version 4.0.3
-\end{verbatim}
-
-\begin{verbatim}
-## -- Conflicts ------------------------------------------ tidyverse_conflicts() --
-## x dplyr::filter() masks stats::filter()
-## x dplyr::lag()    masks stats::lag()
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(MOFA2)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## 
-## Attaching package: 'MOFA2'
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:stats':
-## 
-##     predict
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(here)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## here() starts at /home/rstudio/promise
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{#library(MOFAdata)}
 \KeywordTok{library}\NormalTok{(ReactomePA)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## 
-\end{verbatim}
-
-\begin{verbatim}
-## ReactomePA v1.34.0  For help: https://guangchuangyu.github.io/ReactomePA
-## 
-## If you use ReactomePA in published research, please cite:
-## Guangchuang Yu, Qing-Yu He. ReactomePA: an R/Bioconductor package for reactome pathway analysis and visualization. Molecular BioSystems 2016, 12(2):477-479
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(biomaRt)}
 \KeywordTok{library}\NormalTok{(cowplot)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## 
-## ********************************************************
-\end{verbatim}
-
-\begin{verbatim}
-## Note: As of version 1.0.0, cowplot does not change the
-\end{verbatim}
-
-\begin{verbatim}
-##   default ggplot2 theme anymore. To recover the previous
-\end{verbatim}
-
-\begin{verbatim}
-##   behavior, execute:
-##   theme_set(theme_cowplot())
-\end{verbatim}
-
-\begin{verbatim}
-## ********************************************************
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(enrichplot)}
 \KeywordTok{library}\NormalTok{(dplyr)}
 \KeywordTok{library}\NormalTok{(clusterProfiler)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## clusterProfiler v3.18.1  For help: https://guangchuangyu.github.io/software/clusterProfiler
-## 
-## If you use clusterProfiler in published research, please cite:
-## Guangchuang Yu, Li-Gen Wang, Yanyan Han, Qing-Yu He. clusterProfiler: an R package for comparing biological themes among gene clusters. OMICS: A Journal of Integrative Biology. 2012, 16(5):284-287.
-\end{verbatim}
-
-\begin{verbatim}
-## 
-## Attaching package: 'clusterProfiler'
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:biomaRt':
-## 
-##     select
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:purrr':
-## 
-##     simplify
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:stats':
-## 
-##     filter
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \KeywordTok{library}\NormalTok{(utils)}
 \KeywordTok{library}\NormalTok{(stats)}
 \end{Highlighting}
@@ -269,10 +132,10 @@
 \NormalTok{promise_long_filtered_top <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{'data/processed/expression/promise_expr_filtered_tidy_top.rds'}\NormalTok{))}
 
 \CommentTok{# organoid morphology}
-\NormalTok{umap_df <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"}\NormalTok{))}
+\NormalTok{umap_df <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"data/processed/morphology/umap_absolute_all_drugs_sampled.Rds"}\NormalTok{))}
 
 \CommentTok{# organoid size}
-\NormalTok{organoid_size_fit <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"data/processed/morphology/organoid_size.Rds"}\NormalTok{)) }\OperatorTok{%>%}\StringTok{ }
+\NormalTok{organoid_size_fit <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"data/processed/morphology/organoid_size_fit.Rds"}\NormalTok{)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{filter}\NormalTok{(}\OperatorTok{!}\NormalTok{line }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{'D055T01'}\NormalTok{, }\StringTok{'D020T02'}\NormalTok{, }\StringTok{'D021T01'}\NormalTok{)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\CommentTok{#filter(!line %in% c('D055T01','D020T02')) %>% }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{as.character}\NormalTok{(line)) }\OperatorTok{%>%}\StringTok{ }
@@ -286,26 +149,7 @@
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(}\DataTypeTok{line =}\NormalTok{ organoid, }\DataTypeTok{morphology =}\NormalTok{ visual_inspection_v2) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{substr}\NormalTok{(line, }\DecValTok{1}\NormalTok{, }\DecValTok{4}\NormalTok{)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{morphology =} \KeywordTok{if_else}\NormalTok{(}\KeywordTok{is.na}\NormalTok{(morphology), }\StringTok{"other"}\NormalTok{, morphology))}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Parsed with column specification:
-## cols(
-##   organoid = col_character(),
-##   visual_inspection_morphology_2017 = col_character(),
-##   visual_class_2_2017 = col_double(),
-##   visual_inspection_v2 = col_character(),
-##   visual_inspection_size_2017 = col_character(),
-##   visual_class_1_2017 = col_double(),
-##   visual_size_ranking_2018 = col_double(),
-##   visual_cystic_ranking_2018 = col_double(),
-##   clustering_jan = col_character()
-## )
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{# drug activity data}
 \NormalTok{utils}\OperatorTok{::}\KeywordTok{data}\NormalTok{(}\StringTok{'aucroc'}\NormalTok{, }\DataTypeTok{package =} \StringTok{'SCOPEAnalysis'}\NormalTok{)}
 \NormalTok{drug_activity <-}\StringTok{ }\NormalTok{aucroc }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(}\OperatorTok{!}\NormalTok{line }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{'D055T01'}\NormalTok{, }\StringTok{'D021T01'}\NormalTok{, }\StringTok{'D054T01'}\NormalTok{))}
@@ -315,16 +159,7 @@
                                      \DataTypeTok{sheet =} \DecValTok{1}\NormalTok{, }\DataTypeTok{skip =} \DecValTok{4}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }\NormalTok{.[,}\DecValTok{1}\OperatorTok{:}\DecValTok{4}\NormalTok{] }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{gather}\NormalTok{(signature, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{drop_na}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{symbol =} \KeywordTok{gsub}\NormalTok{(}\StringTok{'}\CharTok{\textbackslash{}\textbackslash{}}\StringTok{*'}\NormalTok{, }\StringTok{''}\NormalTok{, symbol))}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## New names:
-## * `` -> ...5
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{cris_sig <-}\StringTok{ }\NormalTok{readxl}\OperatorTok{::}\KeywordTok{read_excel}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{'data/external/expression/cris/41467_2017_BFncomms15107_MOESM422_ESM.xlsx'}\NormalTok{), }\DataTypeTok{sheet =} \DecValTok{1}\NormalTok{, }\DataTypeTok{skip =} \DecValTok{2}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{rename}\NormalTok{(}\DataTypeTok{symbol =} \StringTok{`}\DataTypeTok{Gene ID}\StringTok{`}\NormalTok{, }\DataTypeTok{signature =} \StringTok{`}\DataTypeTok{CRIS Class}\StringTok{`}\NormalTok{)}
 
@@ -341,22 +176,8 @@
 \StringTok{    }\KeywordTok{complete}\NormalTok{(sample, feature, }\DataTypeTok{fill =} \KeywordTok{list}\NormalTok{(}\DataTypeTok{value =} \DecValTok{0}\NormalTok{)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{    }\KeywordTok{distinct}\NormalTok{(sample, feature, value) }\OperatorTok{%>%}
 \StringTok{    }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{view =} \StringTok{"mutation"}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Parsed with column specification:
-## cols(
-##   SAMPLE = col_character(),
-##   SYMBOL = col_character(),
-##   Protein_position = col_character(),
-##   Amino_acids = col_character(),
-##   Consequence = col_character()
-## )
-\end{verbatim}
 
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{weights <-}\StringTok{ }\NormalTok{model}\OperatorTok{@}\NormalTok{expectations}\OperatorTok{$}\NormalTok{Z}\OperatorTok{$}\NormalTok{single_group }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as.data.frame}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\KeywordTok{rownames_to_column}\NormalTok{(}\StringTok{"id"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\NormalTok{janitor}\OperatorTok{::}\KeywordTok{clean_names}\NormalTok{()}
 \NormalTok{loadings_size <-}\StringTok{ }\NormalTok{model}\OperatorTok{@}\NormalTok{expectations}\OperatorTok{$}\NormalTok{W}\OperatorTok{$}\NormalTok{size_view }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as.data.frame}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\KeywordTok{rownames_to_column}\NormalTok{(}\StringTok{"id"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\NormalTok{janitor}\OperatorTok{::}\KeywordTok{clean_names}\NormalTok{()}
 \NormalTok{loadings_expression <-}\StringTok{ }\NormalTok{model}\OperatorTok{@}\NormalTok{expectations}\OperatorTok{$}\NormalTok{W}\OperatorTok{$}\NormalTok{expression }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as.data.frame}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\KeywordTok{rownames_to_column}\NormalTok{(}\StringTok{"id"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\NormalTok{janitor}\OperatorTok{::}\KeywordTok{clean_names}\NormalTok{()}
@@ -375,10 +196,6 @@
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/data_overview.pdf"}\NormalTok{))}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Saving 6.5 x 4.5 in image
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-3-1.pdf}
 
@@ -401,10 +218,6 @@
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/var_explained_feature.pdf"}\NormalTok{))}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Saving 6.5 x 4.5 in image
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-4-1.pdf}
 
@@ -446,10 +259,6 @@ Breakdown by factors
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/var_explained.pdf"}\NormalTok{))}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Saving 6.5 x 4.5 in image
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-7-1.pdf}
 
@@ -503,15 +312,7 @@ Breakdown by factors
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(umap_df }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{filter}\NormalTok{(drug }\OperatorTok{==}\StringTok{ "DMSO"}\NormalTok{), .) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{filter}\NormalTok{(line }\OperatorTok{!=}\StringTok{ "D020T02"}\NormalTok{) }
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = c("line", "replicate")
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_factor_umap <-}\StringTok{ }\NormalTok{umap_factor }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(}\OperatorTok{-}\NormalTok{size_factor) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{pivot_longer}\NormalTok{(}\DataTypeTok{cols =} \KeywordTok{contains}\NormalTok{(}\StringTok{"factor"}\NormalTok{), }\DataTypeTok{names_to =} \StringTok{"number"}\NormalTok{, }\DataTypeTok{values_to =} \StringTok{"value"}\NormalTok{) }\OperatorTok{%>%}
@@ -548,19 +349,7 @@ Breakdown by factors
 \StringTok{  }\KeywordTok{scale_color_viridis_c}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{coord_fixed}\NormalTok{()}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = c("line", "rep")
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f12 }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/factor_12_plot.pdf"}\NormalTok{), }\DataTypeTok{height =} \DecValTok{6}\NormalTok{ , }\DataTypeTok{width =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
@@ -579,15 +368,7 @@ Breakdown by factors
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{    }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{coord_fixed}\NormalTok{() }
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f23 }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/factor_23_plot.pdf"}\NormalTok{), }\DataTypeTok{height =} \DecValTok{5}\NormalTok{ , }\DataTypeTok{width =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
@@ -624,11 +405,14 @@ Breakdown by factors
 \NormalTok{df <-}\StringTok{ }\NormalTok{loadings_mutation }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{gather}\NormalTok{(}\DataTypeTok{key =} \StringTok{"factor"}\NormalTok{, }\DataTypeTok{value =} \StringTok{"weight"}\NormalTok{, }\OperatorTok{-}\NormalTok{id) }
 
-\NormalTok{df }\OperatorTok{%>%}
+\NormalTok{gg_weight_mutation <-}\StringTok{ }\NormalTok{df }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(factor, weight, }\DataTypeTok{label =}\NormalTok{ id)) }\OperatorTok{+}
 \StringTok{  }\KeywordTok{geom_point}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\NormalTok{ggrepel}\OperatorTok{::}\KeywordTok{geom_text_repel}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ df }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(id }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"NRAS"}\NormalTok{, }\StringTok{"ERBB2"}\NormalTok{, }\StringTok{"PTEN"}\NormalTok{, }\StringTok{"KRAS"}\NormalTok{, }\StringTok{"PIK3CA"}\NormalTok{)))}
+\StringTok{  }\NormalTok{ggrepel}\OperatorTok{::}\KeywordTok{geom_text_repel}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ df }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(id }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"NRAS"}\NormalTok{, }\StringTok{"ERBB2"}\NormalTok{, }\StringTok{"PTEN"}\NormalTok{, }\StringTok{"KRAS"}\NormalTok{, }\StringTok{"PIK3CA"}\NormalTok{))) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_hline}\NormalTok{(}\DataTypeTok{yintercept =} \DecValTok{0}\NormalTok{, }\DataTypeTok{linetype =} \StringTok{"dashed"}\NormalTok{)}
+
+\NormalTok{gg_weight_mutation }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/mutation_weight.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{5}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -647,15 +431,8 @@ Breakdown by factors
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(}\OperatorTok{-}\NormalTok{id) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor1)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_anno)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "drug"
-\end{verbatim}
 
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{# }
 \CommentTok{# top_n <- 20}
 \CommentTok{# }
@@ -682,15 +459,8 @@ Breakdown by factors
 
 \NormalTok{row_anno <-}\StringTok{  }\NormalTok{df }\OperatorTok{%>%}\StringTok{ }\KeywordTok{left_join}\NormalTok{(loadings_drug_activity_tidy) }\OperatorTok{%>%}\StringTok{ }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(drug, target) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{id =} \KeywordTok{paste0}\NormalTok{(drug, }\StringTok{"_"}\NormalTok{, target)) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\KeywordTok{as.data.frame}\NormalTok{() }\OperatorTok{%>%}\StringTok{ }\KeywordTok{column_to_rownames}\NormalTok{(}\StringTok{"id"}\NormalTok{) }
-\end{Highlighting}
-\end{Shaded}
+           
 
-\begin{verbatim}
-## Joining, by = "drug"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{df }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{spread}\NormalTok{(drug, value) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(}\OperatorTok{-}\NormalTok{factor_name) }\OperatorTok{%>%}
@@ -710,10 +480,6 @@ Breakdown by factors
 \StringTok{                                            }\KeywordTok{filter}\NormalTok{(n }\OperatorTok{>=}\DecValTok{5}\NormalTok{)) }
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "target"
-\end{verbatim}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -818,30 +584,10 @@ enrichment}\label{exporting-factors-loadings-for-enrichment}}
 \StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{y =} \StringTok{"expected size"}\NormalTok{) }\OperatorTok{+}
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{2}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = c("line", "rep")
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_sizef1 }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_size.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{5}\NormalTok{, }\DataTypeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-23-1.pdf}
 
@@ -860,15 +606,7 @@ enrichment}\label{exporting-factors-loadings-for-enrichment}}
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.y =} \KeywordTok{element_blank}\NormalTok{(),}
         \DataTypeTok{axis.ticks.y =}\KeywordTok{element_blank}\NormalTok{()) }
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Warning: Ignoring unknown parameters: max.overlaps
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f1_geneexp }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_genexp.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
@@ -889,28 +627,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## Warning: Expected 1 pieces. Additional pieces discarded in 3222 rows [1, 2, 3,
-## 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
-\NormalTok{df }\OperatorTok{%>%}\StringTok{ }
-\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(order, factor1)) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{geom_point}\NormalTok{()}\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{geom_point}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ df }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(symbol }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"H19"}\NormalTok{, }\StringTok{"IGF2"}\NormalTok{)), }
-             \DataTypeTok{color =} \StringTok{"blue"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{()}
-\end{Highlighting}
-\end{Shaded}
-
-\includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-25-1.pdf}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \NormalTok{df <-}\StringTok{ }\NormalTok{loadings_expression }\OperatorTok{%>%}\StringTok{ }
@@ -918,20 +634,8 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{filter}\NormalTok{(symbol }\OperatorTok{!=}\StringTok{ ""}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top }\OperatorTok{%>%}\StringTok{ }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(symbol, entrez) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{()) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor1))}
-\end{Highlighting}
-\end{Shaded}
+  
 
-\begin{verbatim}
-## Warning: Expected 1 pieces. Additional pieces discarded in 3222 rows [1, 2, 3,
-## 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor1, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{entrez))}
 \NormalTok{ranks_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{sort}\NormalTok{(ranks_}\DecValTok{1}\NormalTok{, }\DataTypeTok{decreasing =}\NormalTok{ T)}
 
@@ -944,198 +648,14 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \CommentTok{#maxGSSize = 500,}
   \DataTypeTok{pvalueCutoff =} \FloatTok{0.2}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Loading required package: org.Hs.eg.db
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: AnnotationDbi
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: stats4
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: BiocGenerics
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: parallel
-\end{verbatim}
-
-\begin{verbatim}
-## 
-## Attaching package: 'BiocGenerics'
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:parallel':
-## 
-##     clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
-##     clusterExport, clusterMap, parApply, parCapply, parLapply,
-##     parLapplyLB, parRapply, parSapply, parSapplyLB
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:dplyr':
-## 
-##     combine, intersect, setdiff, union
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:stats':
-## 
-##     IQR, mad, sd, var, xtabs
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:base':
-## 
-##     anyDuplicated, append, as.data.frame, basename, cbind, colnames,
-##     dirname, do.call, duplicated, eval, evalq, Filter, Find, get, grep,
-##     grepl, intersect, is.unsorted, lapply, Map, mapply, match, mget,
-##     order, paste, pmax, pmax.int, pmin, pmin.int, Position, rank,
-##     rbind, Reduce, rownames, sapply, setdiff, sort, table, tapply,
-##     union, unique, unsplit, which.max, which.min
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: Biobase
-\end{verbatim}
-
-\begin{verbatim}
-## Welcome to Bioconductor
-## 
-##     Vignettes contain introductory material; view with
-##     'browseVignettes()'. To cite Bioconductor, see
-##     'citation("Biobase")', and for packages 'citation("pkgname")'.
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: IRanges
-\end{verbatim}
-
-\begin{verbatim}
-## Loading required package: S4Vectors
-\end{verbatim}
-
-\begin{verbatim}
-## 
-## Attaching package: 'S4Vectors'
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:clusterProfiler':
-## 
-##     rename
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:dplyr':
-## 
-##     first, rename
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:tidyr':
-## 
-##     expand
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:base':
-## 
-##     expand.grid
-\end{verbatim}
-
-\begin{verbatim}
-## 
-## Attaching package: 'IRanges'
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:clusterProfiler':
-## 
-##     slice
-\end{verbatim}
-
-\begin{verbatim}
-## The following objects are masked from 'package:dplyr':
-## 
-##     collapse, desc, slice
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:purrr':
-## 
-##     reduce
-\end{verbatim}
-
-\begin{verbatim}
-## 
-## Attaching package: 'AnnotationDbi'
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:clusterProfiler':
-## 
-##     select
-\end{verbatim}
-
-\begin{verbatim}
-## The following object is masked from 'package:dplyr':
-## 
-##     select
-\end{verbatim}
-
-\begin{verbatim}
-## 
-\end{verbatim}
-
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in preparePathwaysAndStats(pathways, stats, minSize, maxSize,
-## gseaParam, : There are duplicate gene names, fgsea may produce unexpected
-## results.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{reactome <-}\StringTok{ }\KeywordTok{pairwise_termsim}\NormalTok{(gse_reactome_}\DecValTok{1}\NormalTok{) }
 \NormalTok{gg_f1_emap <-}\StringTok{ }\KeywordTok{emapplot}\NormalTok{(reactome, }\DataTypeTok{color =} \StringTok{"NES"}\NormalTok{,}
          \DataTypeTok{cex_label_category =} \FloatTok{.8}\NormalTok{,}
          \DataTypeTok{cex_line =} \DecValTok{1}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{scale_color_viridis_c}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{color =} \StringTok{"NES"}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Scale for 'colour' is already present. Adding another scale for 'colour',
-## which will replace the existing scale.
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f1_emap }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_emap.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
@@ -1172,15 +692,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor1, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor1))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor1, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_sig <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -1191,40 +702,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_sig_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_sig)}
 \end{Highlighting}
@@ -1264,12 +742,15 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{## LGR5}
-\KeywordTok{gseaplot2}\NormalTok{(}
+\NormalTok{gg_f1lgr <-}\StringTok{ }\KeywordTok{gseaplot2}\NormalTok{(}
 \NormalTok{  gse_sig, }\DataTypeTok{geneSetID =}\NormalTok{ gse_sig}\OperatorTok{$}\NormalTok{ID[}\DecValTok{3}\NormalTok{],}
   \DataTypeTok{title =} \KeywordTok{paste0}\NormalTok{(gse_sig}\OperatorTok{$}\NormalTok{ID[}\DecValTok{3}\NormalTok{], }
                 \StringTok{' (p = '}\NormalTok{, }\KeywordTok{round}\NormalTok{(gse_sig_tbl}\OperatorTok{$}\NormalTok{pvalue[}\DecValTok{3}\NormalTok{], }\DecValTok{3}\NormalTok{), }
                 \StringTok{'; NES = '}\NormalTok{, }\KeywordTok{round}\NormalTok{(gse_sig_tbl}\OperatorTok{$}\NormalTok{NES[}\DecValTok{3}\NormalTok{], }\DecValTok{2}\NormalTok{), }\StringTok{')'}\NormalTok{)}
 \NormalTok{)}
+
+\NormalTok{gg_f1lgr }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_lgr.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{3}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
 
@@ -1301,15 +782,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor1, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor1))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor1, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_cris <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -1320,40 +792,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_cris_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_cris)}
 
@@ -1365,11 +804,11 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 ## # A tibble: 5 x 11
 ##   ID    Description setSize enrichmentScore    NES  pvalue p.adjust qvalues
 ##   <chr> <chr>         <int>           <dbl>  <dbl>   <dbl>    <dbl> <lgl>  
-## 1 CRIS~ CRIS-D           41           0.620  2.17  2.28e-5 0.000114 NA     
-## 2 CRIS~ CRIS-C           75          -0.445 -1.69  1.30e-3 0.00326  NA     
-## 3 CRIS~ CRIS-A           88          -0.400 -1.56  5.21e-3 0.00868  NA     
-## 4 CRIS~ CRIS-E           48          -0.353 -1.23  1.45e-1 0.181    NA     
-## 5 CRIS~ CRIS-B           40           0.246  0.856 7.23e-1 0.723    NA     
+## 1 CRIS~ CRIS-D           41           0.620  2.17  2.27e-5 0.000113 NA     
+## 2 CRIS~ CRIS-C           75          -0.445 -1.69  1.22e-3 0.00305  NA     
+## 3 CRIS~ CRIS-A           88          -0.400 -1.56  4.64e-3 0.00773  NA     
+## 4 CRIS~ CRIS-E           48          -0.353 -1.23  1.49e-1 0.186    NA     
+## 5 CRIS~ CRIS-B           40           0.246  0.855 7.23e-1 0.723    NA     
 ## # ... with 3 more variables: rank <dbl>, leading_edge <chr>,
 ## #   core_enrichment <chr>
 \end{verbatim}
@@ -1413,27 +852,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \begin{Shaded}
 \begin{Highlighting}[]
 \NormalTok{aggregate_drugs <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }\KeywordTok{group_by}\NormalTok{(target) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{summarise_at}\NormalTok{(}\KeywordTok{vars}\NormalTok{(}\KeywordTok{contains}\NormalTok{(}\StringTok{"factor"}\NormalTok{)), }\KeywordTok{funs}\NormalTok{(}\StringTok{"median"}\NormalTok{))}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Warning: `funs()` is deprecated as of dplyr 0.8.0.
-## Please use a list of either functions or lambdas: 
-## 
-##   # Simple named list: 
-##   list(mean = mean, median = median)
-## 
-##   # Auto named with `tibble::lst()`: 
-##   tibble::lst(mean, median)
-## 
-##   # Using lambdas
-##   list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
-## This warning is displayed once every 8 hours.
-## Call `lifecycle::last_warnings()` to see where this warning was generated.
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{include_drugs <-}\StringTok{ }\NormalTok{aggregate_drugs }\OperatorTok{%>%}\StringTok{ }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor1)) }\OperatorTok{%>%}\StringTok{ }\NormalTok{.}\OperatorTok{$}\NormalTok{target}
 
 \NormalTok{gg_f1_drug <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}
@@ -1450,11 +869,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \NormalTok{gg_f1_drug }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_ridge_drug.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{3}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Picking joint bandwidth of 0.11
-## Picking joint bandwidth of 0.11
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-36-1.pdf}
 
@@ -1477,21 +891,15 @@ no activity when treated with EGFR inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{no_egfr <-}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"Tyrphostin 9"} \CommentTok{# IC50 at >100uM, binds PDGFR}
 \NormalTok{             )}
 
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{123}\NormalTok{)}
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "EGFR"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(drug }\OperatorTok{!=}\StringTok{ }\NormalTok{no_egfr) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{sample_n}\NormalTok{(}\DecValTok{9}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
 
 
@@ -1502,20 +910,13 @@ no activity when treated with EGFR inhibitors.
 \StringTok{  }\NormalTok{cowplot}\OperatorTok{::}\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{geom_smooth}\NormalTok{(}\DataTypeTok{method =} \StringTok{"lm"}\NormalTok{, }\DataTypeTok{se =} \OtherTok{FALSE}\NormalTok{, }\DataTypeTok{color =} \StringTok{"red"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{)}
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{scale_y_continuous}\NormalTok{(}\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\FloatTok{0.5}\NormalTok{, }\DecValTok{1}\NormalTok{))}
 
 
 \NormalTok{gg_f1_egfr }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_egfr.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{6}\NormalTok{, }\DataTypeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-38-1.pdf}
 
@@ -1527,17 +928,11 @@ no activity when treated with EGFR inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{123}\NormalTok{)}
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "MEK"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
+\StringTok{   }\KeywordTok{sample_n}\NormalTok{(}\DecValTok{9}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
 
 
@@ -1548,33 +943,12 @@ no activity when treated with EGFR inhibitors.
 \StringTok{  }\NormalTok{cowplot}\OperatorTok{::}\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{geom_smooth}\NormalTok{(}\DataTypeTok{method =} \StringTok{"lm"}\NormalTok{, }\DataTypeTok{se =} \OtherTok{FALSE}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{)}
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{scale_y_continuous}\NormalTok{(}\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\FloatTok{0.5}\NormalTok{, }\DecValTok{1}\NormalTok{))}
 
 \NormalTok{gg_f1_mek }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_mek.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{6}\NormalTok{, }\DataTypeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing non-finite values (stat_smooth).
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing missing values (geom_point).
-\end{verbatim}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing non-finite values (stat_smooth).
-
-## Warning: Removed 1 rows containing missing values (geom_point).
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-39-1.pdf}
 
@@ -1586,18 +960,11 @@ no activity when treated with EGFR inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{123}\NormalTok{)}
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "IGF-1R"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
-\StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
+\StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug}
 
 
 \NormalTok{gg_f1_igf <-}\StringTok{ }\NormalTok{drug_activity_joined }\OperatorTok{%>%}\StringTok{ }
@@ -1606,19 +973,13 @@ no activity when treated with EGFR inhibitors.
 \StringTok{  }\KeywordTok{geom_point}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\NormalTok{cowplot}\OperatorTok{::}\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{geom_smooth}\NormalTok{(}\DataTypeTok{method =} \StringTok{"lm"}\NormalTok{, }\DataTypeTok{se =} \OtherTok{FALSE}\NormalTok{, }\DataTypeTok{color =} \StringTok{"black"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug)}
+\StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{scale_y_continuous}\NormalTok{(}\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\FloatTok{0.5}\NormalTok{, }\DecValTok{1}\NormalTok{))}
 
 \NormalTok{gg_f1_igf }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_igf.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{6}\NormalTok{, }\DataTypeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-40-1.pdf}
 
@@ -1630,17 +991,11 @@ no activity when treated with EGFR inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{123}\NormalTok{)}
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "mTOR"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
+\StringTok{  }\KeywordTok{sample_n}\NormalTok{(}\DecValTok{9}\NormalTok{, }\DataTypeTok{replace =} \OtherTok{TRUE}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
 
 
@@ -1650,19 +1005,13 @@ no activity when treated with EGFR inhibitors.
 \StringTok{  }\KeywordTok{geom_point}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\NormalTok{cowplot}\OperatorTok{::}\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{geom_smooth}\NormalTok{(}\DataTypeTok{method =} \StringTok{"lm"}\NormalTok{, }\DataTypeTok{se =} \OtherTok{FALSE}\NormalTok{, }\DataTypeTok{color =} \StringTok{"green"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
-\StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug)}
+\StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{coord_fixed}\NormalTok{(}\DataTypeTok{ratio =} \DecValTok{5}\NormalTok{) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{scale_y_continuous}\NormalTok{(}\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\FloatTok{0.5}\NormalTok{, }\DecValTok{1}\NormalTok{))}
 
 \NormalTok{gg_f1_mtor }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_mtor.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{6}\NormalTok{, }\DataTypeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-41-1.pdf}
 within the group of mTOR inhibitors, activity towards treatment with the
@@ -1688,11 +1037,6 @@ sensitivity}\label{pick-of-drug-sensitivity}}
 \NormalTok{gg_f1_egfr_pick }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f1_drug_pick.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-42-1.pdf}
 
@@ -1722,10 +1066,6 @@ groups would change the phenotype of organoids
 \StringTok{  }\KeywordTok{facet_grid}\NormalTok{(drug }\OperatorTok{~}\StringTok{ }\NormalTok{feature)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "sample"
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-43-1.pdf}
 
@@ -1762,15 +1102,8 @@ groups would change the phenotype of organoids
 \StringTok{  }\NormalTok{ggrepel}\OperatorTok{::}\KeywordTok{geom_text_repel}\NormalTok{(}\DataTypeTok{color =} \StringTok{"black"}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{scale_color_brewer}\NormalTok{(}\DataTypeTok{type =} \StringTok{"qual"}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
 
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_cystic }\OperatorTok{+}\StringTok{ }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f2_morph.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{6}\NormalTok{, }\DataTypeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
@@ -1792,15 +1125,7 @@ groups would change the phenotype of organoids
 \StringTok{  }\KeywordTok{theme_cowplot}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.y =} \KeywordTok{element_blank}\NormalTok{(),}
         \DataTypeTok{axis.ticks.y =}\KeywordTok{element_blank}\NormalTok{()) }
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Warning: Ignoring unknown parameters: max.overlaps
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f2_geneexp }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f2_genexp.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
@@ -1820,20 +1145,8 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{filter}\NormalTok{(symbol }\OperatorTok{!=}\StringTok{ ""}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top }\OperatorTok{%>%}\StringTok{ }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(symbol, entrez) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{()) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor2))}
-\end{Highlighting}
-\end{Shaded}
+  
 
-\begin{verbatim}
-## Warning: Expected 1 pieces. Additional pieces discarded in 3222 rows [1, 2, 3,
-## 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor2, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{entrez))}
 \NormalTok{ranks_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{sort}\NormalTok{(ranks_}\DecValTok{2}\NormalTok{, }\DataTypeTok{decreasing =}\NormalTok{ T)}
 
@@ -1846,33 +1159,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \CommentTok{#maxGSSize = 500,}
   \DataTypeTok{pvalueCutoff =} \FloatTok{0.2}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in preparePathwaysAndStats(pathways, stats, minSize, maxSize,
-## gseaParam, : There are duplicate gene names, fgsea may produce unexpected
-## results.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{reactome <-}\StringTok{ }\KeywordTok{pairwise_termsim}\NormalTok{(gse_reactome_}\DecValTok{2}\NormalTok{) }
 
 \NormalTok{gg_f2_emap <-}\StringTok{ }\KeywordTok{emapplot}\NormalTok{(reactome, }\DataTypeTok{color =} \StringTok{"NES"}\NormalTok{,}
@@ -1880,16 +1167,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
          \DataTypeTok{cex_line =} \DecValTok{1}\NormalTok{) }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{scale_color_viridis_c}\NormalTok{() }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{color =} \StringTok{"NES"}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Scale for 'colour' is already present. Adding another scale for 'colour',
-## which will replace the existing scale.
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gg_f2_emap }\OperatorTok{+}\StringTok{ }
 \StringTok{  }\KeywordTok{ggsave}\NormalTok{(here}\OperatorTok{::}\KeywordTok{here}\NormalTok{(}\StringTok{"reports/figures/mofa/f2_emap.pdf"}\NormalTok{), }\DataTypeTok{width =} \DecValTok{4}\NormalTok{, }\DataTypeTok{height =} \DecValTok{4}\NormalTok{)}
 \end{Highlighting}
@@ -1926,15 +1204,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor2, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor2))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor2, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_sig <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -1945,40 +1214,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_sig_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_sig)}
 \end{Highlighting}
@@ -2003,7 +1239,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 
 \begin{Shaded}
 \begin{Highlighting}[]
-\CommentTok{## lgr5 signature}
 \KeywordTok{gseaplot2}\NormalTok{(}
 \NormalTok{  gse_sig, }\DataTypeTok{geneSetID =}\NormalTok{ gse_sig}\OperatorTok{$}\NormalTok{ID[}\DecValTok{2}\NormalTok{], }
   \DataTypeTok{title =} \KeywordTok{paste0}\NormalTok{(gse_sig}\OperatorTok{$}\NormalTok{ID[}\DecValTok{2}\NormalTok{], }
@@ -2055,15 +1290,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor2, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor2))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor2, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_cris <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -2074,40 +1300,7 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_cris_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_cris)}
 
@@ -2119,11 +1312,11 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 ## # A tibble: 5 x 11
 ##   ID    Description setSize enrichmentScore    NES  pvalue p.adjust qvalues
 ##   <chr> <chr>         <int>           <dbl>  <dbl>   <dbl>    <dbl> <lgl>  
-## 1 CRIS~ CRIS-E           48          -0.656 -2.54  4.36e-5 0.000154 NA     
-## 2 CRIS~ CRIS-A           88          -0.429 -1.86  6.16e-5 0.000154 NA     
-## 3 CRIS~ CRIS-C           75          -0.363 -1.53  5.06e-3 0.00843  NA     
-## 4 CRIS~ CRIS-D           41           0.455  1.44  4.08e-2 0.0510   NA     
-## 5 CRIS~ CRIS-B           40          -0.252 -0.936 5.76e-1 0.576    NA     
+## 1 CRIS~ CRIS-E           48          -0.656 -2.54  4.33e-5 0.000216 NA     
+## 2 CRIS~ CRIS-A           88          -0.429 -1.87  1.21e-4 0.000303 NA     
+## 3 CRIS~ CRIS-C           75          -0.363 -1.53  4.69e-3 0.00782  NA     
+## 4 CRIS~ CRIS-D           41           0.455  1.44  4.11e-2 0.0514   NA     
+## 5 CRIS~ CRIS-B           40          -0.252 -0.936 5.74e-1 0.574    NA     
 ## # ... with 3 more variables: rank <dbl>, leading_edge <chr>,
 ## #   core_enrichment <chr>
 \end{verbatim}
@@ -2193,11 +1386,6 @@ fibronectin expression DLX- TGFb and BMP inhibiting transcription factor
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## Picking joint bandwidth of 0.104
-## Picking joint bandwidth of 0.104
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-58-1.pdf}
 
 median weighting within the factor was strongest for activity of
@@ -2216,15 +1404,7 @@ responsive to MEK and ERK inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "EGFR"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
@@ -2240,10 +1420,6 @@ responsive to MEK and ERK inhibitors.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-59-1.pdf}
 
 \begin{Shaded}
@@ -2254,15 +1430,7 @@ responsive to MEK and ERK inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "MEK"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
@@ -2278,18 +1446,6 @@ responsive to MEK and ERK inhibitors.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing non-finite values (stat_smooth).
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing missing values (geom_point).
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-60-1.pdf}
 
 \begin{Shaded}
@@ -2300,15 +1456,7 @@ responsive to MEK and ERK inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "ERK"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
@@ -2323,10 +1471,6 @@ responsive to MEK and ERK inhibitors.
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-61-1.pdf}
 
@@ -2351,11 +1495,6 @@ responsive to MEK and ERK inhibitors.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-62-1.pdf}
 
 \begin{Shaded}
@@ -2366,15 +1505,7 @@ responsive to MEK and ERK inhibitors.
 \StringTok{ }\KeywordTok{summarise_all}\NormalTok{(}\KeywordTok{funs}\NormalTok{(mean)) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{line =} \KeywordTok{paste0}\NormalTok{(id, }\StringTok{"T01"}\NormalTok{)) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(drug_activity)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## Joining, by = "line"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{doi <-}\StringTok{ }\NormalTok{drug_activity_test }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{filter}\NormalTok{(target }\OperatorTok{==}\StringTok{ "mTOR"}\NormalTok{) }\OperatorTok{%>%}\StringTok{ }
 \StringTok{  }\NormalTok{.}\OperatorTok{$}\NormalTok{drug }
@@ -2389,10 +1520,6 @@ responsive to MEK and ERK inhibitors.
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-63-1.pdf}
 again, within the group of mTOR inhibitors, activity towards treatment
@@ -2420,11 +1547,6 @@ sensitivity}\label{pick-of-drug-sensitivity-1}}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-64-1.pdf}
 
 \hypertarget{factor-3}{%
@@ -2448,10 +1570,6 @@ sensitivity}\label{pick-of-drug-sensitivity-1}}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## Warning: Ignoring unknown parameters: max.overlaps
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-65-1.pdf}
 
 NRX cell adhesion xenobiotic metabolism
@@ -2466,20 +1584,8 @@ NRX cell adhesion xenobiotic metabolism
 \StringTok{  }\KeywordTok{filter}\NormalTok{(symbol }\OperatorTok{!=}\StringTok{ ""}\NormalTok{) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top }\OperatorTok{%>%}\StringTok{ }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(symbol, entrez) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{()) }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor3))}
-\end{Highlighting}
-\end{Shaded}
+  
 
-\begin{verbatim}
-## Warning: Expected 1 pieces. Additional pieces discarded in 3222 rows [1, 2, 3,
-## 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].
-\end{verbatim}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor3, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{entrez))}
 \NormalTok{ranks_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{sort}\NormalTok{(ranks_}\DecValTok{3}\NormalTok{, }\DataTypeTok{decreasing =}\NormalTok{ T)}
 
@@ -2492,33 +1598,7 @@ NRX cell adhesion xenobiotic metabolism
   \CommentTok{#maxGSSize = 500,}
   \DataTypeTok{pvalueCutoff =} \FloatTok{0.2}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in preparePathwaysAndStats(pathways, stats, minSize, maxSize,
-## gseaParam, : There are duplicate gene names, fgsea may produce unexpected
-## results.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{reactome <-}\StringTok{ }\KeywordTok{pairwise_termsim}\NormalTok{(gse_reactome_}\DecValTok{3}\NormalTok{) }
 \KeywordTok{emapplot}\NormalTok{(reactome, }\DataTypeTok{color =} \StringTok{"NES"}\NormalTok{)}
 \end{Highlighting}
@@ -2555,15 +1635,6 @@ NRX cell adhesion xenobiotic metabolism
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor3, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor3))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor3, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_sig <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -2574,40 +1645,7 @@ NRX cell adhesion xenobiotic metabolism
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_sig_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_sig)}
 \end{Highlighting}
@@ -2683,15 +1721,6 @@ NRX cell adhesion xenobiotic metabolism
 \StringTok{  }\KeywordTok{left_join}\NormalTok{(promise_long_filtered_top) }\OperatorTok{%>%}
 \StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(factor3, symbol) }\OperatorTok{%>%}\StringTok{ }\KeywordTok{distinct}\NormalTok{() }\OperatorTok{%>%}
 \StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(factor3))}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{verbatim}
-## Joining, by = "symbol"
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ranks_symbol =}\StringTok{ }\KeywordTok{setNames}\NormalTok{(df}\OperatorTok{$}\NormalTok{factor3, }\KeywordTok{as.character}\NormalTok{(df}\OperatorTok{$}\NormalTok{symbol))}
 
 \NormalTok{gse_cris <-}\StringTok{ }\KeywordTok{GSEA}\NormalTok{(}
@@ -2702,40 +1731,7 @@ NRX cell adhesion xenobiotic metabolism
   \DataTypeTok{maxGSSize =} \DecValTok{1000}\NormalTok{,}
   \DataTypeTok{pvalueCutoff =} \DecValTok{1}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{verbatim}
-## preparing geneSet collections...
-\end{verbatim}
-
-\begin{verbatim}
-## GSEA analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in .GSEA(geneList = geneList, exponent = exponent, minGSSize =
-## minGSSize, : We do not recommend using nPerm parameter incurrent and future
-## releases
-\end{verbatim}
-
-\begin{verbatim}
-## Warning in fgsea(pathways = geneSets, stats = geneList, nperm = nPerm, minSize
-## = minGSSize, : You are trying to run fgseaSimple. It is recommended to use
-## fgseaMultilevel. To run fgseaMultilevel, you need to remove the nperm argument
-## in the fgsea function call.
-\end{verbatim}
-
-\begin{verbatim}
-## leading edge analysis...
-\end{verbatim}
-
-\begin{verbatim}
-## done...
-\end{verbatim}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{## output as tibble}
 \NormalTok{gse_cris_tbl <-}\StringTok{ }\KeywordTok{as_tibble}\NormalTok{(gse_cris)}
 
@@ -2804,10 +1800,6 @@ NRX cell adhesion xenobiotic metabolism
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## Picking joint bandwidth of 0.0945
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-76-1.pdf}
 
 median weighting within the factor was strongest for activity of AURK
@@ -2833,10 +1825,6 @@ targeting and less responsive to GSK and EGFR inhibitors.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-77-1.pdf}
 
 \begin{Shaded}
@@ -2856,10 +1844,6 @@ targeting and less responsive to GSK and EGFR inhibitors.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-78-1.pdf}
 
 \begin{Shaded}
@@ -2878,18 +1862,6 @@ targeting and less responsive to GSK and EGFR inhibitors.
 \StringTok{  }\KeywordTok{facet_wrap}\NormalTok{(}\OperatorTok{~}\StringTok{ }\NormalTok{drug)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{verbatim}
-## `geom_smooth()` using formula 'y ~ x'
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing non-finite values (stat_smooth).
-\end{verbatim}
-
-\begin{verbatim}
-## Warning: Removed 1 rows containing missing values (geom_point).
-\end{verbatim}
 
 \includegraphics{mofa_exploration_files/figure-latex/unnamed-chunk-79-1.pdf}
 
