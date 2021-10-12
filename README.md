@@ -1,5 +1,7 @@
 # PROMISE: Image-based Profiling of Cancer Organoids
 
+![image](https://user-images.githubusercontent.com/18559148/136934819-e9881ecf-9f37-4d30-85aa-07b2418317e6.png)
+
 This repository contains all notebooks and supporting code for the Boutros lab cancer organoid image-based profiling project. The latest version of the corresponding manuscript is published on [bioarXiv](https://www.biorxiv.org/content/10.1101/660993v1.full). The manuscript is currently undergoing peer-review. If you have comments, criticism or questions, please feel free to create an issue in this repository, send us a [tweet](https://twitter.com/Niklas_TR) or comment at bioarXiv. 
 
 This repository comes with a matching [docker](https://www.docker.com/products/docker-desktop) container [image](https://hub.docker.com/r/niklastr/promise/tags), which contains all dependencies and additional raw data to re-run the analysis.
