@@ -22,7 +22,7 @@ I start out by loading the trained MOFA model and additional gene expression dat
 
 ```{r}
 # input data
-morphology_profile <- readRDS(here::here("data/processed/imaging/pca_absolute_all_drugs_aggregate.Rds"))
+morphology_profile <- readRDS(here::here("data/processed/morphology/pca_absolute_all_drugs_aggregate.Rds"))
 
 # input model
 model <- load_model(here("models/mofa/model.hdf5"))
@@ -37,7 +37,7 @@ loadings_mutation <- model@expectations$W$mutation %>% as.data.frame() %>% rowna
 
 # additional data
 ## UMAP morphology
-umap_df <- readRDS(here::here("data/processed/imaging/umap_absolute_all_drugs_sampled.Rds"))
+umap_df <- readRDS(here::here("data/processed/morphology/umap_absolute_all_drugs_sampled.Rds"))
 ## gene expression baseline
 promise_long_filtered_top <- readRDS(here::here('data/processed/expression/promise_expr_filtered_tidy_top.rds'))
 ## gene expression drug response
