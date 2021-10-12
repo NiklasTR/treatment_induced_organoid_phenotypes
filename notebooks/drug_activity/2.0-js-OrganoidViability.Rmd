@@ -17,6 +17,11 @@ editor_options:
 ---
 
 ```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+
 library(ggplot2)
 
 library(knitr)
