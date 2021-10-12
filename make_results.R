@@ -30,7 +30,7 @@ rmarkdown::render(here::here('notebooks/drug_activity/2.0-js-OrganoidViability.R
 
 # # figure 3
 # requires running the drug_effect scripts within the FeatureAnalysis module
-rmarkdown::render(here::here('notebooks/drug_activity/3.0-js-OrganoidPhenotypes.Rmd'))
+rmarkdown::render(here::here('notebooks/drug_activity/3.0-js-DrugPhenotypes.Rmd'))
 
 # figure 4 and 5
 # running these vignettes requires a trained MOFA model. A MOFA model can be trained from within the MOFA2 docker container
