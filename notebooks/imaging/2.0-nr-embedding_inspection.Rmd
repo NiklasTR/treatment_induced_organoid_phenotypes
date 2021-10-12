@@ -6,8 +6,8 @@ output:
   html_document:
     keep_md: true
 params:
-  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
-  data_harmony: "data/processed/PhenotypeSpectrum/harmony_umap_absolute_all_drugs_sampled.Rds"
+  data: "data/processed/imaging/umap_absolute_all_drugs_sampled.Rds"
+  data_harmony: "data/processed/imaging/harmony_umap_absolute_all_drugs_sampled.Rds"
   remote: FALSE
   cache: FALSE
 ---

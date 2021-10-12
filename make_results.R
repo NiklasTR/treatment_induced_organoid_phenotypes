@@ -1,8 +1,11 @@
+# run this script from within the docker container by calling Rscript --vanilla make_results.R
+# the git directory and accompanying docker container comer "batteries included". This script can be run to recreate all figures in one go.
+
+
 # defining lib path
 #.libPaths("/omics/groups/OE0049/b110_data/B110-Isilon2/promise/x86_64-pc-linux-gnu-library/4.0")
 print(.libPaths())
 
-# the git directory and accompanying docker container comer "batteries included". This script can be run to recreate all figures in one go.
 
 # figure 1
 # requires running the line_difference scripts within the FeatureAnalysis module
