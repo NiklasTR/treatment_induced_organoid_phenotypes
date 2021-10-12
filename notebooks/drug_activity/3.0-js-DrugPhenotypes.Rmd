@@ -1286,7 +1286,7 @@ if(save_images) pheatmap(
 ```{r}
 active_drugs = rownames(d)
 
-drug_df <- readRDS(here::here("data/processed/PhenotypeSpectrum/pca_absolute_all_drugs_aggregate.Rds")) %>% 
+drug_df <- readRDS(here::here("data/processed/morphology/pca_absolute_all_drugs_aggregate.Rds")) %>% 
   mutate(rep = paste0("r", replicate)) %>% 
   mutate(line = substr(line, 1, 4)) %>% 
   #filter(size_log > 7.5) %>%
