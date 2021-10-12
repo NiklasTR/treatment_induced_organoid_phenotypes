@@ -6,8 +6,8 @@ output:
   html_document:
     keep_md: true
 params:
-  data: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_sampled.Rds"
-  sample: "data/processed/PhenotypeSpectrum/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
+  data: "data/processed/imaging/umap_absolute_all_drugs_sampled.Rds"
+  sample: "data/processed/imaging/umap_absolute_all_drugs_tidy_Paclitaxel.Rds"
   output: "imaging"
   remote: FALSE
   cache: FALSE

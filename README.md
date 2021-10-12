@@ -20,7 +20,7 @@ The project can most easily be reproduced by pulling these docker containers:
 All notebooks can be reproduced by starting a niklastr/promise docker, navigating to the promise working directory and calling
 
 ```
-Rscript --vanilla make_results.R
+Rscript --vanilla /home/rstudio/promise/make_results.R
 ```
 
 Knitted vignettes will appear in the notebook subdirectories. Individual figures are exported into the reports/figures directory.
