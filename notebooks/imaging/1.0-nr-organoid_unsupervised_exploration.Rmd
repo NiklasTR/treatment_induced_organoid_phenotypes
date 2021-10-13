@@ -556,6 +556,7 @@ I create a single plot showing the two extreme organoid lines and their distribu
 set.seed(123)
 
 loi <- c("D019T01", "D007T01",  "D030T01", "D018T01") #c("D055T01", "D007T01",  "D021T01", "D019T01", "D027T01")
+loi <- c("D020T01", "D007T01",  "D030T01", "D018T01")
 #loi <- umap_df$line %>% unique()
 
 df <- umap_df %>%
