@@ -33,7 +33,7 @@ monocle_input = "data/interim/PhenotypeSpectrum/archive_pre_qc/hdf5_umap_absolut
 #drop_plates = c("D027T01P906L03", "D020T01P906L03", "D013T01P001L02")
 
 # find classification_logs and aggregate results for UMAP filtering
-log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>%
+log <- list.files(ldc_input, full.names = TRUE, pattern = "log.csv") %>% # the log files contain the granular classification info
   as_tibble() %>% janitor::clean_names() %>%
   # reading logs
   mutate(data = purrr::map(value, ~ .x %>% read_csv)) %>% 
