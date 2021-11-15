@@ -6,7 +6,9 @@ RUN apt-get update && apt-get install -y \
   tmux \
   libxml2-dev \
   libcurl4-openssl-dev \
-  libssl-dev
+  libssl-dev \ 
+  nano \
+  less
 
 # R packages
 ## CRAN
