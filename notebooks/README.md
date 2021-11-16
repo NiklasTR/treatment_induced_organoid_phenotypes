@@ -1,1 +1,1 @@
-Open notebooks on github by clicking on the .md version of the file. Different from .Rmd and .html Github will render these .md notebooks for you in the browser. Otherwise, go and download the .pdf version of the file.
+Open notebooks on github by clicking on the .md version of the file. Different from .Rmd and .html Github will render these .md notebooks for you in the browser. Otherwise, download the .pdf version of the vignette or run it locally.
