@@ -65,7 +65,7 @@ organoid_morphology <- read_delim(here::here("references/imaging/visual_classifi
   mutate(line = substr(line, 1, 4)) %>% 
   mutate(morphology = if_else(is.na(morphology), "other", morphology))
 
-organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size.Rds")) %>% 
+organoid_size_fit <- readRDS(here::here("data/processed/morphology/organoid_size_fit.Rds")) %>% 
   filter(!line %in% c('D055T01', 'D020T02', 'D021T01')) %>% 
   #filter(!line %in% c('D055T01','D020T02')) %>% 
   mutate(line = as.character(line)) %>% 
@@ -192,15 +192,16 @@ pca_morph <- pca_hco$x_anno %>%
   ggrepel::geom_text_repel() +
   ggtitle("PCA on probe level - organoid morphology")
 
-pca_morph
+pca_morph + 
+  ggsave(here::here("reports/figures/expression/pca_organoid_morphology.pdf"), height = 4, width = 4)
 ```
 
 ```{r}
 
 
 pca_size <- pca_hco$x_anno %>%
-  left_join(organoid_size_fit %>% rename(organoid = line)) %>%
-  ggplot(aes(PC1, PC2, color = size)) + 
+  left_join(organoid_size_fit %>% rename(organoid = line, line = rep)) %>%
+  ggplot(aes(PC1, PC2, color = size, label = organoid)) + 
   geom_point(size = 3) + 
   theme_classic() + 
   xlab(pca_percent[1]) + 
@@ -212,7 +213,8 @@ pca_size <- pca_hco$x_anno %>%
   ggrepel::geom_text_repel() +
   ggtitle("PCA on probe level - organoid size")
 
-pca_size
+pca_size + 
+  ggsave(here::here("reports/figures/expression/pca_organoid_size.pdf"), height = 4, width = 4)
 ```
 
 ```{r}
@@ -222,7 +224,8 @@ df = promise_long %>%
 
 pca_igf <- pca_hco$x_anno %>%
   left_join(df) %>%
-  ggplot(aes(PC1, PC2, color = expr)) + 
+  distinct() %>%
+  ggplot(aes(PC1, PC2, color = expr, label = organoid)) + 
   geom_point(size = 3) + 
   theme_classic() + 
   xlab(pca_percent[1]) + 

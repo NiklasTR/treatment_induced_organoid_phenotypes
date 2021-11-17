@@ -366,8 +366,7 @@ for(line in unique(substr(rownames(annotation), 1, 7))) {
   # My cluster_enrichment function doesn't play well with NA values yet
   pathways = pathways[!is.na(names(pathways))]
   pathways_sig_vec = get_cluster_enrichment(
-    clustering = hc, labels = pathways, min_cluster_size = min_cluster_size, 
-    max_annotated_labels = 7)
+    clustering = hc, labels = pathways, min_cluster_size = min_cluster_size)
   # 'Others' is too vague
   pathways_sig_vec$Labels[pathways_sig_vec$Labels == "Others"] = NA
   
@@ -381,8 +380,7 @@ for(line in unique(substr(rownames(annotation), 1, 7))) {
   # My cluster_enrichment function doesn't play well with NA values yet
   targets = targets[!is.na(names(targets))]
   targets_sig_vec = get_cluster_enrichment(
-    clustering = hc, labels = targets, min_cluster_size = min_cluster_size, 
-    max_annotated_labels = 7)
+    clustering = hc, labels = targets, min_cluster_size = min_cluster_size)
   
   line_annotation$Pathway = pathways_sig_vec$Labels
   line_annotation$Target = targets_sig_vec$Labels
