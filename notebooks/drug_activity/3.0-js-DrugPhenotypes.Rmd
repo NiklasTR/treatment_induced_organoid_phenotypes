@@ -302,7 +302,7 @@ metadata_active = metadata[sel_indices, ]
 ```
 
 ## Individual Cell Lines
-I look at the angles between vectors. The SVM generates a profile for all drugs, including inactive ones. However, because they cannot be properly separated from DMSO, the profiles of these drugs will be largely random, ergo I remove them as noise.
+I look at the angles between vectors. The classification generates a profile for all drugs, including inactive ones. However, because they cannot be properly separated from DMSO, the profiles of these drugs will be largely random, ergo I remove them as noise.
 
 ```{r calc_svm_clustering}
 killing_anno = rep(NA, nrow(metadata_active))
