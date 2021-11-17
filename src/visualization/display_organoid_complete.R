@@ -5,11 +5,11 @@ library(janitor)
 library(imager)
 
 # read annotation data
-ccp <- read_delim(here("data/layouts/Clin_Cancer_Panel_V170511.csv"), 
+ccp <- read_delim(here("references/layouts/processed_layout_files/Clin_Cancer_Panel_V170511.csv"), 
                   ";", escape_double = FALSE, trim_ws = TRUE) %>% .[,-1] %>% 
   janitor::clean_names()
 
-kistem <- read_delim(here("data/layouts/KiStem_edt_V170125.csv"), 
+kistem <- read_delim(here("references/layouts/processed_layout_files/KiStem_edt_V170125.csv"), 
                      ";", escape_double = FALSE, trim_ws = TRUE) %>% .[,-1] %>% 
   janitor::clean_names()
 

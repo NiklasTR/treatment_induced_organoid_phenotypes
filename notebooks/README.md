@@ -1,3 +1,1 @@
-I am currently in the process of merging the SCOPEAnalysis package with additional code I wrote during the revision period. To make things simpler, I decided to pull all notebooks into the base layer of the notebooks dir and gradually sort the rest of the code.
-
-Open notebooks on github by clicking on the .md version of the file. Different from .Rmd and .html Github will render these .md notebooks for you in the browser. Otherwise, go and download the .pdf version of the file.
+Open notebooks on github by clicking on the .md version of the file. Different from .Rmd and .html Github will render these .md notebooks for you in the browser. Otherwise, download the .pdf version of the vignette or run it locally.

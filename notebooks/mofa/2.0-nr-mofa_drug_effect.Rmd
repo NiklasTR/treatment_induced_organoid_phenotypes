@@ -553,6 +553,11 @@ gg_f2_drug_shift + ggsave(here::here("reports/figures/mofa/f2_ridge_drug_shift.p
 
 ```
 
+```{r}
+drug_shift_test %>% arrange(desc(statistic)) %>% filter(factor == "factor2")
+```
+
+
 
 ```{r}
 z_projected_anno_test
