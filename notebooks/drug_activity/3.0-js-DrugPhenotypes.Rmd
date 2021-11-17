@@ -157,19 +157,20 @@ Updating key objects after removing data from the analysis
 
 ```{r}
 drug_effect_metadata_all_lines <- drug_effect_metadata
-#drug_effect_metadata <- drug_effect_metadata %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+drug_effect_metadata_filtered <- drug_effect_metadata %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+# drug_effect_metadata <- drug_effect_metadata %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
 ```
 
 
 # Introduction 
-Drug effects are defined as the vector pointing from negative control (DMSO) organoids to treated organoids in feature space. Features are transformed with a PCA and the top 25 components are retained. An SVM with a linear kernel is trained to differentiate DMSO and treated organoids (for each drug individually) and the normal vector to the separating hyperplane is defined as the drug effect vector. It is scaled to be as long as the distance between the DMSO median and the treated organoid median in feature space.
+Drug effects are defined as the vector pointing from negative control (DMSO) organoids to treated organoids in feature space. Features are transformed with a PCA and the top 25 components are retained. A logistic regression model is trained to differentiate DMSO and treated organoids (for each drug individually) and the normal vector to the separating hyperplane is defined as the drug effect vector. It is scaled to be as long as the distance between the DMSO median and the treated organoid median in feature space.
 
 The paper's "story flow" began with the drug-induced phenotypes and then continued onto the organoid viability. However, there are interesting parallels between the two analyses so that I include the lethality of drugs in the annotation of heatmaps here.
 
 # Define Active Drugs
 A histogram of the accuracies (or AUCs to be exact) shows that there are two groups of drugs. The first, normally distributed, group with low AUCs represents the inactive drugs that cannot be sufficiently differentiated from DMSO while the other group represents the active drugs that have significantly different characteristic features than the DMSO organoids and can be separated by a linear SVM hyperplane in feature space.
 ```{r auroc_hist}
-ggplot(data = drug_effect_metadata, mapping = aes(x = AUC_Mean)) + 
+ggplot(data = drug_effect_metadata_filtered, mapping = aes(x = AUC_Mean)) + 
   geom_histogram(bins = 100) + 
   theme_vignette() + ggtitle("AUROC Histogram") + 
   xlab("Mean AUROC (10-fold Cross Validation)") + ylab("") + 
@@ -180,13 +181,13 @@ if(save_images) ggsave(
 
 The distance in feature space between drugs and DMSO clouds correlates, as expected, with the AUROC.
 ```{r dist_vs_auroc}
-ggplot(data = drug_effect_metadata, 
+ggplot(data = drug_effect_metadata_filtered, 
        mapping = aes(x = AUC_Mean, y = Distance)) + 
   geom_point(size = 0.5) + 
   theme_vignette() + labs(
     caption = paste("Spearman rho =", round(
-      cor(drug_effect_metadata$AUC_Mean, 
-          drug_effect_metadata$Distance, method = "spearman"), 2))) + 
+      cor(drug_effect_metadata_filtered$AUC_Mean, 
+          drug_effect_metadata_filtered$Distance, method = "spearman"), 2))) + 
   xlab("AUROC") + labs(color = "") + 
   geom_smooth()
 if(save_images) ggsave(
@@ -196,7 +197,7 @@ if(save_images) ggsave(
 
 The SVM was trained with 10-fold cross validation and the resulting means and standard devations of the accuracies are shown below.
 ```{r auroc_mean_vs_auroc_std}
-ggplot(data = drug_effect_metadata, 
+ggplot(data = drug_effect_metadata_filtered, 
        mapping = aes(x = AUC_Mean, y = AUC_Std)) + 
   geom_point(size = 0.5) + theme_vignette() + 
   labs(x = "AUROC Mean", y = "AUROC Standard Deviation", color = "") + 
@@ -211,11 +212,15 @@ Based on the bimodal histogram of active drugs, I define any drug that can be se
 auc_thresh = 0.85
 profiles_active = drug_effect_metadata_all_lines[drug_effect_metadata_all_lines$AUC_Mean >= auc_thresh, ]
 metadata_active = drug_effect_metadata_all_lines[drug_effect_metadata_all_lines$AUC_Mean >= auc_thresh, ]
+
+profiles_active_filtered = drug_effect_metadata_filtered[drug_effect_metadata_filtered$AUC_Mean >= auc_thresh, ]
+metadata_active_filtered = drug_effect_metadata_filtered[drug_effect_metadata_filtered$AUC_Mean >= auc_thresh, ]
+
 ```
 
 The number of active drugs varies per line.
 ```{r active_drugs_per_line}
-ggplot_df = as.data.frame(table(metadata_active$Line))
+ggplot_df = as.data.frame(table(metadata_active_filtered$Line))
 # D054T01 was only imaged with the small library
 ggplot_df = ggplot_df[ggplot_df$Var1 != "D054T01", ]
 
@@ -240,7 +245,7 @@ if(save_images) ggsave(
 
 Some drugs are active in all cell lines and others only in very few.
 ```{r cell_lines_per_drug}
-activity_table = table(metadata_active$Drug, metadata_active$Line)
+activity_table = table(metadata_active_filtered$Drug, metadata_active_filtered$Line)
 activity_table = activity_table[, colnames(activity_table) != "D054T01"]
 ggplot_df = as.data.frame(sort(rowSums(activity_table > 0), decreasing = TRUE))
 
@@ -257,9 +262,9 @@ ggplot(data = ggplot_df, mapping = aes(x = Var1, y = Freq)) +
 A comparison of the viability versus the drug effect shows that all drugs previously identified as lethal are also identified as active. However, a good number of active drugs were previously identified as nonlethal.
 ```{r viability_vs_svm}
 ggplot(mapping = aes(y = Viability, x = AUC_Mean)) + 
-  geom_point(data = drug_effect_metadata, color = "lightgrey", size = 0.5) + 
-  geom_point(data = drug_effect_metadata[
-    drug_effect_metadata$AUC_Mean >= auc_thresh, ], 
+  geom_point(data = drug_effect_metadata_filtered, color = "lightgrey", size = 0.5) + 
+  geom_point(data = drug_effect_metadata_filtered[
+    drug_effect_metadata_filtered$AUC_Mean >= auc_thresh, ], 
              size = 0.5) + 
   theme_vignette() + ylab("Viability") + xlab("AUROC Mean") + 
   geom_segment(mapping = aes(
@@ -272,8 +277,8 @@ if(save_images) ggsave(
 
 Plotting a histogram of the viabilities of all "active" drugs, i.e. with $AUROC \geq 0.85$
 ```{r viability_dist_active_drugs}
-ggplot(data = drug_effect_metadata[
-  drug_effect_metadata$AUC_Mean >= auc_thresh, ]) + 
+ggplot(data = drug_effect_metadata_filtered[
+  drug_effect_metadata_filtered$AUC_Mean >= auc_thresh, ]) + 
   geom_histogram(mapping = aes(x = Viability), bins = 25) + 
   theme_vignette()
 ```
@@ -694,7 +699,8 @@ I look at enrichment heatmaps, i.e. which cell lines have an enrichment in which
 ### Log-Odds Heatmap
 I create a heatmap of the enrichment (log odds ratio) to determine which pathways and targets are enriched in each cell line
 ```{r logodds_enrichement_heatmap}
-heatmap_pathways = oddsratio_pathway[, c("Line", "Label", "OddsRatio")]
+heatmap_pathways = oddsratio_pathway[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+
 heatmap_pathways = acast(
   data = heatmap_pathways, 
   formula = Line ~ Label, value.var = "OddsRatio", 
@@ -707,7 +713,8 @@ heatmap_pathways[heatmap_pathways != 0] = log2(
 hc_pathways = as.dist((1 - cor(heatmap_pathways)) / 2)
 hc_pathways_line = as.dist((1 - cor(t(heatmap_pathways))) / 2)
 
-heatmap_targets = oddsratio_target[, c("Line", "Label", "OddsRatio")]
+heatmap_targets = oddsratio_target[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+
 heatmap_targets = acast(
   data = heatmap_targets, 
   formula = Line ~ Label, value.var = "OddsRatio", 
