@@ -1,6 +1,6 @@
 sleepSeconds=300
 nrWells=384
-indir=here::here("data/raw/PROMISE/incoming/PROMISE-10x-4t-c-16z")
+indir=here::here("data/raw/PROMISE/incoming/PROMISE-10x-4t-c-16z-2-channel")
 pythondir="/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/configdir/segmentation_config"
 hdf5dir="/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/hdf5dir"
 hdf5validationdir="/collab-ag-fischer/PROMISE/data-10x-4t-c-16z/hdf5validation"
