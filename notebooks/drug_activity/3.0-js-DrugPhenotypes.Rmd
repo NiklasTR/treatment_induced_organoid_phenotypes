@@ -697,7 +697,7 @@ I look at enrichment heatmaps, i.e. which cell lines have an enrichment in which
 ### Log-Odds Heatmap
 I create a heatmap of the enrichment (log odds ratio) to determine which pathways and targets are enriched in each cell line
 ```{r logodds_enrichement_heatmap}
-heatmap_pathways = oddsratio_pathway[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+heatmap_pathways = oddsratio_pathway[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01", "D20T02"))
 
 heatmap_pathways = acast(
   data = heatmap_pathways, 
@@ -711,7 +711,7 @@ heatmap_pathways[heatmap_pathways != 0] = log2(
 hc_pathways = as.dist((1 - cor(heatmap_pathways)) / 2)
 hc_pathways_line = as.dist((1 - cor(t(heatmap_pathways))) / 2)
 
-heatmap_targets = oddsratio_target[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01"))
+heatmap_targets = oddsratio_target[, c("Line", "Label", "OddsRatio")] %>% filter(!Line %in% c("D021T01", "D054T01", "D055T01", "D20T02"))
 
 heatmap_targets = acast(
   data = heatmap_targets, 
