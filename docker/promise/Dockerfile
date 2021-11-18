@@ -50,6 +50,9 @@ RUN R -e "install.packages(c('platetools'), dependencies = TRUE)"
 RUN R -e "BiocManager::install('preprocessCore', configure.args='--disable-threading')"
 RUN R -e "BiocManager::install('DESeq2',dependencies=TRUE)"
 
+RUN apt-get install -y \
+  libfftw3-3
+RUN R -e "BiocManager::install('EBImage',dependencies=TRUE)"
 RUN wget https://bioconductor.statistik.tu-dortmund.de/packages/3.11/bioc/src/contrib/MaxContrastProjection_1.11.0.tar.gz
 RUN R CMD INSTALL MaxContrastProjection_1.11.0.tar.gz
 #RUN mv MaxContrastProjection_1.11.0.tar.gz data/external 
