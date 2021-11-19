@@ -1,5 +1,3 @@
-This directory contains the raw imaging data, projections, features, miniature images and other ressources related to the image processing pipeline.
-The incoming directory contains raw data and serves as landing pad for the INCELL 6000 microscope.
-Other directories are created as dedicated locations for data that was acquired with a given protocol. 
-
-Complete data can be found on the DKFZ promise isilon, the B110 image backup server and -for compressed raw data- the B110 hard disk archive.
+The responsible vignette can be knitted with make_results.R
+Figures will be produced into reports/figures. Selected figures relevant for this figure were moved into this directory manually.
+The depicted images for Fig 5 can be found via: /data/valentini/promise/PROMISE/data-10x-4t-c-16z/typical_organoids on the B110 cluster
