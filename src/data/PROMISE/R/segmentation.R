@@ -20,6 +20,6 @@ segmentation <- function(plateIndir, platename, row, col, configdir) {
   exec_script = file.path(pythondir, pythonexec)
   infile = projectionHdf5Filename(filedir = file.path(hdf5projection, platename), platename = platename, row = row, col = col)
   outfile = segmentationHdf5Filename(filedir = file.path(segmentationdir, platename), platename = platename, row = row, col = col)  
-  output = system(sprintf("python %s %s %s %s %s", exec_script, platename, infile, outfile, pythondir))
+  output = system(sprintf("python2 %s %s %s %s %s", exec_script, platename, infile, outfile, pythondir))
 }
 

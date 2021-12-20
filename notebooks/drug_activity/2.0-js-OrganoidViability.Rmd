@@ -971,7 +971,7 @@ if(save_images) ggsave(
 ## Accuracy Comparison
 A barplot for the accuracies of classifiers on their native datasets. While there is a substantial drop in accuracy for most cell lines if only individual channels are used, the classifier does not become useless. The lowest achieved accuracy if only the DAPI channel is used is still approximately 80%, which is reasonable for a biological screen. It is worth noting that the additional stainings possible by using only one of the channels and freeing up the other two will undoubtedly improve the accuracy again.
 
-```{r, eval=F}
+```{r, eval=T}
 acc_full = diag(acc_matrix)
 acc_Actin = diag(acc_matrix_reduced$Actin)
 acc_FITC = diag(acc_matrix_reduced$FITC)
@@ -1005,7 +1005,7 @@ if(save_images) ggsave(
   width = 6, height = 4, useDingbats = FALSE)
 ```
 
-```{r, eval=F}
+```{r, eval=T}
 ggplot_df = acc
 ggplot_df$Type = c(
   "acc_full" = "All", 
