@@ -191,8 +191,10 @@ if __name__ == "__main__":
         print("Usage: python %s <PLATE> <INFILE> <OUTFILE> <PYDIR>" % sys.argv[0])
 
     prog, plate, infile, outfile, pydir = sys.argv
+    print(prog, plate, infile, outfile, pydir)
 
     weightsfile = os.path.join(pydir, "DNN_weights.pkl")
+    print("loading weights")
 
     # If the weights file doesn't exist yet, then skip this entire procedure
     if os.path.isfile(weightsfile):
